@@ -149,9 +149,6 @@ class VlcPlayerController(
             media.addOption(":http-custom-header=$key: $value")
         }
 
-        media.parseFlags = Media.Parse.FetchNetwork
-        media.parseAsync(Media.Parse.FetchNetwork)
-
         mediaPlayer?.setMedia(media)
         media.release()
 
@@ -204,14 +201,15 @@ class VlcPlayerController(
                 textureView != null -> {
                     val st = textureView?.surfaceTexture
                     if (st != null) {
-                        vlcVout.setVideoSurface(Surface(st), st)
-                        if (!vlcVout.areViewsAttached()) {
-                            vlcVout.attachViews()
+                        vlcVout.setVideoSurface(Surface(st), null)
+                            if (!vlcVout.areViewsAttached()) {
+                                vlcVout.attachViews()
+                            }
                         }
                     }
                     textureView?.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
                         override fun onSurfaceTextureAvailable(st: SurfaceTexture, w: Int, h: Int) {
-                            vlcVout.setVideoSurface(Surface(st), st)
+                            vlcVout.setVideoSurface(Surface(st), null)
                             if (!vlcVout.areViewsAttached()) {
                                 vlcVout.attachViews()
                             }
@@ -254,8 +252,8 @@ class VlcPlayerController(
         val player = mediaPlayer ?: return
         val tracks = player.audioTracks
         val trackId = tracks.getOrNull(trackIndex) ?: return
-        player.setAudioTrack(trackId)
-        Log.d(TAG, "VLC: Selected audio track index=$trackIndex, id=$trackId")
+        player.setAudioTrack(trackId.id)
+        Log.d(TAG, "VLC: Selected audio track index=$trackIndex, id=${trackId.id}")
     }
 
     override fun selectSubtitleTrack(groupIndex: Int, trackIndex: Int) {
@@ -266,8 +264,8 @@ class VlcPlayerController(
         } else {
             val tracks = player.spuTracks
             val trackId = tracks.getOrNull(trackIndex) ?: return
-            player.setSpuTrack(trackId)
-            Log.d(TAG, "VLC: Selected subtitle track index=$trackIndex, id=$trackId")
+            player.setSpuTrack(trackId.id)
+            Log.d(TAG, "VLC: Selected subtitle track index=$trackIndex, id=${trackId.id}")
         }
     }
 

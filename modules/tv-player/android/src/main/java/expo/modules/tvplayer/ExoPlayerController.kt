@@ -230,8 +230,10 @@ class ExoPlayerController(
             .setUri(Uri.parse(currentUrl))
             .setMimeType(getStreamMimeType(currentUrl))
 
-        if (!currentDrmType.isNullOrEmpty() && !currentDrmLicenseUrl.isNullOrEmpty()) {
-            val uuid = when (currentDrmType.lowercase()) {
+        val drmType = currentDrmType
+        val drmHeaders = currentDrmHeaders
+        if (!drmType.isNullOrEmpty() && !currentDrmLicenseUrl.isNullOrEmpty()) {
+            val uuid = when (drmType.lowercase()) {
                 "widevine"  -> C.WIDEVINE_UUID
                 "playready" -> C.PLAYREADY_UUID
                 "clearkey"  -> C.CLEARKEY_UUID
@@ -239,7 +241,7 @@ class ExoPlayerController(
             }
             if (uuid != null) {
                 val drmCfg = DrmConfiguration.Builder(uuid).setLicenseUri(currentDrmLicenseUrl)
-                if (!currentDrmHeaders.isNullOrEmpty()) drmCfg.setLicenseRequestHeaders(currentDrmHeaders)
+                if (!drmHeaders.isNullOrEmpty()) drmCfg.setLicenseRequestHeaders(drmHeaders)
                 mediaItemBuilder.setDrmConfiguration(drmCfg.build())
             }
         }
