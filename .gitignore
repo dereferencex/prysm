@@ -19,6 +19,7 @@ android/
 ios/
 !modules/**/android/
 modules/**/android/.gradle/
+modules/**/android/build/
 
 # =========================
 # EAS / Signing Credentials
