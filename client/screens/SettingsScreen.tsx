@@ -145,6 +145,11 @@ const TEXT_SIZE_OPTIONS = [
   { label: "Large", value: "large" as const },
 ];
 
+const PLAYER_ENGINE_OPTIONS = [
+  { label: "ExoPlayer (Media3)", value: "exoplayer" as const, desc: "Default — best for most streams" },
+  { label: "VLC Player", value: "vlc" as const, desc: "Fallback — wider codec support" },
+];
+
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<SettingsNavigationProp>();
@@ -170,6 +175,7 @@ export default function SettingsScreen() {
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showAutoRefreshModal, setShowAutoRefreshModal] = useState(false);
   const [showTextSizeModal, setShowTextSizeModal] = useState(false);
+  const [showPlayerEngineModal, setShowPlayerEngineModal] = useState(false);
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
   const [showDeletePlaylistModal, setShowDeletePlaylistModal] = useState(false);
   const [showClearAllConfirm, setShowClearAllConfirm] = useState(false);
@@ -249,6 +255,17 @@ export default function SettingsScreen() {
     if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     updateSettings({ textSize: value });
     setShowTextSizeModal(false);
+  };
+
+  const handlePlayerEngineSelect = (value: typeof settings.playerEngine) => {
+    if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    updateSettings({ playerEngine: value });
+    setShowPlayerEngineModal(false);
+  };
+
+  const getPlayerEngineLabel = () => {
+    const option = PLAYER_ENGINE_OPTIONS.find((o) => o.value === settings.playerEngine);
+    return option?.label || "ExoPlayer (Media3)";
   };
 
   const getTextSizeLabel = () => {
@@ -514,6 +531,14 @@ export default function SettingsScreen() {
                 subtitle="Choose preferred video quality"
                 value={getQualityLabel()}
                 onPress={() => setShowQualityModal(true)}
+                showChevron
+              />
+              <SettingsRow
+                icon="settings"
+                title="Player Engine"
+                subtitle="Choose playback engine for streams"
+                value={getPlayerEngineLabel()}
+                onPress={() => setShowPlayerEngineModal(true)}
                 showChevron
               />
             </View>
@@ -799,6 +824,52 @@ export default function SettingsScreen() {
               >
                 <ThemedText type="body">{option.label}</ThemedText>
                 {settings.textSize === option.value ? (
+                  <Ionicons name="checkmark" size={20} color={theme.primary} />
+                ) : null}
+              </FocusableOption>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={showPlayerEngineModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPlayerEngineModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowPlayerEngineModal(false)}
+          focusable={!isTV}
+        >
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: theme.backgroundDefault },
+            ]}
+          >
+            <ThemedText type="h4" style={styles.modalTitle}>
+              Player Engine
+            </ThemedText>
+            {PLAYER_ENGINE_OPTIONS.map((option, idx) => (
+              <FocusableOption
+                key={option.value}
+                onPress={() => handlePlayerEngineSelect(option.value)}
+                isSelected={settings.playerEngine === option.value}
+                accessibilityLabel={option.label}
+                hasTVPreferredFocus={isTV && idx === 0}
+              >
+                <View style={{ flex: 1 }}>
+                  <ThemedText type="body">{option.label}</ThemedText>
+                  <ThemedText
+                    type="caption"
+                    style={{ color: theme.textSecondary }}
+                  >
+                    {option.desc}
+                  </ThemedText>
+                </View>
+                {settings.playerEngine === option.value ? (
                   <Ionicons name="checkmark" size={20} color={theme.primary} />
                 ) : null}
               </FocusableOption>

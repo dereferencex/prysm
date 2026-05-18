@@ -45,6 +45,7 @@ import { useResponsive } from "@/hooks/useResponsive";
 import { Colors, Spacing, BorderRadius } from "@/constants/theme";
 import { parseHLSQualities, isHLSStream } from "@/lib/hls-quality-parser";
 import { Channel } from "@/types/playlist";
+import { getChannelPlayerEngine, setChannelPlayerEngine } from "@/lib/storage";
 import {
   TvPlayerView,
   TvPlayerCommands,
@@ -168,8 +169,10 @@ export interface AdvancedVideoPlayerProps {
   title?: string;
   subtitle?: string;
   poster?: string;
+  channelId?: string;
   autoPlay?: boolean;
   backgroundPlay?: boolean;
+  playerEngine?: "exoplayer" | "vlc";
   drm?: DRMConfig;
   headers?: Record<string, string>;
   qualities?: VideoQuality[];
@@ -204,8 +207,10 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   title,
   subtitle,
   poster,
+  channelId,
   autoPlay = true,
   backgroundPlay = false,
+  playerEngine: defaultEngine = "exoplayer",
   headers,
   drm,
   qualities: propQualities = [],
@@ -287,16 +292,26 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   >([]);
   const [showRecentPanel, setShowRecentPanel] = useState(false);
 
+  // Per-channel player engine — loaded from storage, falls back to defaultEngine prop
+  const [activePlayerEngine, setActivePlayerEngine] = useState<"exoplayer" | "vlc">(defaultEngine);
+
   // Modals
   const [showStopAudioModal, setShowStopAudioModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showQualityModal, setShowQualityModal] = useState(false);
   const [showAudioModal, setShowAudioModal] = useState(false);
   const [showSubtitleModal, setShowSubtitleModal] = useState(false);
+  const [showPlayerEngineModal, setShowPlayerEngineModal] = useState(false);
+  const [showFallbackDialog, setShowFallbackDialog] = useState(false);
 
   const [isInPiP, setIsInPiP] = useState(false);
   // Ref mirror — read by setShowControls guard to block controls in PiP
   const isInPiPRef = useRef(false);
+
+  // Track consecutive errors for automatic fallback
+  const consecutiveErrorCountRef = useRef(0);
+  const currentEngineRef = useRef(activePlayerEngine);
+  currentEngineRef.current = activePlayerEngine;
 
   // Seek bar drag state — tracks the thumb position while the user is
   // dragging. When the drag ends we commit the seek to the player.
@@ -381,8 +396,9 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
       showSettingsModal ||
       showQualityModal ||
       showAudioModal ||
-      showSubtitleModal;
-  }, [showSettingsModal, showQualityModal, showAudioModal, showSubtitleModal]);
+      showSubtitleModal ||
+      showPlayerEngineModal;
+  }, [showSettingsModal, showQualityModal, showAudioModal, showSubtitleModal, showPlayerEngineModal]);
 
   // Start/reset the auto-hide timer for both TV and phone.
   const scheduleHide = useCallback(() => {
@@ -458,11 +474,50 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
       .catch(() => {});
   }, [currentSource]);
 
+  // ── Load per-channel player engine ────────────────────────────────────────
+  useEffect(() => {
+    if (!channelId) {
+      setActivePlayerEngine(defaultEngine);
+      return;
+    }
+    let cancelled = false;
+    getChannelPlayerEngine(channelId).then((saved) => {
+      if (!cancelled) {
+        setActivePlayerEngine(saved || defaultEngine);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [channelId, defaultEngine]);
+
+  // ── Change player engine (saves per-channel) ──────────────────────────────
+  const changePlayerEngine = useCallback((engine: "exoplayer" | "vlc") => {
+    setActivePlayerEngine(engine);
+    if (channelId) {
+      setChannelPlayerEngine(channelId, engine);
+    }
+    if (tvPlayerRef.current) {
+      TvPlayerCommands.setPlayerEngine(tvPlayerRef, engine);
+      setError(null);
+      setIsLoading(true);
+      consecutiveErrorCountRef.current = 0;
+      TvPlayerCommands.loadSource(tvPlayerRef, {
+        url: currentSource,
+        headers: headers && Object.keys(headers).length > 0 ? headers : undefined,
+        drmType: drm?.type as any,
+        drmLicenseUrl: drm?.licenseServer,
+        drmHeaders: drm?.headers,
+        autoPlay: true,
+      });
+    }
+  }, [channelId, currentSource, headers, drm]);
+
   // ── Native player load ────────────────────────────────────────────────────
   const loadSource = useCallback(() => {
     if (!tvPlayerRef.current) return;
     setIsLoading(true);
     setError(null);
+    consecutiveErrorCountRef.current = 0;
+    TvPlayerCommands.setPlayerEngine(tvPlayerRef, activePlayerEngine);
     TvPlayerCommands.loadSource(tvPlayerRef, {
       url: currentSource,
       headers: headers && Object.keys(headers).length > 0 ? headers : undefined,
@@ -471,7 +526,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
       drmHeaders: drm?.headers,
       autoPlay,
     });
-  }, [currentSource, headers, drm, autoPlay]);
+  }, [currentSource, headers, drm, autoPlay, activePlayerEngine]);
 
   // Run loadSource whenever these values change, but guard on native readiness.
   useEffect(() => {
@@ -854,6 +909,10 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
               setIsLoading(false);
               setIsBuffering(false);
               setError(msg);
+              consecutiveErrorCountRef.current += 1;
+              if (consecutiveErrorCountRef.current >= 2 && activePlayerEngine === "exoplayer") {
+                setShowFallbackDialog(true);
+              }
               onError?.(msg);
             }}
             onPlayingChange={(e) => setIsPlaying(e.nativeEvent.isPlaying)}
@@ -875,6 +934,11 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
             }}
             onPipModeChange={(e) => {
               handlePipChange(e.nativeEvent.isInPiP);
+            }}
+            onEngineChange={(e) => {
+              const engine = e.nativeEvent.engine;
+              console.log(`Player engine changed to: ${engine}`);
+              consecutiveErrorCountRef.current = 0;
             }}
           />
 
@@ -1555,6 +1619,79 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
         </View>
       </Modal>
 
+      {/* ── Fallback: switch to VLC dialog ──────────────────────────── */}
+      <Modal
+        visible={showFallbackDialog}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowFallbackDialog(false)}
+      >
+        <View style={st.modalScrim}>
+          <View style={[st.modalSheet, { maxWidth: 360 }]}>
+            <Ionicons
+              name="warning"
+              size={36}
+              color={Colors.dark.error}
+              style={{ alignSelf: "center", marginBottom: Spacing.md }}
+            />
+            <ThemedText type="h4" style={st.modalTitle}>
+              Playback Error
+            </ThemedText>
+            <ThemedText
+              type="body"
+              style={{
+                color: Colors.dark.textSecondary,
+                textAlign: "center",
+                marginBottom: Spacing.xl,
+              }}
+            >
+              Playback failed. Switch to VLC for better compatibility?
+            </ThemedText>
+            <TVFocusablePressable
+              onPress={() => {
+                setShowFallbackDialog(false);
+                changePlayerEngine(activePlayerEngine === "vlc" ? "exoplayer" : "vlc");
+              }}
+              baseStyle={st.optionRow}
+              focusedStyle={st.optionRowFocused}
+              hasTVPreferredFocus={isTV}
+              accessibilityLabel="Switch player engine and retry"
+            >
+              <Ionicons
+                name="play-circle-outline"
+                size={22}
+                color={Colors.dark.primary}
+                style={{ marginRight: Spacing.md }}
+              />
+              <ThemedText type="body" style={{ color: "#fff", flex: 1 }}>
+                Switch to {activePlayerEngine === "vlc" ? "ExoPlayer" : "VLC"}
+              </ThemedText>
+            </TVFocusablePressable>
+            <TVFocusablePressable
+              onPress={() => {
+                setShowFallbackDialog(false);
+              }}
+              baseStyle={st.optionRow}
+              focusedStyle={st.optionRowFocused}
+              accessibilityLabel="Stay with ExoPlayer"
+            >
+              <Ionicons
+                name="close-circle-outline"
+                size={22}
+                color={Colors.dark.textSecondary}
+                style={{ marginRight: Spacing.md }}
+              />
+              <ThemedText
+                type="body"
+                style={{ color: Colors.dark.textSecondary, flex: 1 }}
+              >
+                Stay with ExoPlayer
+              </ThemedText>
+            </TVFocusablePressable>
+          </View>
+        </View>
+      </Modal>
+
       {/* ── Settings modal ──────────────────────────────────────────── */}
       <Modal
         visible={showSettingsModal}
@@ -1572,6 +1709,16 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
               Settings
             </ThemedText>
             {[
+              {
+                label: "Player",
+                value: activePlayerEngine === "vlc" ? "VLC" : "ExoPlayer",
+                icon: "play-circle-outline" as const,
+                onPress: () => {
+                  setShowSettingsModal(false);
+                  setShowPlayerEngineModal(true);
+                },
+                hidden: false,
+              },
               {
                 label: "Quality",
                 value: selectedQuality,
@@ -1909,6 +2056,99 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 </TVFocusablePressable>
               ))}
             </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* ── Player Engine modal ───────────────────────────────────────────── */}
+      <Modal
+        visible={showPlayerEngineModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPlayerEngineModal(false)}
+      >
+        <Pressable
+          style={st.modalScrim}
+          onPress={() => setShowPlayerEngineModal(false)}
+          focusable={!isTV}
+        >
+          <View style={st.modalSheet}>
+            <ThemedText type="h4" style={st.modalTitle}>
+              Player Engine
+            </ThemedText>
+            <ThemedText
+              type="caption"
+              style={{
+                color: Colors.dark.textSecondary,
+                textAlign: "center",
+                marginBottom: Spacing.md,
+              }}
+            >
+              Saved per-channel
+            </ThemedText>
+            <TVFocusablePressable
+              onPress={() => {
+                changePlayerEngine("exoplayer");
+                setShowPlayerEngineModal(false);
+              }}
+              baseStyle={[
+                st.optionRow,
+                activePlayerEngine === "exoplayer" && st.optionRowActive,
+              ]}
+              focusedStyle={st.optionRowFocused}
+              hasTVPreferredFocus={isTV}
+              accessibilityLabel="Use ExoPlayer"
+            >
+              <View style={{ flex: 1 }}>
+                <ThemedText type="body" style={{ color: "#fff" }}>
+                  ExoPlayer (Media3)
+                </ThemedText>
+                <ThemedText
+                  type="caption"
+                  style={{ color: Colors.dark.textSecondary }}
+                >
+                  Default — best for most streams
+                </ThemedText>
+              </View>
+              {activePlayerEngine === "exoplayer" ? (
+                <Ionicons
+                  name="checkmark"
+                  size={20}
+                  color={Colors.dark.primary}
+                />
+              ) : null}
+            </TVFocusablePressable>
+            <TVFocusablePressable
+              onPress={() => {
+                changePlayerEngine("vlc");
+                setShowPlayerEngineModal(false);
+              }}
+              baseStyle={[
+                st.optionRow,
+                activePlayerEngine === "vlc" && st.optionRowActive,
+              ]}
+              focusedStyle={st.optionRowFocused}
+              accessibilityLabel="Use VLC Player"
+            >
+              <View style={{ flex: 1 }}>
+                <ThemedText type="body" style={{ color: "#fff" }}>
+                  VLC Player
+                </ThemedText>
+                <ThemedText
+                  type="caption"
+                  style={{ color: Colors.dark.textSecondary }}
+                >
+                  Fallback — wider codec support
+                </ThemedText>
+              </View>
+              {activePlayerEngine === "vlc" ? (
+                <Ionicons
+                  name="checkmark"
+                  size={20}
+                  color={Colors.dark.primary}
+                />
+              ) : null}
+            </TVFocusablePressable>
           </View>
         </Pressable>
       </Modal>

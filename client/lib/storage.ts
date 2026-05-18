@@ -12,6 +12,7 @@ const STORAGE_KEYS = {
   LAST_PLAYED: "prysm_last_played",
   SETTINGS: "prysm_settings",
   NETWORK_STREAM: "prysm_network_stream",
+  CHANNEL_ENGINE: "prysm_channel_engine_",
 };
 
 const CHUNK_SIZE = 300;
@@ -83,6 +84,8 @@ export const USER_AGENT_STRINGS: Record<UserAgent, string> = {
   custom: "",
 };
 
+export type PlayerEngine = "exoplayer" | "vlc";
+
 export interface AppSettings {
   autoPlay: boolean;
   backgroundPlay: boolean;
@@ -92,6 +95,7 @@ export interface AppSettings {
   rememberLastCategory: boolean;
   lastCategory: string;
   textSize: TextSizeOption;
+  playerEngine: PlayerEngine;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -103,6 +107,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   rememberLastCategory: true,
   lastCategory: "All",
   textSize: "medium",
+  playerEngine: "exoplayer",
 };
 
 interface PlaylistMeta {
@@ -591,5 +596,23 @@ export async function saveNetworkStreamConfig(
     );
   } catch (error) {
     console.error("Error saving network stream config:", error);
+  }
+}
+
+export async function getChannelPlayerEngine(channelId: string): Promise<PlayerEngine | null> {
+  try {
+    const data = await AsyncStorage.getItem(`${STORAGE_KEYS.CHANNEL_ENGINE}${channelId}`);
+    return (data as PlayerEngine) || null;
+  } catch (error) {
+    console.error("Error getting channel player engine:", error);
+    return null;
+  }
+}
+
+export async function setChannelPlayerEngine(channelId: string, engine: PlayerEngine): Promise<void> {
+  try {
+    await AsyncStorage.setItem(`${STORAGE_KEYS.CHANNEL_ENGINE}${channelId}`, engine);
+  } catch (error) {
+    console.error("Error setting channel player engine:", error);
   }
 }

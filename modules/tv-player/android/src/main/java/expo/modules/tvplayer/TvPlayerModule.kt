@@ -65,6 +65,7 @@ class TvPlayerModule : Module() {
                 "onPositionChange",
                 "onTracksChange",
                 "onPipModeChange",
+                "onEngineChange",
             )
 
             // ── Commands (imperative API, auto-added to React ref) ─────────
@@ -163,6 +164,16 @@ class TvPlayerModule : Module() {
                 val artist     = params["artist"] as? String ?: "Prysm"
                 val artworkUri = params["artworkUri"] as? String
                 view.setMediaMetadata(title, artist, artworkUri)
+            }
+
+            // ── Player engine switching ──────────────────────────────────────
+
+            AsyncFunction("setPlayerEngine") { view: TvPlayerView, engine: String ->
+                view.setPlayerEngine(engine)
+            }
+
+            AsyncFunction("getPlayerEngine") { view: TvPlayerView ->
+                view.getPlayerEngine()
             }
         }
     }

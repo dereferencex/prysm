@@ -68,12 +68,14 @@ export function PlaylistProvider({ children }: { children: ReactNode }) {
   const [recentChannels, setRecentChannels] = useState<string[]>([]);
   const [settings, setSettings] = useState<storage.AppSettings>({
     autoPlay: true,
+    backgroundPlay: false,
     videoQuality: "auto",
     showCategoryFilter: true,
     autoRefreshInterval: "off",
     rememberLastCategory: false,
     lastCategory: "All",
     textSize: "medium",
+    playerEngine: "exoplayer",
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingPlaylist, setIsLoadingPlaylist] = useState(false);
@@ -416,12 +418,14 @@ export function PlaylistProvider({ children }: { children: ReactNode }) {
     syncFavourites([]);
     setSettings({
       autoPlay: true,
+      backgroundPlay: false,
       videoQuality: "auto",
       showCategoryFilter: true,
       autoRefreshInterval: "off",
       rememberLastCategory: false,
       lastCategory: "All",
       textSize: "medium",
+      playerEngine: "exoplayer",
     });
   };
 

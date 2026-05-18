@@ -65,6 +65,8 @@ export interface TvPlayerViewProps {
   }) => void;
   /** Fires when the app enters or exits Picture-in-Picture mode. */
   onPipModeChange?: (event: { nativeEvent: { isInPiP: boolean } }) => void;
+  /** Fires when the player engine changes (exoplayer <-> vlc). */
+  onEngineChange?: (event: { nativeEvent: { engine: string } }) => void;
 }
 
 // ── Native view ───────────────────────────────────────────────────────────────
@@ -165,6 +167,17 @@ export const TvPlayerCommands = {
     viewRef: React.RefObject<any>,
     params: { title: string; artist?: string; artworkUri?: string },
   ): Promise<void> | undefined => viewRef.current?.setMediaMetadata(params),
+
+  /** Switch the active player engine ("exoplayer" | "vlc"). */
+  setPlayerEngine: (
+    viewRef: React.RefObject<any>,
+    engine: "exoplayer" | "vlc",
+  ): Promise<void> | undefined => viewRef.current?.setPlayerEngine(engine),
+
+  /** Get the current player engine name. */
+  getPlayerEngine: (
+    viewRef: React.RefObject<any>,
+  ): Promise<string> | undefined => viewRef.current?.getPlayerEngine(),
 };
 
 // ── React component ───────────────────────────────────────────────────────────

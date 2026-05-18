@@ -22,6 +22,16 @@ android {
   buildFeatures {
     viewBinding true
   }
+
+  // ABI splits to reduce APK size — VLC native libs are large
+  splits {
+    abi {
+      enable true
+      reset()
+      include "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
+      universalApk false
+    }
+  }
 }
 
 repositories {
@@ -34,7 +44,7 @@ dependencies {
   implementation "org.jetbrains.kotlin:kotlin-stdlib:${getKotlinVersion()}"
   implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"
 
-  // Media3 / ExoPlayer — the TV-grade player stack
+  // Media3 / ExoPlayer — the TV-grade player stack (default engine)
   implementation "androidx.media3:media3-exoplayer:1.3.1"
   implementation "androidx.media3:media3-exoplayer-hls:1.3.1"
   implementation "androidx.media3:media3-exoplayer-dash:1.3.1"
@@ -43,11 +53,34 @@ dependencies {
   implementation "androidx.media3:media3-ui:1.3.1"
   implementation "androidx.media3:media3-session:1.3.1"
 
+  // VLC — fallback player engine for streams ExoPlayer cannot decode
+  implementation "org.videolan.android:libvlc:3.7.0"
+
   // OkHttp for custom headers / DRM token injection
   implementation "com.squareup.okhttp3:okhttp:4.12.0"
 
   // NotificationCompat for the foreground service placeholder notification
   implementation "androidx.core:core-ktx:1.13.1"
+}
+
+// ProGuard / R8 rules for VLC
+def proguardRules = """
+-keep class org.videolan.libvlc.** { *; }
+-keep class org.videolan.libvlc.util.** { *; }
+-keep class org.videolan.medialibrary.** { *; }
+-dontwarn org.videolan.libvlc.**
+-dontwarn org.videolan.medialibrary.**
+"""
+
+android.libraryVariants.all { variant ->
+  def proguardTask = tasks.register("generateVlcProguardRulesFor${variant.name.capitalize()}", DefaultTask) {
+    def outFile = file("${buildDir}/generated/vlc-proguard/${variant.name}/vlc-rules.pro")
+    doLast {
+      outFile.parentFile.mkdirs()
+      outFile.text = proguardRules
+    }
+  }
+  variant.preBuildProvider.configure { dependsOn(proguardTask) }
 }
 
 def safeExtGet(prop, fallback) {
