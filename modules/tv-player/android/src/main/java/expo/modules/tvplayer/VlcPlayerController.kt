@@ -202,9 +202,8 @@ class VlcPlayerController(
                     val st = textureView?.surfaceTexture
                     if (st != null) {
                         vlcVout.setVideoSurface(Surface(st), null)
-                            if (!vlcVout.areViewsAttached()) {
-                                vlcVout.attachViews()
-                            }
+                        if (!vlcVout.areViewsAttached()) {
+                            vlcVout.attachViews()
                         }
                     }
                     textureView?.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
