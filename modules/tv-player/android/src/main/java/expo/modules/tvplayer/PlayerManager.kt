@@ -65,17 +65,19 @@ class PlayerManager(
         activeController = getOrCreateController(newEngine)
         activeController?.setCallbacks(ForwardingCallbacks(callbacks))
 
-        lastLoadParams?.let { params ->
-            if (savedPosition > 0) {
-                activeController?.load(
-                    params.url,
-                    params.headers,
-                    params.drmType,
-                    params.drmLicenseUrl,
-                    params.drmHeaders,
-                    wasPlaying,
-                )
-                activeController?.seekTo(savedPosition)
+        if (lastLoadParams != null && savedPosition > 0) {
+            val params = lastLoadParams!!
+            activeController?.load(
+                params.url,
+                params.headers,
+                params.drmType,
+                params.drmLicenseUrl,
+                params.drmHeaders,
+                false,
+            )
+            activeController?.seekTo(savedPosition)
+            if (wasPlaying) {
+                activeController?.play()
             }
         }
 

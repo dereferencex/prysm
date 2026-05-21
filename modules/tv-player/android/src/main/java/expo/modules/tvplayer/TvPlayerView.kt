@@ -316,8 +316,10 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
             playerManager.clearVideoSurface()
         } else if (PipRegistry.isInPipMode) {
             playerManager.clearVideoSurface()
-        } else if (isTV) {
-            playerManager.clearVideoSurface()
+        } else if (isTV && surfaceView != null) {
+            playerManager.setVideoSurfaceView(surfaceView!!)
+        } else if (textureView != null) {
+            playerManager.setTextureView(textureView!!)
         } else {
             releasePlayer()
         }
