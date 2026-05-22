@@ -125,6 +125,11 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         }
 
         playerManager.setCallbacks(this)
+
+        when {
+            isTV && surfaceView != null -> playerManager.setVideoSurfaceView(surfaceView)
+            textureView != null -> playerManager.setTextureView(textureView)
+        }
     }
 
     fun setPlayerEngine(engine: String) {

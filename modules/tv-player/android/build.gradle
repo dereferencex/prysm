@@ -8,11 +8,22 @@ android {
   defaultConfig {
     minSdkVersion safeExtGet("minSdkVersion", 24)
     targetSdkVersion safeExtGet("targetSdkVersion", 35)
+    
+    // Ensure VLC native libraries are properly packaged
+    ndk {
+      abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
+    }
   }
 
   compileOptions {
     sourceCompatibility JavaVersion.VERSION_17
     targetCompatibility JavaVersion.VERSION_17
+  }
+
+  packagingOptions {
+    jniLibs {
+      useLegacyPackaging true
+    }
   }
 
   kotlinOptions {

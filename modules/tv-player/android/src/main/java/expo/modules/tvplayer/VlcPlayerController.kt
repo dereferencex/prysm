@@ -68,8 +68,12 @@ class VlcPlayerController(
         options.add("--no-osd")
 
         try {
-            libVLC = LibVLC(context, options)
-            Log.d(TAG, "LibVLC initialized with hardware decoding options")
+            libVLC = LibVLC(context.applicationContext, options)
+            Log.d(TAG, "LibVLC initialized successfully")
+        } catch (e: UnsatisfiedLinkError) {
+            Log.e(TAG, "Failed to load LibVLC native libraries: ${e.message}", e)
+            callbacks?.onError("VLC initialization failed: native libraries not loaded. ${e.message}")
+            return
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize LibVLC: ${e.message}", e)
             callbacks?.onError("VLC initialization failed: ${e.message}")
