@@ -200,11 +200,11 @@ class VlcPlayerController(
                         vlcVout.attachViews()
                     }
                     
-                    // Set window size after layout
-                    surfaceView?.post {
-                        val w = surfaceView?.width ?: 0
-                        val h = surfaceView?.height ?: 0
-                        Log.d(TAG, "VLC: SurfaceView size after layout ${w}x${h}")
+                    // Listen for layout changes
+                    surfaceView?.addOnLayoutChangeListener { _, left, top, right, bottom, _, _, _, _ ->
+                        val w = right - left
+                        val h = bottom - top
+                        Log.d(TAG, "VLC: SurfaceView layout changed ${w}x${h}")
                         if (w > 0 && h > 0) {
                             vlcVout.setWindowSize(w, h)
                         }
@@ -231,15 +231,6 @@ class VlcPlayerController(
                         if (!vlcVout.areViewsAttached()) {
                             vlcVout.attachViews()
                         }
-                        // Set window size after layout
-                        textureView?.post {
-                            val w = textureView?.width ?: 0
-                            val h = textureView?.height ?: 0
-                            Log.d(TAG, "VLC: TextureView size after layout ${w}x${h}")
-                            if (w > 0 && h > 0) {
-                                vlcVout.setWindowSize(w, h)
-                            }
-                        }
                     } else {
                         Log.d(TAG, "SurfaceTexture not ready, waiting...")
                         textureView?.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
@@ -248,15 +239,6 @@ class VlcPlayerController(
                                 vlcVout.setVideoSurface(Surface(surfaceTexture), null)
                                 if (!vlcVout.areViewsAttached()) {
                                     vlcVout.attachViews()
-                                }
-                                // Set window size after layout
-                                textureView?.post {
-                                    val w = textureView?.width ?: 0
-                                    val h = textureView?.height ?: 0
-                                    Log.d(TAG, "VLC: TextureView size after layout ${w}x${h}")
-                                    if (w > 0 && h > 0) {
-                                        vlcVout.setWindowSize(w, h)
-                                    }
                                 }
                             }
                             override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) {
@@ -270,6 +252,16 @@ class VlcPlayerController(
                                 return false
                             }
                             override fun onSurfaceTextureUpdated(st: SurfaceTexture) {}
+                        }
+                    }
+                    
+                    // Listen for layout changes
+                    textureView?.addOnLayoutChangeListener { _, left, top, right, bottom, _, _, _, _ ->
+                        val w = right - left
+                        val h = bottom - top
+                        Log.d(TAG, "VLC: TextureView layout changed ${w}x${h}")
+                        if (w > 0 && h > 0) {
+                            vlcVout.setWindowSize(w, h)
                         }
                     }
                 }
