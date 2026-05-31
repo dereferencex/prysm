@@ -10,6 +10,7 @@ import android.view.TextureView
 import android.view.ViewGroup
 import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
+import org.videolan.libvlc.Media.VideoTrack
 import org.videolan.libvlc.interfaces.IMedia
 import org.videolan.libvlc.util.VLCVideoLayout
 
@@ -237,7 +238,7 @@ class VlcPlayerController(
         val media = mediaPlayer?.media ?: return
         for (i in 0 until media.trackCount) {
             val track = media.getTrack(i)
-            if (track is Media.VideoTrack) {
+            if (track is VideoTrack) {
                 val w = track.width
                 val h = track.height
                 if (w > 0 && h > 0) {
