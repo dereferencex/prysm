@@ -237,7 +237,7 @@ class VlcPlayerController(
         val media = mediaPlayer?.media ?: return
         for (i in 0 until media.trackCount) {
             val track = media.getTrack(i)
-            if (track.type == Media.Track.Type.Video) {
+            if (track is Media.VideoTrack) {
                 val w = track.width
                 val h = track.height
                 if (w > 0 && h > 0) {
