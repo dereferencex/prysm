@@ -87,6 +87,7 @@ class VlcPlayerController(
                         Log.d(TAG, "VLC: Playing started")
                         isPrepared = true
                         isPlayingState = true
+                        reportTracks()
                         callbacks?.onReady()
                         callbacks?.onPlayingChanged(true)
                         callbacks?.onBufferingChanged(false)
@@ -127,6 +128,7 @@ class VlcPlayerController(
                         Log.d(TAG, "VLC: Vout count: $count")
                         if (count > 0) {
                             durationMs = this.length
+                            reportVideoSize()
                             callbacks?.onReady()
                         }
                     }
@@ -228,6 +230,65 @@ class VlcPlayerController(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error attaching VLC video output: ${e.message}", e)
+        }
+    }
+
+    private fun reportVideoSize() {
+        val media = mediaPlayer?.media ?: return
+        for (i in 0 until media.trackCount) {
+            val track = media.getTrack(i)
+            if (track.type == Media.Track.Type.Video) {
+                val w = track.width
+                val h = track.height
+                if (w > 0 && h > 0) {
+                    Log.d(TAG, "VLC: Video size ${w}x${h}")
+                    callbacks?.onVideoSizeChanged(w, h, 1.0f)
+                }
+                break
+            }
+        }
+    }
+
+    private fun reportTracks() {
+        val player = mediaPlayer ?: return
+        val audioTracks = mutableListOf<Map<String, Any>>()
+        val subtitleTracks = mutableListOf<Map<String, Any>>()
+
+        try {
+            val currentAudioId = player.audioTrack
+            player.audioTracks?.forEachIndexed { index, desc ->
+                audioTracks.add(mapOf(
+                    "groupIndex" to 0,
+                    "trackIndex" to index,
+                    "id" to "audio_0_${index}",
+                    "label" to (desc.name ?: "Audio ${index + 1}"),
+                    "language" to "",
+                    "isSelected" to (desc.id == currentAudioId),
+                ))
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error reading VLC audio tracks: ${e.message}")
+        }
+
+        try {
+            val currentSpuId = player.spuTrack
+            player.spuTracks?.forEachIndexed { index, desc ->
+                subtitleTracks.add(mapOf(
+                    "groupIndex" to 0,
+                    "trackIndex" to index,
+                    "id" to "sub_0_${index}",
+                    "label" to (desc.name ?: "Subtitle ${index + 1}"),
+                    "language" to "",
+                    "isSelected" to (desc.id == currentSpuId),
+                ))
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error reading VLC subtitle tracks: ${e.message}")
+        }
+
+        if (audioTracks.isNotEmpty() || subtitleTracks.isNotEmpty()) {
+            Log.d(TAG, "VLC: Reporting ${audioTracks.size} audio, ${subtitleTracks.size} subtitle tracks")
+            callbacks?.onTracksChanged(audioTracks, subtitleTracks)
         }
     }
 

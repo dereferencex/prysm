@@ -535,7 +535,11 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
     }
     // nativeReadyRef is not reactive — intentionally omitted from deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSource, headers, drm, autoPlay]);
+  }, [currentSource, headers, drm, autoPlay, activePlayerEngine]);
+
+  // Keep a ref to the latest loadSource so the callback ref always calls the current version
+  const loadSourceRef = useRef(loadSource);
+  loadSourceRef.current = loadSource;
 
   // Native view callback ref — fires when the native view mounts.
   const nativeViewRef = useCallback((node: any) => {
@@ -544,10 +548,8 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
       // The native view just mounted; trigger initial load.
       nativeReadyRef.current = true;
       // Slight delay to let the native view fully initialise its surface.
-      setTimeout(() => loadSource(), 50);
+      setTimeout(() => loadSourceRef.current(), 50);
     }
-    // loadSource is stable (useCallback) — safe to include
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Release on unmount

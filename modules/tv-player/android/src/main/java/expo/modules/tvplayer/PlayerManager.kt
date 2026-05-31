@@ -68,8 +68,7 @@ class PlayerManager(
         activeController?.setCallbacks(ForwardingCallbacks(callbacks))
         applyPendingSurface(activeController!!)
 
-        if (lastLoadParams != null && savedPosition > 0) {
-            val params = lastLoadParams!!
+        lastLoadParams?.let { params ->
             activeController?.load(
                 params.url,
                 params.headers,
@@ -78,7 +77,9 @@ class PlayerManager(
                 params.drmHeaders,
                 false,
             )
-            activeController?.seekTo(savedPosition)
+            if (savedPosition > 0) {
+                activeController?.seekTo(savedPosition)
+            }
             if (wasPlaying) {
                 activeController?.play()
             }
