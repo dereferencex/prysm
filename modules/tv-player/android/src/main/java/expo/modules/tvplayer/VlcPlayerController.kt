@@ -236,22 +236,24 @@ class VlcPlayerController(
     private fun reportVideoSize() {
         try {
             val media = mediaPlayer?.media ?: return
+            Log.d(TAG, "VLC: Checking ${media.trackCount} tracks for video size")
             for (i in 0 until media.trackCount) {
                 val track = media.getTrack(i)
-                if (track.type == 1) { // 1 = video track type
+                Log.d(TAG, "VLC: Track $i type=${track.type}, codec=${track.codec}")
+                if (track.type == 2) { // 2 = video track type in libvlc
                     val widthField = track.javaClass.getField("width")
                     val heightField = track.javaClass.getField("height")
                     val w = widthField.getInt(track)
                     val h = heightField.getInt(track)
+                    Log.d(TAG, "VLC: Found video track ${w}x${h}")
                     if (w > 0 && h > 0) {
-                        Log.d(TAG, "VLC: Video size ${w}x${h}")
                         callbacks?.onVideoSizeChanged(w, h, 1.0f)
                     }
                     break
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Could not get video size: ${e.message}")
+            Log.w(TAG, "Could not get video size: ${e.message}", e)
         }
     }
 
