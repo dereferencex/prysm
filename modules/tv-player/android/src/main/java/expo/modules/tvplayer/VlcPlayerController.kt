@@ -10,7 +10,6 @@ import android.view.TextureView
 import android.view.ViewGroup
 import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
-import org.videolan.libvlc.Media.VideoTrack
 import org.videolan.libvlc.interfaces.IMedia
 import org.videolan.libvlc.util.VLCVideoLayout
 
@@ -235,18 +234,24 @@ class VlcPlayerController(
     }
 
     private fun reportVideoSize() {
-        val media = mediaPlayer?.media ?: return
-        for (i in 0 until media.trackCount) {
-            val track = media.getTrack(i)
-            if (track is VideoTrack) {
-                val w = track.width
-                val h = track.height
-                if (w > 0 && h > 0) {
-                    Log.d(TAG, "VLC: Video size ${w}x${h}")
-                    callbacks?.onVideoSizeChanged(w, h, 1.0f)
+        try {
+            val media = mediaPlayer?.media ?: return
+            for (i in 0 until media.trackCount) {
+                val track = media.getTrack(i)
+                if (track.type == 1) { // 1 = video track type
+                    val widthField = track.javaClass.getField("width")
+                    val heightField = track.javaClass.getField("height")
+                    val w = widthField.getInt(track)
+                    val h = heightField.getInt(track)
+                    if (w > 0 && h > 0) {
+                        Log.d(TAG, "VLC: Video size ${w}x${h}")
+                        callbacks?.onVideoSizeChanged(w, h, 1.0f)
+                    }
+                    break
                 }
-                break
             }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not get video size: ${e.message}")
         }
     }
 
