@@ -199,6 +199,23 @@ class VlcPlayerController(
                     if (!vlcVout.areViewsAttached()) {
                         vlcVout.attachViews()
                     }
+                    surfaceView?.holder?.addCallback(object : android.view.SurfaceHolder.Callback {
+                        override fun surfaceCreated(holder: android.view.SurfaceHolder) {
+                            val w = surfaceView?.width ?: 0
+                            val h = surfaceView?.height ?: 0
+                            Log.d(TAG, "VLC: Surface created ${w}x${h}")
+                            if (w > 0 && h > 0) {
+                                vlcVout.setWindowSize(w, h)
+                            }
+                        }
+                        override fun surfaceChanged(holder: android.view.SurfaceHolder, format: Int, width: Int, height: Int) {
+                            Log.d(TAG, "VLC: Surface changed ${width}x${height}")
+                            if (width > 0 && height > 0) {
+                                vlcVout.setWindowSize(width, height)
+                            }
+                        }
+                        override fun surfaceDestroyed(holder: android.view.SurfaceHolder) {}
+                    })
                 }
                 textureView != null -> {
                     val st = textureView?.surfaceTexture
@@ -208,17 +225,30 @@ class VlcPlayerController(
                         if (!vlcVout.areViewsAttached()) {
                             vlcVout.attachViews()
                         }
+                        val w = textureView?.width ?: 0
+                        val h = textureView?.height ?: 0
+                        if (w > 0 && h > 0) {
+                            vlcVout.setWindowSize(w, h)
+                        }
                     } else {
                         Log.d(TAG, "SurfaceTexture not ready, waiting...")
                         textureView?.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
                             override fun onSurfaceTextureAvailable(surfaceTexture: SurfaceTexture, width: Int, height: Int) {
-                                Log.d(TAG, "SurfaceTexture now available, attaching VLC")
+                                Log.d(TAG, "SurfaceTexture now available ${width}x${height}, attaching VLC")
                                 vlcVout.setVideoSurface(Surface(surfaceTexture), null)
                                 if (!vlcVout.areViewsAttached()) {
                                     vlcVout.attachViews()
                                 }
+                                if (width > 0 && height > 0) {
+                                    vlcVout.setWindowSize(width, height)
+                                }
                             }
-                            override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) {}
+                            override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) {
+                                Log.d(TAG, "VLC: SurfaceTexture size changed ${w}x${h}")
+                                if (w > 0 && h > 0) {
+                                    vlcVout.setWindowSize(w, h)
+                                }
+                            }
                             override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean {
                                 vlcVout.setVideoSurface(null, null)
                                 return false
