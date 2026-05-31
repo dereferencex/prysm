@@ -23,7 +23,9 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.prysmplayer.app",
       "jsEngine": "hermes",
-      "permissions": ["REQUEST_INSTALL_PACKAGES"]
+      "permissions": [
+        "REQUEST_INSTALL_PACKAGES"
+      ]
     },
     "web": {
       "output": "single",
@@ -37,9 +39,16 @@
           "androidTVBanner": "./assets/images/android-tv-banner.png"
         }
       ],
-      ["./plugins/withNetworkSecurityConfig", {}],
-      ["./modules/tv-channel/plugin"],
-      ["./modules/tv-player/plugin"],
+      [
+        "./plugins/withNetworkSecurityConfig",
+        {}
+      ],
+      [
+        "./modules/tv-channel/plugin"
+      ],
+      [
+        "./modules/tv-player/plugin"
+      ],
       [
         "expo-splash-screen",
         {
@@ -58,7 +67,8 @@
         {
           "initialOrientation": "DEFAULT"
         }
-      ]
+      ],
+      "expo-font"
     ],
     "experiments": {
       "reactCompiler": true
