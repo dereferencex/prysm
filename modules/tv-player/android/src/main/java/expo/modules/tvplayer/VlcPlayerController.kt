@@ -60,10 +60,7 @@ class VlcPlayerController(
         options.add("--live-caching=3000")
         options.add("--http-caching=3000")
         options.add("--file-caching=3000")
-        options.add("--codec=all")
         options.add("--avcodec-hw=any")
-        options.add("--subsdec-encoding=UTF-8")
-        options.add("--sout-subtitles-force-autodetection")
         options.add("--no-video-title-show")
         options.add("--no-osd")
 

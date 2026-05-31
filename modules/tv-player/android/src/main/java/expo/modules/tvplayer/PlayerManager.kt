@@ -22,6 +22,8 @@ class PlayerManager(
     private var consecutiveErrorCount = 0
     private var isSwitching = false
     private var lastLoadParams: LoadParams? = null
+    private var pendingSurfaceView: SurfaceView? = null
+    private var pendingTextureView: TextureView? = null
 
     data class LoadParams(
         val url: String,
@@ -64,6 +66,7 @@ class PlayerManager(
 
         activeController = getOrCreateController(newEngine)
         activeController?.setCallbacks(ForwardingCallbacks(callbacks))
+        applyPendingSurface(activeController!!)
 
         if (lastLoadParams != null && savedPosition > 0) {
             val params = lastLoadParams!!
@@ -99,21 +102,33 @@ class PlayerManager(
         if (activeController == null) {
             activeController = getOrCreateController(currentEngine)
             activeController?.setCallbacks(ForwardingCallbacks(callbacks))
+            applyPendingSurface(activeController!!)
         }
 
         activeController?.load(url, headers, drmType, drmLicenseUrl, drmHeaders, autoPlay)
     }
 
     fun setVideoSurfaceView(surfaceView: SurfaceView) {
+        pendingSurfaceView = surfaceView
+        pendingTextureView = null
         activeController?.setVideoSurfaceView(surfaceView)
     }
 
     fun setTextureView(textureView: TextureView) {
+        pendingTextureView = textureView
+        pendingSurfaceView = null
         activeController?.setTextureView(textureView)
     }
 
     fun clearVideoSurface() {
+        pendingSurfaceView = null
+        pendingTextureView = null
         activeController?.clearVideoSurface()
+    }
+
+    private fun applyPendingSurface(controller: PlayerController) {
+        pendingSurfaceView?.let { controller.setVideoSurfaceView(it) }
+        pendingTextureView?.let { controller.setTextureView(it) }
     }
 
     fun play() { activeController?.play() }
