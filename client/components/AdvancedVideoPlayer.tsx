@@ -581,9 +581,14 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (nextAppState === "background" || nextAppState === "inactive") {
         // Mobile: do NOT auto-enter PiP — user must tap the PiP button explicitly
-        // If background play is disabled, stop background audio when app goes to background
-        if (!backgroundPlay && isBackgroundPlayingRef.current) {
-          TvPlayerCommands.disableBackgroundAudio(tvPlayerRef);
+        // If background play is disabled, stop playback when app goes to background
+        if (!backgroundPlay) {
+          // Stop background service if it was running
+          if (isBackgroundPlayingRef.current) {
+            TvPlayerCommands.disableBackgroundAudio(tvPlayerRef);
+          }
+          // ALWAYS pause the player when background play is disabled
+          TvPlayerCommands.pause(tvPlayerRef);
         }
       } else if (nextAppState === "active") {
         // App came back to foreground
