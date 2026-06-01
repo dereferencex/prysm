@@ -556,9 +556,14 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   useEffect(() => {
     return () => {
       if (controlsTimerRef.current) clearTimeout(controlsTimerRef.current);
+      // Explicitly pause and disable background audio before release
+      if (!backgroundPlay) {
+        TvPlayerCommands.pause(tvPlayerRef);
+        TvPlayerCommands.disableBackgroundAudio(tvPlayerRef);
+      }
       TvPlayerCommands.release(tvPlayerRef);
     };
-  }, []);
+  }, [backgroundPlay]);
 
   // Sync background audio state on mount
   useEffect(() => {
@@ -723,7 +728,8 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
           // it playing before navigating away.
           setShowStopAudioModal(true);
         } else {
-          // Controls already hidden — treat as a navigation back
+          // Controls already hidden — pause and navigate back
+          TvPlayerCommands.pause(tvPlayerRef);
           onBack?.();
         }
       }
@@ -1103,7 +1109,13 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
             <View style={st.topLeft}>
               {onBack ? (
                 <TVFocusablePressable
-                  onPress={onBack}
+                  onPress={() => {
+                    // Pause playback before navigating back if background play is disabled
+                    if (!backgroundPlay) {
+                      TvPlayerCommands.pause(tvPlayerRef);
+                    }
+                    onBack();
+                  }}
                   baseStyle={st.iconBtn}
                   focusedStyle={st.iconBtnFocused}
                   focusable={showControls}
@@ -1614,6 +1626,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
             <TVFocusablePressable
               onPress={() => {
                 setShowStopAudioModal(false);
+                // Keep playing - don't pause, just navigate back
                 onBack?.();
               }}
               baseStyle={st.optionRow}
@@ -1633,6 +1646,8 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
             </TVFocusablePressable>
             <TVFocusablePressable
               onPress={() => {
+                // Stop audio and go back
+                TvPlayerCommands.pause(tvPlayerRef);
                 TvPlayerCommands.disableBackgroundAudio(tvPlayerRef);
                 setShowStopAudioModal(false);
                 onBack?.();
