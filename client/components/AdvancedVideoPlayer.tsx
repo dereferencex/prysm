@@ -560,12 +560,31 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
     };
   }, []);
 
+  // Sync background audio state on mount
+  useEffect(() => {
+    const syncBackgroundState = async () => {
+      const isEnabled = await TvPlayerCommands.isBackgroundAudioEnabled(tvPlayerRef);
+      if (isEnabled !== undefined) {
+        isBackgroundPlayingRef.current = isEnabled;
+        setIsBackgroundPlaying(isEnabled);
+      }
+    };
+    
+    // Small delay to ensure native view is ready
+    const timer = setTimeout(syncBackgroundState, 100);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Handle app state changes — background audio is only enabled when
   // the user explicitly toggles it or the backgroundPlay setting is on.
   useEffect(() => {
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (nextAppState === "background" || nextAppState === "inactive") {
         // Mobile: do NOT auto-enter PiP — user must tap the PiP button explicitly
+        // If background play is disabled, stop background audio when app goes to background
+        if (!backgroundPlay && isBackgroundPlayingRef.current) {
+          TvPlayerCommands.disableBackgroundAudio(tvPlayerRef);
+        }
       } else if (nextAppState === "active") {
         // App came back to foreground
         if (isTV && isBackgroundPlayingRef.current) {
@@ -580,19 +599,32 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
       handleAppStateChange,
     );
     return () => subscription.remove();
-  }, []);
+  }, [backgroundPlay]);
 
-  // Enable background audio on mount if the setting is on (TV only).
+  // Enable background audio on mount if the setting is on.
   useEffect(() => {
-    if (!isTV || !backgroundPlay || !isPlaying) return;
-    TvPlayerCommands.enableBackgroundAudio(tvPlayerRef);
-    TvPlayerCommands.setMediaMetadata(tvPlayerRef, {
-      title: title || "",
-      artist: subtitle || "Live TV",
-      artworkUri: poster,
-    });
+    if (!backgroundPlay || !isPlaying) return;
+    
+    const enableBackground = async () => {
+      // Request notification permission on Android 13+
+      if (Platform.OS === "android" && parseInt(String(Platform.Version), 10) >= 33) {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+        );
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) return;
+      }
+      
+      TvPlayerCommands.enableBackgroundAudio(tvPlayerRef);
+      TvPlayerCommands.setMediaMetadata(tvPlayerRef, {
+        title: title || "",
+        artist: subtitle || "Live TV",
+        artworkUri: poster,
+      });
+    };
+    
+    enableBackground();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [backgroundPlay, isPlaying]);
 
   // Keep a ref to the current contentFit so the PiP listener (which is
   // registered once) always restores the correct mode on PiP exit.

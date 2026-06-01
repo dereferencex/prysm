@@ -46,6 +46,10 @@ class TvPlayerService : MediaSessionService() {
         const val NOTIFICATION_CHANNEL_NAME = "Background Playback"
         // Stable notification ID — must be > 0 and consistent across calls
         const val FOREGROUND_NOTIFICATION_ID = 1001
+        
+        // Track whether background play was explicitly enabled
+        @Volatile
+        var backgroundPlayEnabled = false
     }
 
     private var mediaSession: MediaSession? = null
@@ -76,10 +80,11 @@ class TvPlayerService : MediaSessionService() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        // User swiped the app from recents. Background audio is intentional —
-        // leave the service running. The user can stop audio via the
-        // media notification stop button or via the in-app dialog on TV.
-        // Do nothing here.
+        // User swiped the app from recents.
+        // Only keep the service running if background play was explicitly enabled.
+        if (!backgroundPlayEnabled) {
+            stopSelf()
+        }
     }
 
     override fun onDestroy() {

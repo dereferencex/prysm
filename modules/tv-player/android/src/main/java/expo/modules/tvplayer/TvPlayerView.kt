@@ -221,6 +221,7 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
 
         serviceStarting = true
         PlayerRegistry.player = null
+        TvPlayerService.backgroundPlayEnabled = true
 
         val intent = Intent(context, TvPlayerService::class.java)
         try {
@@ -241,6 +242,7 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
     fun disableBackgroundAudio(silent: Boolean = false) {
         if (!backgroundAudioEnabled) return
         backgroundAudioEnabled = false
+        TvPlayerService.backgroundPlayEnabled = false
         PlayerRegistry.player = null
         try {
             context.stopService(Intent(context, TvPlayerService::class.java))
