@@ -273,6 +273,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   const [isLocked, setIsLocked] = useState(false);
   const [contentFit, setContentFit] = useState<ContentFit>("contain");
   const [currentSource, setCurrentSource] = useState(source);
+  const [nativeReady, setNativeReady] = useState(false);
   const [detectedQualities, setDetectedQualities] = useState<VideoQuality[]>(
     [],
   );
@@ -547,6 +548,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
     if (node && !nativeReadyRef.current) {
       // The native view just mounted; trigger initial load.
       nativeReadyRef.current = true;
+      setNativeReady(true);
       // Slight delay to let the native view fully initialise its surface.
       setTimeout(() => loadSourceRef.current(), 50);
     }
@@ -583,7 +585,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   // Handle app state changes — background audio is only enabled when
   // the user explicitly toggles it or the backgroundPlay setting is on.
   useEffect(() => {
-    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+    const handleAppStateChange = async (nextAppState: AppStateStatus) => {
       if (nextAppState === "background" || nextAppState === "inactive") {
         // Mobile: do NOT auto-enter PiP — user must tap the PiP button explicitly
         // If background play is disabled, stop playback when app goes to background
@@ -601,6 +603,31 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
           // Re-attach video surface if background audio was active
           TvPlayerCommands.play(tvPlayerRef);
         }
+        
+        // Enable background audio if setting is on and video is playing
+        if (backgroundPlay && isPlaying && nativeReady && !isBackgroundPlayingRef.current) {
+          // Small delay to ensure everything is ready
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          if (Platform.OS === "android" && parseInt(String(Platform.Version), 10) >= 33) {
+            try {
+              const granted = await PermissionsAndroid.request(
+                PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+              );
+              if (granted !== PermissionsAndroid.RESULTS.GRANTED) return;
+            } catch (error) {
+              console.error("Permission request failed:", error);
+              return;
+            }
+          }
+          
+          TvPlayerCommands.enableBackgroundAudio(tvPlayerRef);
+          TvPlayerCommands.setMediaMetadata(tvPlayerRef, {
+            title: title || "",
+            artist: subtitle || "Live TV",
+            artworkUri: poster,
+          });
+        }
       }
     };
 
@@ -609,19 +636,27 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
       handleAppStateChange,
     );
     return () => subscription.remove();
-  }, [backgroundPlay]);
+  }, [backgroundPlay, isPlaying, nativeReady, title, subtitle, poster]);
 
-  // Enable background audio on mount if the setting is on.
+  // Enable background audio when the setting is on and video is playing.
   useEffect(() => {
-    if (!backgroundPlay || !isPlaying) return;
+    if (!backgroundPlay || !isPlaying || !nativeReady) return;
     
     const enableBackground = async () => {
+      // Small delay to ensure player is fully initialized
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       // Request notification permission on Android 13+
       if (Platform.OS === "android" && parseInt(String(Platform.Version), 10) >= 33) {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
-        );
-        if (granted !== PermissionsAndroid.RESULTS.GRANTED) return;
+        try {
+          const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+          );
+          if (granted !== PermissionsAndroid.RESULTS.GRANTED) return;
+        } catch (error) {
+          console.error("Permission request failed:", error);
+          return;
+        }
       }
       
       TvPlayerCommands.enableBackgroundAudio(tvPlayerRef);
@@ -634,7 +669,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
     
     enableBackground();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [backgroundPlay, isPlaying]);
+  }, [backgroundPlay, isPlaying, nativeReady]);
 
   // Keep a ref to the current contentFit so the PiP listener (which is
   // registered once) always restores the correct mode on PiP exit.
