@@ -12,6 +12,8 @@ import {
   ActivityIndicator,
   Linking,
   Alert,
+  AppState,
+  AppStateStatus,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -34,6 +36,8 @@ import {
   checkForUpdate,
   downloadApk,
   getDownloadedApkPath,
+  clearDownloadedApk,
+  getApkContentUri,
   UpdateInfo,
 } from "@/utils/updateChecker";
 import * as FileSystemLegacy from "expo-file-system/legacy";
@@ -208,7 +212,28 @@ export default function SettingsScreen() {
       }
     };
     initializeUpdateCheck();
-  }, []);
+    
+    // Listen for app state changes to handle install result
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (nextAppState === "active" && installingApk) {
+        // App returned to foreground after installer
+        setInstallingApk(false);
+        setShowUpdateModal(false);
+        // Re-check for updates to see if version changed
+        checkForUpdate().then((info) => {
+          if (info) {
+            setUpdateInfo(info);
+            if (!info.available) {
+              Alert.alert("Update Successful", "App has been updated to the latest version.");
+            }
+          }
+        });
+      }
+    };
+    
+    const subscription = AppState.addEventListener("change", handleAppStateChange);
+    return () => subscription.remove();
+  }, [installingApk]);
 
   const handleToggleAutoPlay = (value: boolean) => {
     if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -366,6 +391,9 @@ export default function SettingsScreen() {
     setDownloadProgress(0);
     setUpdateError(null);
     try {
+      // Clean up any old APK first
+      await clearDownloadedApk();
+      
       const apkPath = await downloadApk(updateInfo.apkUrl, (progress) => {
         setDownloadProgress(Math.round(progress * 100));
       });
@@ -375,14 +403,25 @@ export default function SettingsScreen() {
       }
       setDownloadingApk(false);
       setInstallingApk(true);
-      const contentUri = await FileSystemLegacy.getContentUriAsync(apkPath);
+      
+      const contentUri = await getApkContentUri(apkPath);
+      if (!contentUri) {
+        setUpdateError("Failed to prepare update for installation");
+        return;
+      }
+      
+      // Use modern intent action for Android 10+
       await IntentLauncher.startActivityAsync(
-        "android.intent.action.INSTALL_PACKAGE",
+        "android.intent.action.VIEW",
         {
           data: contentUri,
-          flags: 1,
+          type: "application/vnd.android.package-archive",
+          flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
         },
       );
+      
+      // Clean up the APK after successful install launch
+      await clearDownloadedApk();
     } catch (error) {
       console.error("Error installing update:", error);
       setUpdateError("Failed to install update");
@@ -392,11 +431,20 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleOpenUpdateModal = () => {
+  const handleOpenUpdateModal = async () => {
     if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setUpdateError(null);
     setDownloadProgress(0);
+    // Clean up any old APKs when opening the modal
+    await clearDownloadedApk();
     setShowUpdateModal(true);
+  };
+
+  const handleCloseUpdateModal = async () => {
+    if (downloadingApk || installingApk) return;
+    setShowUpdateModal(false);
+    // Clean up APK when closing modal
+    await clearDownloadedApk();
   };
 
   const getQualityLabel = () => {
@@ -1269,15 +1317,11 @@ export default function SettingsScreen() {
         visible={showUpdateModal}
         transparent
         animationType="fade"
-        onRequestClose={() =>
-          !downloadingApk && !installingApk && setShowUpdateModal(false)
-        }
+        onRequestClose={handleCloseUpdateModal}
       >
         <Pressable
           style={styles.modalOverlay}
-          onPress={() =>
-            !downloadingApk && !installingApk && setShowUpdateModal(false)
-          }
+          onPress={handleCloseUpdateModal}
           focusable={!isTV}
         >
           <View
@@ -1355,7 +1399,7 @@ export default function SettingsScreen() {
             )}
             <View style={styles.confirmButtons}>
               <Button
-                onPress={() => setShowUpdateModal(false)}
+                onPress={handleCloseUpdateModal}
                 style={[
                   styles.confirmButton,
                   { backgroundColor: theme.backgroundSecondary },

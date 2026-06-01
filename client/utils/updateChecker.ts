@@ -118,8 +118,21 @@ export async function getDownloadedApkPath(): Promise<string | null> {
 export async function clearDownloadedApk(): Promise<void> {
   if (!APK_DOWNLOAD_DIR) return;
   const apkPath = `${APK_DOWNLOAD_DIR}prysm-update.apk`;
-  const fileInfo = await FileSystemLegacy.getInfoAsync(apkPath);
-  if (fileInfo.exists) {
-    await FileSystemLegacy.deleteAsync(apkPath);
+  try {
+    const fileInfo = await FileSystemLegacy.getInfoAsync(apkPath);
+    if (fileInfo.exists) {
+      await FileSystemLegacy.deleteAsync(apkPath);
+    }
+  } catch (error) {
+    console.error("Error clearing downloaded APK:", error);
+  }
+}
+
+export async function getApkContentUri(apkPath: string): Promise<string | null> {
+  try {
+    return await FileSystemLegacy.getContentUriAsync(apkPath);
+  } catch (error) {
+    console.error("Error getting content URI:", error);
+    return null;
   }
 }
