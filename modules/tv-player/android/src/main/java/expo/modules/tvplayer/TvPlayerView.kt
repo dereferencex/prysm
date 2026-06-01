@@ -150,6 +150,7 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         aspectFrame.resizeMode = mode
         aspectFrame.requestLayout()
         requestLayout()
+        playerManager.setResizeMode(mode)
     }
 
     fun load(

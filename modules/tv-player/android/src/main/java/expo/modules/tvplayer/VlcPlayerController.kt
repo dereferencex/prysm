@@ -29,6 +29,7 @@ class VlcPlayerController(
     private var isPrepared = false
     private var isPlayingState = false
     private var durationMs: Long = 0L
+    private var currentResizeMode: Int = 0 // 0 = FIT, 1 = FILL, 3 = ZOOM
 
     companion object {
         private const val TAG = "VlcPlayerController"
@@ -137,6 +138,7 @@ class VlcPlayerController(
                                 Log.d(TAG, "VLC: Setting window size on Vout ${w}x${h}")
                                 if (w > 0 && h > 0) {
                                     this@VlcPlayerController.mediaPlayer?.vlcVout?.setWindowSize(w, h)
+                                    updateVlcScale()
                                 }
                             }
                             callbacks?.onReady()
@@ -218,6 +220,7 @@ class VlcPlayerController(
                             Log.d(TAG, "VLC: SurfaceView laid out ${w}x${h}")
                             if (w > 0 && h > 0) {
                                 vlcVout.setWindowSize(w, h)
+                                updateVlcScale()
                                 surfaceView?.viewTreeObserver?.removeOnGlobalLayoutListener(this)
                             }
                         }
@@ -230,6 +233,7 @@ class VlcPlayerController(
                         Log.d(TAG, "VLC: SurfaceView layout changed ${w}x${h}")
                         if (w > 0 && h > 0) {
                             vlcVout.setWindowSize(w, h)
+                            updateVlcScale()
                         }
                     }
                     
@@ -241,6 +245,7 @@ class VlcPlayerController(
                             Log.d(TAG, "VLC: Surface changed ${width}x${height}")
                             if (width > 0 && height > 0) {
                                 vlcVout.setWindowSize(width, height)
+                                updateVlcScale()
                             }
                         }
                         override fun surfaceDestroyed(holder: android.view.SurfaceHolder) {}
@@ -262,6 +267,7 @@ class VlcPlayerController(
                                 Log.d(TAG, "VLC: TextureView laid out ${w}x${h}")
                                 if (w > 0 && h > 0) {
                                     vlcVout.setWindowSize(w, h)
+                                    updateVlcScale()
                                     textureView?.viewTreeObserver?.removeOnGlobalLayoutListener(this)
                                 }
                             }
@@ -283,6 +289,7 @@ class VlcPlayerController(
                                         Log.d(TAG, "VLC: TextureView laid out ${w}x${h}")
                                         if (w > 0 && h > 0) {
                                             vlcVout.setWindowSize(w, h)
+                                            updateVlcScale()
                                             textureView?.viewTreeObserver?.removeOnGlobalLayoutListener(this)
                                         }
                                     }
@@ -294,6 +301,7 @@ class VlcPlayerController(
                                     Log.d(TAG, "VLC: TextureView layout changed ${w}x${h}")
                                     if (w > 0 && h > 0) {
                                         vlcVout.setWindowSize(w, h)
+                                        updateVlcScale()
                                     }
                                 }
                             }
@@ -316,6 +324,7 @@ class VlcPlayerController(
                             Log.d(TAG, "VLC: TextureView layout changed ${w}x${h}")
                             if (w > 0 && h > 0) {
                                 vlcVout.setWindowSize(w, h)
+                                updateVlcScale()
                             }
                         }
                     }
@@ -435,8 +444,42 @@ class VlcPlayerController(
     }
 
     override fun getCurrentPosition(): Long = mediaPlayer?.time ?: 0L
-    override fun getDuration(): Long = mediaPlayer?.length ?: 0L
+    override fun getDuration(): Long {
+        val length = mediaPlayer?.length ?: 0L
+        // For live streams, VLC can return very large duration values
+        // Treat streams with duration > 24 hours as live streams (duration = 0)
+        return if (length > 86400000L) 0L else length
+    }
     override fun isPlaying(): Boolean = mediaPlayer?.isPlaying ?: false
+
+    fun setResizeMode(mode: Int) {
+        currentResizeMode = mode
+        updateVlcScale()
+    }
+
+    private fun updateVlcScale() {
+        val player = mediaPlayer ?: return
+        when (currentResizeMode) {
+            0 -> { // FIT - maintain aspect ratio, fit within window
+                player.setScale(0f)
+                player.setAspectRatio(null)
+            }
+            1 -> { // FILL - stretch to fill window (ignore aspect ratio)
+                player.setScale(0f)
+                // Get surface dimensions and set aspect ratio to match
+                val view = surfaceView ?: textureView
+                val w = view?.width ?: 0
+                val h = view?.height ?: 0
+                if (w > 0 && h > 0) {
+                    player.setAspectRatio("${w}:${h}")
+                }
+            }
+            3 -> { // ZOOM - fill window while maintaining aspect ratio (may crop)
+                player.setScale(0f)
+                player.setAspectRatio(null)
+            }
+        }
+    }
 
     private fun release(silent: Boolean = false) {
         savedPosition = getCurrentPosition()

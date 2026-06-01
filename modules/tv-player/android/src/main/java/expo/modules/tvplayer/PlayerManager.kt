@@ -137,6 +137,14 @@ class PlayerManager(
     fun seekTo(positionMs: Long) { activeController?.seekTo(positionMs) }
     fun setVolume(volume: Float) { activeController?.setVolume(volume) }
 
+    fun setResizeMode(mode: Int) {
+        // Only VLC needs to know about resize mode changes
+        // ExoPlayer handles it automatically through AspectRatioFrameLayout
+        if (activeController is VlcPlayerController) {
+            (activeController as VlcPlayerController).setResizeMode(mode)
+        }
+    }
+
     fun selectAudioTrack(groupIndex: Int, trackIndex: Int) {
         activeController?.selectAudioTrack(groupIndex, trackIndex)
     }
