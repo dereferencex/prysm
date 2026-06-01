@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -42,6 +43,7 @@ import androidx.media3.session.MediaSessionService
 class TvPlayerService : MediaSessionService() {
 
     companion object {
+        private const val TAG = "TvPlayerService"
         const val NOTIFICATION_CHANNEL_ID   = "tv_player_background"
         const val NOTIFICATION_CHANNEL_NAME = "Background Playback"
         // Stable notification ID — must be > 0 and consistent across calls
@@ -58,13 +60,20 @@ class TvPlayerService : MediaSessionService() {
         super.onCreate()
         ensureNotificationChannel()
 
-        // ── Step 1: Call startForeground() immediately ────────────────────────
-        // This keeps Android from killing the service within the 5-second window
-        // while we wait for Media3 to post its rich playback notification.
+        // Call startForeground() immediately to satisfy Android's 5-second requirement
         startForeground(FOREGROUND_NOTIFICATION_ID, buildPlaceholderNotification())
 
-        // ── Step 2: Build the MediaSession if the player is already registered ─
+        // Try to build the MediaSession if the player is already registered
         tryBuildSession()
+        
+        // If player isn't ready yet, retry after a short delay
+        if (mediaSession == null && PlayerRegistry.player == null) {
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                if (mediaSession == null) {
+                    tryBuildSession()
+                }
+            }, 500)
+        }
     }
 
     /**
@@ -103,16 +112,20 @@ class TvPlayerService : MediaSessionService() {
         val player = PlayerRegistry.player ?: return
         if (mediaSession != null) return // already built
 
-        mediaSession = MediaSession.Builder(this, player)
-            .setCallback(object : MediaSession.Callback {
-                // Allow system and Bluetooth controllers to connect
-                override fun onConnect(
-                    session: MediaSession,
-                    controller: MediaSession.ControllerInfo,
-                ): MediaSession.ConnectionResult =
-                    MediaSession.ConnectionResult.AcceptedResultBuilder(session).build()
-            })
-            .build()
+        try {
+            mediaSession = MediaSession.Builder(this, player)
+                .setCallback(object : MediaSession.Callback {
+                    override fun onConnect(
+                        session: MediaSession,
+                        controller: MediaSession.ControllerInfo,
+                    ): MediaSession.ConnectionResult =
+                        MediaSession.ConnectionResult.AcceptedResultBuilder(session).build()
+                })
+                .build()
+            Log.d(TAG, "MediaSession built successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to build MediaSession", e)
+        }
     }
 
     /**

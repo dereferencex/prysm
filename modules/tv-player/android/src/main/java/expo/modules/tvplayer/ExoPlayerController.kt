@@ -142,6 +142,7 @@ class ExoPlayerController(
     fun releasePlayer(silent: Boolean = false) {
         savedPosition = getCurrentPosition()
         exoPlayer?.let { player ->
+            PlayerRegistry.unregisterPlayer()
             player.removeListener(aspectRatioListener)
             player.removeListener(playerListener)
             player.removeListener(subtitleListener)
@@ -254,6 +255,7 @@ class ExoPlayerController(
         if (currentAutoPlay) player.playWhenReady = true
 
         exoPlayer = player
+        PlayerRegistry.registerPlayer(player)
         Log.d(TAG, "ExoPlayer built and prepared")
     }
 

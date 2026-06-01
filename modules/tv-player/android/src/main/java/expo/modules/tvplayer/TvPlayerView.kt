@@ -220,7 +220,6 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         }
 
         serviceStarting = true
-        PlayerRegistry.player = null
         TvPlayerService.backgroundPlayEnabled = true
 
         val intent = Intent(context, TvPlayerService::class.java)
@@ -233,7 +232,7 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
             backgroundAudioEnabled = true
             onBackgroundAudioChange(mapOf("enabled" to true))
         } catch (e: Exception) {
-            PlayerRegistry.player = null
+            Log.e(TAG, "Failed to start background audio service", e)
         } finally {
             serviceStarting = false
         }
@@ -243,7 +242,6 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         if (!backgroundAudioEnabled) return
         backgroundAudioEnabled = false
         TvPlayerService.backgroundPlayEnabled = false
-        PlayerRegistry.player = null
         try {
             context.stopService(Intent(context, TvPlayerService::class.java))
         } catch (_: Exception) {}
