@@ -1429,26 +1429,6 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
 
               {/* Right tool buttons */}
               <View style={st.bottomRight}>
-                {/* Aspect ratio */}
-                <TVFocusablePressable
-                  onPress={() => {
-                    const currentIndex = CONTENT_FIT_OPTIONS.findIndex(
-                      (o) => o.value === contentFit,
-                    );
-                    const nextIndex =
-                      (currentIndex + 1) % CONTENT_FIT_OPTIONS.length;
-                    const next = CONTENT_FIT_OPTIONS[nextIndex];
-                    setContentFit(next.value);
-                    TvPlayerCommands.setResizeMode(tvPlayerRef, next.value);
-                  }}
-                  baseStyle={st.toolBtn}
-                  focusedStyle={st.toolBtnFocused}
-                  focusable={showControls}
-                  accessibilityLabel="Aspect ratio"
-                >
-                  <Ionicons name="scan-outline" size={20} color="#fff" />
-                </TVFocusablePressable>
-
                 {/* Settings */}
                 <TVFocusablePressable
                   onPress={() => setShowSettingsModal(true)}
@@ -1500,6 +1480,26 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                     <Ionicons name="browsers-outline" size={20} color="#fff" />
                   </TVFocusablePressable>
                 ) : null}
+
+                {/* Aspect ratio */}
+                <TVFocusablePressable
+                  onPress={() => {
+                    const currentIndex = CONTENT_FIT_OPTIONS.findIndex(
+                      (o) => o.value === contentFit,
+                    );
+                    const nextIndex =
+                      (currentIndex + 1) % CONTENT_FIT_OPTIONS.length;
+                    const next = CONTENT_FIT_OPTIONS[nextIndex];
+                    setContentFit(next.value);
+                    TvPlayerCommands.setResizeMode(tvPlayerRef, next.value);
+                  }}
+                  baseStyle={st.toolBtn}
+                  focusedStyle={st.toolBtnFocused}
+                  focusable={showControls}
+                  accessibilityLabel="Aspect ratio"
+                >
+                  <Ionicons name="scan-outline" size={20} color="#fff" />
+                </TVFocusablePressable>
               </View>
             </View>
           </View>
