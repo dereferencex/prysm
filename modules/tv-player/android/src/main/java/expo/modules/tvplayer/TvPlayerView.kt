@@ -17,6 +17,7 @@ import android.view.TextureView
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.Toast
 import android.app.PictureInPictureParams
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -216,6 +217,7 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         if (backgroundAudioEnabled || serviceStarting) return
         if (playerEngine != PlayerEngine.EXOPLAYER) {
             Log.w(TAG, "Background audio only supported with ExoPlayer")
+            Toast.makeText(context, "Background play requires ExoPlayer. Switch to ExoPlayer in settings.", Toast.LENGTH_LONG).show()
             return
         }
 
