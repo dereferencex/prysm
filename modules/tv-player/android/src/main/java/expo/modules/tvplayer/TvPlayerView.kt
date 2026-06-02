@@ -327,18 +327,16 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         if (!isTV) PipRegistry.onPipModeChanged = null
-        if (backgroundAudioEnabled) {
-            stopPoller()
-            playerManager.clearVideoSurface()
-        } else if (PipRegistry.isInPipMode) {
-            playerManager.clearVideoSurface()
-        } else if (isTV && surfaceView != null) {
-            playerManager.setVideoSurfaceView(surfaceView!!)
-        } else if (textureView != null) {
-            playerManager.setTextureView(textureView!!)
-        } else {
+        
+        // If background audio is disabled and not in PiP, stop playback
+        if (!backgroundAudioEnabled && !PipRegistry.isInPipMode) {
             releasePlayer()
+            return
         }
+        
+        // Otherwise, just clear the video surface but keep playing
+        stopPoller()
+        playerManager.clearVideoSurface()
     }
 
     override fun onAttachedToWindow() {
