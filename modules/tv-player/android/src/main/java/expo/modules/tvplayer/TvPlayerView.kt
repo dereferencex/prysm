@@ -163,7 +163,7 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
     ) {
         Log.d(TAG, "load() called with engine=$playerEngine, url=$url")
         releasePlayer()
-        PlayerRegistry.registerPlayer(player = null, view = this)
+        PlayerRegistry.registerPlayer(exoPlayer = null, view = this)
         playerManager.load(url, headers, drmType, drmLicenseUrl, drmHeaders, autoPlay)
     }
 
