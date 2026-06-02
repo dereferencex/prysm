@@ -443,7 +443,13 @@ class VlcPlayerController(
         }
     }
 
-    override fun getCurrentPosition(): Long = mediaPlayer?.time ?: 0L
+    override fun getCurrentPosition(): Long {
+        val position = mediaPlayer?.time ?: 0L
+        val duration = getDuration()
+        // For live streams, position can exceed duration
+        // Clamp to duration to prevent progress bar overflow
+        return if (duration > 0 && position > duration) duration else position
+    }
     override fun getDuration(): Long {
         val length = mediaPlayer?.length ?: 0L
         // For live streams, VLC can return very large duration values
