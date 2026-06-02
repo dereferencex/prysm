@@ -325,6 +325,12 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
     }
 
     override fun onDetachedFromWindow() {
+        // Detach video output BEFORE super destroys the surface.
+        // VLC's native render thread may access the Surface/TextureView surface
+        // during playback; if the surface is destroyed before VLC detaches from
+        // it, the next frame attempt causes a JNI SIGSEGV.
+        playerManager.clearVideoSurface()
+
         super.onDetachedFromWindow()
         if (!isTV) PipRegistry.onPipModeChanged = null
         
@@ -334,9 +340,8 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
             return
         }
         
-        // Otherwise, just clear the video surface but keep playing
+        // Otherwise, just stop the position poller
         stopPoller()
-        playerManager.clearVideoSurface()
     }
 
     override fun onAttachedToWindow() {
