@@ -174,12 +174,14 @@ class PlayerManager(
     }
 
     fun release() {
-        exoController?.release()
-        vlcController?.release()
+        val savedExo = exoController
+        val savedVlc = vlcController
         exoController = null
         vlcController = null
         activeController = null
         lastLoadParams = null
+        savedExo?.release()
+        savedVlc?.release()
         Log.d(TAG, "PlayerManager released all resources")
     }
 

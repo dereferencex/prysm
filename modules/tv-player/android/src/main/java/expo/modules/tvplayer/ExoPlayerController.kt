@@ -39,6 +39,8 @@ class ExoPlayerController(
     private var currentDrmHeaders: Map<String, String>? = null
     private var currentAutoPlay: Boolean = true
     private var savedPosition: Long = 0L
+    @Volatile
+    private var released = false
 
     companion object {
         private const val TAG = "ExoPlayerController"
@@ -140,6 +142,8 @@ class ExoPlayerController(
     override fun isPlaying(): Boolean = exoPlayer?.isPlaying ?: false
 
     fun releasePlayer(silent: Boolean = false) {
+        if (released) return
+        released = true
         savedPosition = getCurrentPosition()
         exoPlayer?.let { player ->
             PlayerRegistry.unregisterPlayer()
@@ -179,6 +183,7 @@ class ExoPlayerController(
 
     private fun buildPlayer() {
         releasePlayer(silent = true)
+        released = false
 
         val okHttpClient = OkHttpClient.Builder()
             .addInterceptor { chain ->

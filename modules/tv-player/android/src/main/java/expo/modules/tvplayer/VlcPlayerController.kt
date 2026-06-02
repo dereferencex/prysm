@@ -30,6 +30,8 @@ class VlcPlayerController(
     private var isPlayingState = false
     private var durationMs: Long = 0L
     private var currentResizeMode: Int = 0 // 0 = FIT, 1 = FILL, 3 = ZOOM
+    @Volatile
+    private var released = false
 
     companion object {
         private const val TAG = "VlcPlayerController"
@@ -55,6 +57,7 @@ class VlcPlayerController(
         isPlayingState = false
 
         release(silent = true)
+        released = false
 
         val options = ArrayList<String>()
         options.add("--network-caching=3000")
@@ -488,6 +491,8 @@ class VlcPlayerController(
     }
 
     private fun release(silent: Boolean = false) {
+        if (released) return
+        released = true
         savedPosition = getCurrentPosition()
         try {
             mediaPlayer?.let {
