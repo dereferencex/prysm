@@ -163,6 +163,7 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
     ) {
         Log.d(TAG, "load() called with engine=$playerEngine, url=$url")
         releasePlayer()
+        PlayerRegistry.registerPlayer(player = null, view = this)
         playerManager.load(url, headers, drmType, drmLicenseUrl, drmHeaders, autoPlay)
     }
 
@@ -258,6 +259,13 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         stopPoller()
         disableBackgroundAudio(silent = true)
         playerManager.release()
+        PlayerRegistry.clearActiveView()
+    }
+    
+    fun stopPlayback() {
+        Log.d(TAG, "stopPlayback() called - stopping player for new channel")
+        playerManager.pause()
+        disableBackgroundAudio(silent = true)
     }
 
     // ── PlayerController.Callbacks implementation ────────────────────────────
