@@ -325,23 +325,26 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
     }
 
     override fun onDetachedFromWindow() {
-        // Detach video output BEFORE super destroys the surface.
-        // VLC's native render thread may access the Surface/TextureView surface
-        // during playback; if the surface is destroyed before VLC detaches from
-        // it, the next frame attempt causes a JNI SIGSEGV.
-        playerManager.clearVideoSurface()
+        // If background audio is disabled and not in PiP, fully release the
+        // player BEFORE super.onDetachedFromWindow() destroys the surface.
+        // VLC's native render thread runs independently of the Java/UI thread;
+        // if the Android surface is destroyed while VLC still holds a reference
+        // to it (even after detachViews), the next frame attempt causes a
+        // JNI SIGSEGV that cannot be caught by try/catch.
+        if (!backgroundAudioEnabled && !PipRegistry.isInPipMode) {
+            releasePlayer()
+        } else {
+            // Keep playing (background audio / PiP) — detach the surface but
+            // leave the player alive so it resumes when reattached.
+            playerManager.clearVideoSurface()
+        }
 
         super.onDetachedFromWindow()
         if (!isTV) PipRegistry.onPipModeChanged = null
         
-        // If background audio is disabled and not in PiP, stop playback
-        if (!backgroundAudioEnabled && !PipRegistry.isInPipMode) {
-            releasePlayer()
-            return
+        if (backgroundAudioEnabled || PipRegistry.isInPipMode) {
+            stopPoller()
         }
-        
-        // Otherwise, just stop the position poller
-        stopPoller()
     }
 
     override fun onAttachedToWindow() {
