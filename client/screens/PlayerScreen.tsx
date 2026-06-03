@@ -153,9 +153,10 @@ export default function PlayerScreen() {
   const handleChannelSelect = useCallback(
     (selectedChannelId: string) => {
       if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      if (selectedChannelId === channelId) return;
       navigation.replace("Player", { channelId: selectedChannelId });
     },
-    [navigation],
+    [channelId, navigation],
   );
 
   const handleError = useCallback((error: string) => {

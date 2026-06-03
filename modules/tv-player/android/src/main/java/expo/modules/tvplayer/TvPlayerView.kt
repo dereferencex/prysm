@@ -54,6 +54,7 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
 
     private var backgroundAudioEnabled = false
     private var serviceStarting = false
+    private var currentUrl: String? = null
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val positionPoller = object : Runnable {
@@ -162,6 +163,14 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         autoPlay: Boolean,
     ) {
         Log.d(TAG, "load() called with engine=$playerEngine, url=$url")
+
+        if (url == currentUrl) {
+            Log.d(TAG, "Same channel ($url) — resuming existing playback")
+            play()
+            return
+        }
+
+        currentUrl = url
         releasePlayer()
         PlayerRegistry.registerPlayer(exoPlayer = null, view = this)
         playerManager.load(url, headers, drmType, drmLicenseUrl, drmHeaders, autoPlay)
@@ -260,6 +269,7 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         disableBackgroundAudio(silent = true)
         playerManager.release()
         PlayerRegistry.clearActiveView()
+        currentUrl = null
     }
     
     fun stopPlayback() {
