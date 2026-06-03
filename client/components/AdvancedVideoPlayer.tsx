@@ -542,17 +542,17 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   useEffect(() => {
     return () => {
       if (controlsTimerRef.current) clearTimeout(controlsTimerRef.current);
-      // Always pause playback before releasing. This is safe even when
-      // backgroundPlay is on: for ExoPlayer the background service keeps
-      // the player alive; for VLC (which doesn't support background audio)
-      // this prevents its native render thread from accessing a destroyed
-      // surface.  disableBackgroundAudio is only called when the setting
-      // is off, so the background service isn't killed prematurely.
-      TvPlayerCommands.pause(tvPlayerRef);
+      // NOTE: We do NOT call native release/pause here. The native
+      // onDetachedFromWindow() handles all player cleanup. Dispatching
+      // async native calls from JS creates a threading race with the
+      // UI-thread onDetachedFromWindow(), which can double-free VLC's
+      // native resources (SIGSEGV).
+      //
+      // The only JS-side call we need is disableBackgroundAudio when the
+      // setting is off, to ensure the background service is stopped.
       if (!backgroundPlay) {
         TvPlayerCommands.disableBackgroundAudio(tvPlayerRef);
       }
-      TvPlayerCommands.release(tvPlayerRef);
     };
   }, [backgroundPlay]);
 
