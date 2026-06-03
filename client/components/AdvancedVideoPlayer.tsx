@@ -207,6 +207,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   // On phone they appear on the first tap.
   const [showControls, setShowControlsState] = useState(false);
   const [seekBarFocused, setSeekBarFocused] = useState(false);
+  const seekBarFocusedRef = useRef(false);
   // Node handles for nextFocus wiring — populated via onLayout callbacks
   const [nh, setNh] = useState<{
     backBtn: number | null;
@@ -723,9 +724,19 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
       if (!evt) return;
       const { eventType } = evt;
 
-      if (["up", "down", "left", "right", "playPause"].includes(eventType)) {
+      if (["up", "down", "playPause"].includes(eventType)) {
         // Directional / play-pause keys show controls and reset the hide timer
         if (!showControlsRef.current) {
+          showAndScheduleHideRef.current();
+        } else {
+          scheduleHideRef.current();
+        }
+      } else if (eventType === "left" || eventType === "right") {
+        // D-pad left/right on seek bar: scrub 10s
+        if (showControlsRef.current && seekBarFocusedRef.current) {
+          const dir = eventType === "left" ? -SEEK_MS : SEEK_MS;
+          handleSeek(dir);
+        } else if (!showControlsRef.current) {
           showAndScheduleHideRef.current();
         } else {
           scheduleHideRef.current();
@@ -1248,6 +1259,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 viewRef={prevBtnRef}
                 nextFocusRight={nh.playPause}
                 nextFocusUp={nh.backBtn}
+                nextFocusDown={nh.firstTool}
               >
                 <Ionicons
                   name="play-skip-back"
@@ -1273,6 +1285,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 viewRef={prevBtnRef}
                 nextFocusRight={nh.playPause}
                 nextFocusUp={nh.backBtn}
+                nextFocusDown={nh.firstTool}
               >
                 <Ionicons
                   name="play-back"
@@ -1329,6 +1342,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 viewRef={nextBtnRef}
                 nextFocusLeft={nh.playPause}
                 nextFocusUp={nh.favoriteBtn ?? nh.recentBtn}
+                nextFocusDown={nh.firstTool}
               >
                 <Ionicons
                   name="play-skip-forward"
@@ -1354,6 +1368,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 viewRef={nextBtnRef}
                 nextFocusLeft={nh.playPause}
                 nextFocusUp={nh.favoriteBtn ?? nh.recentBtn}
+                nextFocusDown={nh.firstTool}
               >
                 <Ionicons
                   name="play-forward"
@@ -1396,8 +1411,8 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                     ref={seekBarRef}
                     style={[st.seekBar, seekBarFocused && st.seekBarFocused]}
                     focusable={showControls}
-                    onFocus={() => setSeekBarFocused(true)}
-                    onBlur={() => setSeekBarFocused(false)}
+                    onFocus={() => { setSeekBarFocused(true); seekBarFocusedRef.current = true; }}
+                    onBlur={() => { setSeekBarFocused(false); seekBarFocusedRef.current = false; }}
                     nextFocusUp={nh.playPause ?? undefined}
                     nextFocusDown={nh.firstTool ?? undefined}
                     onLayout={(e) => {
@@ -1502,6 +1517,10 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                   viewRef={settingsBtnRef}
                   nextFocusUp={nh.seekBar ?? nh.playPause}
                   nextFocusRight={nh.bgAudioBtn}
+                  onLayout={(e) => {
+                    updateNh("settingsBtn", e);
+                    updateNh("firstTool", e);
+                  }}
                 >
                   <Ionicons name="settings-outline" size={20} color="#fff" />
                 </TVFocusablePressable>
@@ -2412,6 +2431,7 @@ const st = StyleSheet.create({
   },
   iconBtnFocused: {
     backgroundColor: Colors.dark.primary + "40",
+    borderColor: Colors.dark.primary,
     transform: [{ scale: 1.1 }],
   },
 
@@ -2430,6 +2450,7 @@ const st = StyleSheet.create({
     borderColor: "transparent",
   },
   playBtnFocused: {
+    borderColor: "#fff",
     transform: [{ scale: 1.08 }],
   },
   navBtn: {
@@ -2441,6 +2462,7 @@ const st = StyleSheet.create({
   },
   navBtnFocused: {
     backgroundColor: "rgba(255,255,255,0.28)",
+    borderColor: Colors.dark.primary,
     transform: [{ scale: 1.08 }],
   },
 
@@ -2467,7 +2489,8 @@ const st = StyleSheet.create({
     borderColor: "transparent",
   },
   seekBarFocused: {
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderColor: Colors.dark.primary,
   },
   seekBarTrack: {
     height: 4,
@@ -2571,6 +2594,7 @@ const st = StyleSheet.create({
   },
   toolBtnFocused: {
     backgroundColor: "rgba(255,255,255,0.28)",
+    borderColor: Colors.dark.primary,
     transform: [{ scale: 1.12 }],
   },
 

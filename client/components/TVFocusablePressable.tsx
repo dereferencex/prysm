@@ -19,6 +19,7 @@ export interface TVFocusablePressableProps {
   nextFocusDown?: number | null;
   nextFocusLeft?: number | null;
   nextFocusRight?: number | null;
+  onLayout?: (e: any) => void;
 }
 
 export function TVFocusablePressable({
@@ -37,6 +38,7 @@ export function TVFocusablePressable({
   nextFocusDown,
   nextFocusLeft,
   nextFocusRight,
+  onLayout,
 }: TVFocusablePressableProps) {
   const [focused, setFocused] = useState(false);
   const tvProps: any = {};
@@ -60,6 +62,7 @@ export function TVFocusablePressable({
       accessibilityLabel={accessibilityLabel}
       accessibilityRole={accessibilityRole}
       hitSlop={hitSlop}
+      onLayout={onLayout}
       {...tvProps}
       style={resolvedStyle as ViewStyle[]}
     >
