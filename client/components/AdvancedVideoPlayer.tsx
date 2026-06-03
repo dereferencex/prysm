@@ -54,6 +54,7 @@ import {
   NativeAudioTrack,
   NativeSubtitleTrack,
 } from "../../modules/tv-player/src/index";
+import { TVFocusablePressable } from "@/components/TVFocusablePressable";
 
 const isTV = Platform.isTV;
 
@@ -75,65 +76,6 @@ function formatTime(ms: number): string {
   if (h > 0)
     return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
-// ── TVFocusablePressable ──────────────────────────────────────────────────────
-
-function TVFocusablePressable({
-  onPress,
-  baseStyle,
-  focusedStyle,
-  children,
-  hitSlop,
-  focusable = true,
-  hasTVPreferredFocus,
-  accessibilityLabel,
-  accessibilityRole = "button" as const,
-  viewRef,
-  nextFocusUp,
-  nextFocusDown,
-  nextFocusLeft,
-  nextFocusRight,
-}: {
-  onPress: () => void;
-  baseStyle: any;
-  focusedStyle: ViewStyle;
-  children: React.ReactNode;
-  hitSlop?: number;
-  focusable?: boolean;
-  hasTVPreferredFocus?: boolean;
-  accessibilityLabel?: string;
-  accessibilityRole?: "button" | "link";
-  viewRef?: React.RefObject<any>;
-  nextFocusUp?: number | null;
-  nextFocusDown?: number | null;
-  nextFocusLeft?: number | null;
-  nextFocusRight?: number | null;
-}) {
-  const [focused, setFocused] = useState(false);
-  const tvProps: any = {};
-  if (hasTVPreferredFocus) tvProps.hasTVPreferredFocus = true;
-  if (nextFocusUp != null) tvProps.nextFocusUp = nextFocusUp;
-  if (nextFocusDown != null) tvProps.nextFocusDown = nextFocusDown;
-  if (nextFocusLeft != null) tvProps.nextFocusLeft = nextFocusLeft;
-  if (nextFocusRight != null) tvProps.nextFocusRight = nextFocusRight;
-  const base = Array.isArray(baseStyle) ? baseStyle : [baseStyle];
-  return (
-    <Pressable
-      ref={viewRef}
-      onPress={onPress}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      focusable={focusable}
-      accessibilityLabel={accessibilityLabel}
-      accessibilityRole={accessibilityRole}
-      hitSlop={hitSlop}
-      {...tvProps}
-      style={[...base, focused && focusedStyle] as ViewStyle[]}
-    >
-      {children}
-    </Pressable>
-  );
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -248,23 +190,53 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
 
   // TV focus routing — refs for nextFocus wiring between the three control rows
   const backBtnRef = useRef<any>(null);
+  const prevBtnRef = useRef<any>(null);
   const playPauseBtnRef = useRef<any>(null);
+  const nextBtnRef = useRef<any>(null);
   const seekBarRef = useRef<any>(null);
   const seekBarWidthRef = useRef<number>(1); // actual rendered width, updated via onLayout
   const firstToolBtnRef = useRef<any>(null);
+  const recentBtnRef = useRef<any>(null);
+  const favoriteBtnRef = useRef<any>(null);
+  const settingsBtnRef = useRef<any>(null);
+  const bgAudioBtnRef = useRef<any>(null);
+  const aspectBtnRef = useRef<any>(null);
 
   // ── State ─────────────────────────────────────────────────────────────────
   // Controls always start hidden. On TV they appear on the first OK press.
   // On phone they appear on the first tap.
   const [showControls, setShowControlsState] = useState(false);
   const [seekBarFocused, setSeekBarFocused] = useState(false);
-  // Node handles for nextFocus wiring — populated after first layout
+  // Node handles for nextFocus wiring — populated via onLayout callbacks
   const [nh, setNh] = useState<{
     backBtn: number | null;
+    prevBtn: number | null;
     playPause: number | null;
+    nextBtn: number | null;
     seekBar: number | null;
     firstTool: number | null;
-  }>({ backBtn: null, playPause: null, seekBar: null, firstTool: null });
+    recentBtn: number | null;
+    favoriteBtn: number | null;
+    settingsBtn: number | null;
+    bgAudioBtn: number | null;
+    aspectBtn: number | null;
+  }>({
+    backBtn: null,
+    prevBtn: null,
+    playPause: null,
+    nextBtn: null,
+    seekBar: null,
+    firstTool: null,
+    recentBtn: null,
+    favoriteBtn: null,
+    settingsBtn: null,
+    bgAudioBtn: null,
+    aspectBtn: null,
+  });
+  // Track how many node handles we've collected — show controls only after
+  // the critical ones (back, playPause, seekBar) are ready on TV.
+  const nhReadyCount = useRef(0);
+  const NH_READY_MIN = 3; // backBtn, playPause, seekBar
   const [isPlaying, setIsPlaying] = useState(autoPlay);
   const [isLoading, setIsLoading] = useState(true);
   const [isBuffering, setIsBuffering] = useState(false);
@@ -443,22 +415,19 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   }, [cancelHideTimer]);
 
   // ── TV nextFocus node handles ─────────────────────────────────────────────
-  // Computed once after the controls first become visible so the refs are
-  // attached. Allows Android TV to follow a predictable D-pad order:
-  //   Top row  →  Center row (play/pause)  →  Bottom row (seek bar / tools)
-  useEffect(() => {
-    if (!isTV || !showControls) return;
-    // Small delay so the Pressable refs are attached after the animated fade-in
-    const t = setTimeout(() => {
-      setNh({
-        backBtn: findNodeHandle(backBtnRef.current),
-        playPause: findNodeHandle(playPauseBtnRef.current),
-        seekBar: findNodeHandle(seekBarRef.current),
-        firstTool: findNodeHandle(firstToolBtnRef.current),
+  // Computed via onLayout callbacks on each ref'd button — no timeouts.
+  // Each callback updates one slot in the nh state object.
+  const updateNh = useCallback(
+    (key: keyof typeof nh, e: any) => {
+      const nodeHandle = findNodeHandle(e.target);
+      if (nodeHandle == null) return;
+      setNh((prev) => {
+        if (prev[key] === nodeHandle) return prev; // no change
+        return { ...prev, [key]: nodeHandle };
       });
-    }, 250);
-    return () => clearTimeout(t);
-  }, [showControls]);
+    },
+    [],
+  );
 
   // ── Source change ─────────────────────────────────────────────────────────
 
@@ -1173,6 +1142,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                   accessibilityLabel="Back"
                   viewRef={backBtnRef}
                   nextFocusDown={nh.playPause}
+                  nextFocusRight={nh.recentBtn ?? nh.favoriteBtn}
                 >
                   <Ionicons
                     name="chevron-back"
@@ -1215,6 +1185,10 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                   focusedStyle={st.iconBtnFocused}
                   focusable={showControls}
                   accessibilityLabel="Recent channels"
+                  viewRef={recentBtnRef}
+                  nextFocusDown={nh.playPause}
+                  nextFocusLeft={nh.backBtn}
+                  nextFocusRight={nh.favoriteBtn}
                 >
                   <Ionicons
                     name="list"
@@ -1234,6 +1208,9 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                   accessibilityLabel={
                     isFavorite ? "Remove favourite" : "Add favourite"
                   }
+                  viewRef={favoriteBtnRef}
+                  nextFocusDown={nh.playPause}
+                  nextFocusLeft={nh.recentBtn ?? nh.backBtn}
                 >
                   <Ionicons
                     name={isFavorite ? "heart" : "heart-outline"}
@@ -1263,6 +1240,9 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 focusable={showControls}
                 hitSlop={12}
                 accessibilityLabel="Previous"
+                viewRef={prevBtnRef}
+                nextFocusRight={nh.playPause}
+                nextFocusUp={nh.backBtn}
               >
                 <Ionicons
                   name="play-skip-back"
@@ -1285,6 +1265,9 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 focusable={showControls}
                 hitSlop={12}
                 accessibilityLabel="Seek back 10s"
+                viewRef={prevBtnRef}
+                nextFocusRight={nh.playPause}
+                nextFocusUp={nh.backBtn}
               >
                 <Ionicons
                   name="play-back"
@@ -1312,6 +1295,8 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
               viewRef={playPauseBtnRef}
               nextFocusUp={nh.backBtn}
               nextFocusDown={nh.seekBar ?? nh.firstTool}
+              nextFocusLeft={nh.prevBtn}
+              nextFocusRight={nh.nextBtn}
             >
               <Ionicons
                 name={isPlaying ? "pause" : "play"}
@@ -1336,6 +1321,9 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 focusable={showControls}
                 hitSlop={12}
                 accessibilityLabel="Next"
+                viewRef={nextBtnRef}
+                nextFocusLeft={nh.playPause}
+                nextFocusUp={nh.favoriteBtn ?? nh.recentBtn}
               >
                 <Ionicons
                   name="play-skip-forward"
@@ -1358,6 +1346,9 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 focusable={showControls}
                 hitSlop={12}
                 accessibilityLabel="Seek forward 10s"
+                viewRef={nextBtnRef}
+                nextFocusLeft={nh.playPause}
+                nextFocusUp={nh.favoriteBtn ?? nh.recentBtn}
               >
                 <Ionicons
                   name="play-forward"
@@ -1503,6 +1494,9 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                   focusedStyle={st.toolBtnFocused}
                   focusable={showControls}
                   accessibilityLabel="Settings"
+                  viewRef={settingsBtnRef}
+                  nextFocusUp={nh.seekBar ?? nh.playPause}
+                  nextFocusRight={nh.bgAudioBtn}
                 >
                   <Ionicons name="settings-outline" size={20} color="#fff" />
                 </TVFocusablePressable>
@@ -1521,8 +1515,10 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                       ? "Disable background audio"
                       : "Enable background audio"
                   }
-                  viewRef={firstToolBtnRef}
+                  viewRef={bgAudioBtnRef}
                   nextFocusUp={nh.seekBar ?? nh.playPause}
+                  nextFocusLeft={nh.settingsBtn}
+                  nextFocusRight={nh.aspectBtn}
                 >
                   <Ionicons
                     name={
@@ -1564,6 +1560,9 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                   focusedStyle={st.toolBtnFocused}
                   focusable={showControls}
                   accessibilityLabel="Aspect ratio"
+                  viewRef={aspectBtnRef}
+                  nextFocusUp={nh.seekBar ?? nh.playPause}
+                  nextFocusLeft={nh.bgAudioBtn}
                 >
                   <Ionicons name="scan-outline" size={20} color="#fff" />
                 </TVFocusablePressable>
@@ -1593,6 +1592,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
             focusedStyle={st.iconBtnFocused}
             hitSlop={16}
             accessibilityLabel="Close recent channels"
+            hasTVPreferredFocus={isTV && showRecentPanel}
           >
             <Ionicons name="close" size={22} color="#fff" />
           </TVFocusablePressable>
@@ -1939,7 +1939,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                   />
                 ) : null}
               </TVFocusablePressable>
-              {qualities.map((q) => (
+              {qualities.map((q, idx) => (
                 <TVFocusablePressable
                   key={q.label}
                   onPress={() => handleQualitySelect(q)}
@@ -1948,7 +1948,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                     selectedQuality === q.label && st.optionRowActive,
                   ]}
                   focusedStyle={st.optionRowFocused}
-                  hasTVPreferredFocus={isTV && selectedQuality === q.label}
+                  hasTVPreferredFocus={isTV && selectedQuality === q.label && idx === 0 && selectedQuality !== "auto"}
                 >
                   <View style={{ flex: 1 }}>
                     <ThemedText type="body" style={{ color: "#fff" }}>

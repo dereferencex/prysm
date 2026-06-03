@@ -41,14 +41,18 @@ function FocusablePressable({
   focusedStyle,
   children,
   accessibilityLabel,
+  hasTVPreferredFocus,
 }: {
   onPress: () => void;
   style: ViewStyle | ViewStyle[];
   focusedStyle?: ViewStyle;
   children: React.ReactNode;
   accessibilityLabel?: string;
+  hasTVPreferredFocus?: boolean;
 }) {
   const [isFocused, setIsFocused] = useState(false);
+  const tvProps: any = {};
+  if (hasTVPreferredFocus) tvProps.hasTVPreferredFocus = true;
   return (
     <Pressable
       onPress={onPress}
@@ -57,6 +61,7 @@ function FocusablePressable({
       focusable={true}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      {...tvProps}
       style={
         [
           ...(Array.isArray(style) ? style : [style]),
@@ -434,7 +439,7 @@ export default function NetworkStreamScreen() {
             <ThemedText type="h4" style={styles.modalTitle}>
               User Agent
             </ThemedText>
-            {USER_AGENT_OPTIONS.map((opt) => (
+            {USER_AGENT_OPTIONS.map((opt, idx) => (
               <FocusablePressable
                 key={opt.value}
                 onPress={() => {
@@ -453,6 +458,7 @@ export default function NetworkStreamScreen() {
                 }
                 focusedStyle={styles.modalOptionFocused}
                 accessibilityLabel={opt.label}
+                hasTVPreferredFocus={isTV && idx === 0}
               >
                 <ThemedText type="body">{opt.label}</ThemedText>
                 {config.userAgent === opt.value ? (
@@ -489,7 +495,7 @@ export default function NetworkStreamScreen() {
             <ThemedText type="h4" style={styles.modalTitle}>
               DRM Scheme
             </ThemedText>
-            {DRM_SCHEME_OPTIONS.map((opt) => (
+            {DRM_SCHEME_OPTIONS.map((opt, idx) => (
               <FocusablePressable
                 key={opt.value}
                 onPress={() => {
@@ -508,6 +514,7 @@ export default function NetworkStreamScreen() {
                 }
                 focusedStyle={styles.modalOptionFocused}
                 accessibilityLabel={opt.label}
+                hasTVPreferredFocus={isTV && idx === 0}
               >
                 <View style={styles.drmOptionText}>
                   <ThemedText type="body">{opt.label}</ThemedText>

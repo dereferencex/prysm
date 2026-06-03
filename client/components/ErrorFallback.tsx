@@ -7,6 +7,7 @@ import {
   ScrollView,
   Text,
   Modal,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Spacing, BorderRadius, Fonts } from "@/constants/theme";
@@ -43,13 +44,17 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
       {__DEV__ ? (
         <Pressable
           onPress={() => setIsModalVisible(true)}
-          style={({ pressed }) => [
+          style={({ pressed, focused }: any) => [
             styles.topButton,
             {
               backgroundColor: theme.backgroundDefault,
               opacity: pressed ? 0.8 : 1,
             },
+            focused && styles.buttonFocused,
           ]}
+          focusable={true}
+          accessibilityLabel="View error details"
+          accessibilityRole="button"
         >
           <Ionicons name="alert-circle" size={20} color={theme.text} />
         </Pressable>
@@ -110,10 +115,15 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
                 </Text>
                 <Pressable
                   onPress={() => setIsModalVisible(false)}
-                  style={({ pressed }) => [
+                  style={({ pressed, focused }: any) => [
                     styles.closeButton,
                     { opacity: pressed ? 0.6 : 1 },
+                    focused && styles.buttonFocused,
                   ]}
+                  focusable={true}
+                  hasTVPreferredFocus={Platform.isTV}
+                  accessibilityLabel="Close error details"
+                  accessibilityRole="button"
                 >
                   <Ionicons name="close" size={24} color={theme.text} />
                 </Pressable>

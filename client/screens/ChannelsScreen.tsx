@@ -54,7 +54,6 @@ function FocusableCategoryItem({
   onPress,
   onFavoritePress,
   theme,
-  hasTVPreferredFocus,
 }: {
   cat: string;
   isSelected: boolean;
@@ -63,13 +62,9 @@ function FocusableCategoryItem({
   onPress: () => void;
   onFavoritePress: (cat: string, e: any) => void;
   theme: any;
-  hasTVPreferredFocus?: boolean;
 }) {
   const [isFocused, setIsFocused] = useState(false);
   const [isFavFocused, setIsFavFocused] = useState(false);
-
-  const tvProps: any = {};
-  if (hasTVPreferredFocus) tvProps.hasTVPreferredFocus = true;
 
   return (
     <Pressable
@@ -83,7 +78,6 @@ function FocusableCategoryItem({
       onFocus={() => setIsFocused(true)}
       onBlur={() => setIsFocused(false)}
       focusable={true}
-      {...tvProps}
       style={
         [
           styles.categoryItem,
@@ -197,11 +191,15 @@ function FocusableMenuButton({
 function FocusableCloseButton({
   onPress,
   theme,
+  hasTVPreferredFocus,
 }: {
   onPress: () => void;
   theme: any;
+  hasTVPreferredFocus?: boolean;
 }) {
   const [isFocused, setIsFocused] = useState(false);
+  const tvProps: any = {};
+  if (hasTVPreferredFocus) tvProps.hasTVPreferredFocus = true;
   return (
     <Pressable
       onPress={onPress}
@@ -210,6 +208,7 @@ function FocusableCloseButton({
       focusable={true}
       accessibilityLabel="Close categories"
       accessibilityRole="button"
+      {...tvProps}
       style={
         [
           styles.closeButton,
@@ -671,7 +670,7 @@ export default function ChannelsScreen() {
           >
             <View style={styles.drawerHeader}>
               <ThemedText type="h4">Categories</ThemedText>
-              <FocusableCloseButton onPress={closeDrawer} theme={theme} />
+              <FocusableCloseButton onPress={closeDrawer} theme={theme} hasTVPreferredFocus={isTV} />
             </View>
 
             <FlashList
@@ -690,7 +689,6 @@ export default function ChannelsScreen() {
                     onPress={() => handleCategoryChange(cat)}
                     onFavoritePress={handleCategoryFavoritePress}
                     theme={theme}
-                    hasTVPreferredFocus={isTV && isSelected}
                   />
                 );
               }}

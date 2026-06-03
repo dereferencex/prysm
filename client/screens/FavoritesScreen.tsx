@@ -37,14 +37,18 @@ function FocusableTab({
   icon,
   label,
   accessibilityLabel,
+  hasTVPreferredFocus,
 }: {
   onPress: () => void;
   isActive: boolean;
   icon: string;
   label: string;
   accessibilityLabel: string;
+  hasTVPreferredFocus?: boolean;
 }) {
   const [isFocused, setIsFocused] = useState(false);
+  const tvProps: any = {};
+  if (hasTVPreferredFocus) tvProps.hasTVPreferredFocus = true;
   return (
     <Pressable
       onPress={onPress}
@@ -53,6 +57,7 @@ function FocusableTab({
       focusable={true}
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
+      {...tvProps}
       style={
         [
           styles.tab,
@@ -333,6 +338,7 @@ export default function FavoritesScreen() {
               icon="star"
               label={`Channels (${favoriteChannels.length})`}
               accessibilityLabel="Channels view"
+              hasTVPreferredFocus={Platform.isTV}
             />
             <FocusableTab
               onPress={() => handleViewModeChange("categories")}
