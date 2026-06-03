@@ -170,9 +170,9 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
             return
         }
 
-        currentUrl = url
-        releasePlayer()
         PlayerRegistry.registerPlayer(exoPlayer = null, view = this)
+        releasePlayer()
+        currentUrl = url
         playerManager.load(url, headers, drmType, drmLicenseUrl, drmHeaders, autoPlay)
     }
 
@@ -268,8 +268,11 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         stopPoller()
         disableBackgroundAudio(silent = true)
         playerManager.release()
-        PlayerRegistry.clearActiveView()
         currentUrl = null
+        // Note: activeView is NOT cleared here. It is only cleared when the
+        // view is actually destroyed (onDetachedFromWindow). This ensures that
+        // PlayerRegistry.registerPlayer() can still find the old view and call
+        // stopPlayback() on it when a new view loads a different channel.
     }
     
     fun stopPlayback() {
@@ -335,16 +338,16 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
     }
 
     override fun onDetachedFromWindow() {
-        // If background audio is disabled and not in PiP, fully release the
-        // player BEFORE super.onDetachedFromWindow() destroys the surface.
-        // VLC's native render thread runs independently of the Java/UI thread;
-        // if the Android surface is destroyed while VLC still holds a reference
-        // to it (even after detachViews), the next frame attempt causes a
-        // JNI SIGSEGV that cannot be caught by try/catch.
-        if (!backgroundAudioEnabled && !PipRegistry.isInPipMode) {
+        // VLC cannot play background audio — always fully release before the
+        // surface is destroyed, otherwise its native render thread crashes
+        // when it tries to draw to the destroyed surface (SIGSEGV).
+        val vlcNeedsRelease = playerManager.getCurrentEngine() == PlayerEngine.VLC
+
+        if (!backgroundAudioEnabled && !PipRegistry.isInPipMode || vlcNeedsRelease) {
             releasePlayer()
+            PlayerRegistry.clearActiveView()
         } else {
-            // Keep playing (background audio / PiP) — detach the surface but
+            // ExoPlayer with background audio / PiP — detach the surface but
             // leave the player alive so it resumes when reattached.
             playerManager.clearVideoSurface()
         }
