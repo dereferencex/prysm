@@ -44,6 +44,8 @@ import { ThemedText } from "@/components/ThemedText";
 import { useResponsive } from "@/hooks/useResponsive";
 import { Colors, Spacing, BorderRadius } from "@/constants/theme";
 import { parseHLSQualities, isHLSStream } from "@/lib/hls-quality-parser";
+import { parseDASHQualities, isDASHStream } from "@/lib/dash-quality-parser";
+import { parseMSSQualities, isMSSStream } from "@/lib/mss-quality-parser";
 import { Channel } from "@/types/playlist";
 import { getChannelPlayerEngine, setChannelPlayerEngine } from "@/lib/storage";
 import {
@@ -465,10 +467,23 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
     setCurrentSource(source);
   }, [source]);
 
-  // ── HLS quality detection ─────────────────────────────────────────────────
+  // ── Quality detection (HLS, DASH, MSS) ─────────────────────────────────────
   useEffect(() => {
-    if (!currentSource || !isHLSStream(currentSource)) return;
-    parseHLSQualities(currentSource)
+    if (!currentSource) return;
+
+    let parser: Promise<VideoQuality[]>;
+
+    if (isHLSStream(currentSource)) {
+      parser = parseHLSQualities(currentSource);
+    } else if (isDASHStream(currentSource)) {
+      parser = parseDASHQualities(currentSource);
+    } else if (isMSSStream(currentSource)) {
+      parser = parseMSSQualities(currentSource);
+    } else {
+      return;
+    }
+
+    parser
       .then((q) => {
         if (q.length > 0) setDetectedQualities(q);
       })

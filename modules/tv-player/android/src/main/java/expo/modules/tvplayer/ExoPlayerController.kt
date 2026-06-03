@@ -171,6 +171,8 @@ class ExoPlayerController(
             lower.endsWith(".m3u8") || lower.endsWith(".m3u") -> "application/x-mpegURL"
             lower.endsWith(".ts") -> "video/mp2t"
             lower.endsWith(".mpd") -> "application/dash+xml"
+            lower.endsWith(".ism/") || lower.endsWith(".ismc") ||
+                lower.contains(".ism/manifest") -> "application/vnd.ms-sstr+xml"
             lower.endsWith(".mp4") || lower.endsWith(".m4s") -> "video/mp4"
             lower.endsWith(".aac") -> "audio/aac"
             lower.endsWith(".mp3") -> "audio/mpeg"

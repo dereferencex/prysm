@@ -13,6 +13,7 @@ It is designed for large playlists, fast channel browsing, smooth playback, and 
 ## ✨ Features
 
 - **M3U / M3U8** playlist support.
+- **Adaptive Streaming:** DASH (MPD), Smooth Streaming (MSS/ISM), and HLS with quality selection.
 - **Flexible Loading:** Load playlists from a URL or a local file.
 - **Fast Channel Browsing:** Optimized specifically to handle large playlists.
 - **Organization:** Channel categories and filtering.
