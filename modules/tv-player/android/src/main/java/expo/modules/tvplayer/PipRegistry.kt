@@ -23,6 +23,14 @@ object PipRegistry {
     @Volatile var isInPipMode: Boolean = false
 
     /**
+     * Set to true in TvPlayerView.enterPip() before calling
+     * enterPictureInPictureMode(). Cleared by MainActivity when
+     * onPictureInPictureModeChanged fires. Bridges the race window where
+     * onDetachedFromWindow runs before the PiP mode callback arrives.
+     */
+    @Volatile var isEnteringPip: Boolean = false
+
+    /**
      * Callback invoked by MainActivity.onPictureInPictureModeChanged().
      * TvPlayerView registers here so it can fire the native view event
      * (onPipModeChange) which reaches JS reliably even with New Architecture.

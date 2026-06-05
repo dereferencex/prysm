@@ -163,6 +163,7 @@ function withTvPlayer(config) {
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         PipRegistry.isInPipMode = isInPictureInPictureMode
+        PipRegistry.isEnteringPip = false
 
         // Notify TvPlayerView so it can fire the native view event
         // (onPipModeChange). This is the primary path — it works with both

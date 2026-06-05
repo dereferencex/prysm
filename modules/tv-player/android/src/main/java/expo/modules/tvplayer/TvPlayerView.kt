@@ -183,6 +183,7 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
 
     fun enterPip() {
         if (isTV) return
+        if (playerEngine == PlayerEngine.VLC) return
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val activity = appContext.currentActivity ?: return
 
@@ -191,6 +192,7 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         requestLayout()
 
         try {
+            PipRegistry.isEnteringPip = true
             val ratio = PipRegistry.aspectRatio
             val params = PictureInPictureParams.Builder()
                 .setAspectRatio(Rational(ratio.numerator, ratio.denominator))
@@ -202,7 +204,9 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
                 }
                 .build()
             activity.enterPictureInPictureMode(params)
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+            PipRegistry.isEnteringPip = false
+        }
     }
 
     fun getCurrentPosition(): Long = playerManager.getCurrentPosition()
@@ -343,7 +347,7 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         // when it tries to draw to the destroyed surface (SIGSEGV).
         val vlcNeedsRelease = playerManager.getCurrentEngine() == PlayerEngine.VLC
 
-        if (!backgroundAudioEnabled && !PipRegistry.isInPipMode || vlcNeedsRelease) {
+        if (!backgroundAudioEnabled && !PipRegistry.isInPipMode && !PipRegistry.isEnteringPip || vlcNeedsRelease) {
             releasePlayer()
             PlayerRegistry.clearActiveView()
         } else {

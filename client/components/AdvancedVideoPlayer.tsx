@@ -1551,8 +1551,8 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                   />
                 </TVFocusablePressable>
 
-                {/* PiP — mobile only */}
-                {!isTV && Platform.OS === "android" ? (
+                {/* PiP — mobile only, ExoPlayer only */}
+                {!isTV && Platform.OS === "android" && activePlayerEngine === "exoplayer" ? (
                   <TVFocusablePressable
                     onPress={handleEnterPip}
                     baseStyle={st.toolBtn}
