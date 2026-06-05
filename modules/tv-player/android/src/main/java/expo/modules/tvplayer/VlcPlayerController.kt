@@ -492,8 +492,13 @@ class VlcPlayerController(
         try {
             player?.let {
                 it.setEventListener(null)
-                it.stop()
+                // Detach VOUT FIRST — this immediately disconnects VLC's
+                // render thread from the surface, preventing SIGSEGV when
+                // the surface is destroyed during view teardown. stop() is
+                // async in libVLC so the render thread could still be drawing
+                // if we stop() before detachViews().
                 it.vlcVout?.detachViews()
+                it.stop()
                 it.release()
             }
             vlcLib?.release()

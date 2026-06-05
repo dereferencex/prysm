@@ -543,19 +543,13 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   useEffect(() => {
     return () => {
       if (controlsTimerRef.current) clearTimeout(controlsTimerRef.current);
-      // NOTE: We do NOT call native release/pause here. The native
-      // onDetachedFromWindow() handles all player cleanup. Dispatching
-      // async native calls from JS creates a threading race with the
-      // UI-thread onDetachedFromWindow(), which can double-free VLC's
-      // native resources (SIGSEGV).
-      //
-      // The only JS-side call we need is disableBackgroundAudio when the
-      // setting is off, to ensure the background service is stopped.
-      if (!backgroundPlay) {
-        TvPlayerCommands.disableBackgroundAudio(tvPlayerRef);
-      }
+      // NOTE: We do NOT call any native commands here. The native
+      // onDetachedFromWindow() handles all player cleanup (release,
+      // pause, disableBackgroundAudio). Dispatching async native calls
+      // from JS creates a threading race with the UI-thread
+      // onDetachedFromWindow(), which can crash VLC's native resources.
     };
-  }, [backgroundPlay]);
+  }, []);
 
   // Sync background audio state on mount
   useEffect(() => {
@@ -763,8 +757,10 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
           // it playing before navigating away.
           setShowStopAudioModal(true);
         } else {
-          // Controls already hidden — pause and navigate back
-          TvPlayerCommands.pause(tvPlayerRef);
+          // Controls already hidden — navigate back.
+          // Do NOT call TvPlayerCommands.pause() here — it's async and
+          // creates a threading race with onDetachedFromWindow(). The native
+          // cleanup in TvPlayerView handles stopping/releasing the player.
           onBack?.();
         }
       }
@@ -1720,9 +1716,11 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
             </TVFocusablePressable>
             <TVFocusablePressable
               onPress={() => {
-                // Stop audio and go back
-                TvPlayerCommands.pause(tvPlayerRef);
-                TvPlayerCommands.disableBackgroundAudio(tvPlayerRef);
+                // Stop audio and go back.
+                // Do NOT call async native commands here — they create a
+                // threading race with onDetachedFromWindow(). The native
+                // cleanup in TvPlayerView handles stopping/releasing the
+                // player and disabling background audio.
                 setShowStopAudioModal(false);
                 onBack?.();
               }}
