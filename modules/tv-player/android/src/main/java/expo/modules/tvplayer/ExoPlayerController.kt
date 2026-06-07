@@ -293,8 +293,9 @@ class ExoPlayerController(
             val drmSessionManager = DefaultDrmSessionManager.Builder()
                 .build(callback)
             DefaultMediaSourceFactory(dataSourceFactory)
-                .setDrmSessionManagerProvider { drmConfig: DrmConfiguration ->
-                    if (drmConfig.uuid == C.CLEARKEY_UUID) drmSessionManager
+                .setDrmSessionManagerProvider { mediaItem ->
+                    val uuid = mediaItem.localConfiguration?.drmConfiguration?.uuid
+                    if (uuid == C.CLEARKEY_UUID) drmSessionManager
                     else DefaultDrmSessionManager.Builder().build(callback)
                 }
         } else {
