@@ -3,6 +3,7 @@ package expo.modules.tvplayer
 import android.content.Context
 import android.graphics.SurfaceTexture
 import android.net.Uri
+import android.util.Base64
 import android.util.Log
 import android.view.Surface
 import android.view.SurfaceView
@@ -19,9 +20,84 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.drm.DefaultDrmSessionManager
+import androidx.media3.exoplayer.drm.ExoMediaDrm
+import androidx.media3.exoplayer.drm.MediaDrmCallback
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import okhttp3.OkHttpClient
+
+/**
+ * Detects whether [value] is a raw ClearKey in `hex_keyId:hex_key` format
+ * (e.g. `1539f043249e413d91906036f305831e:671e24fd8d234c7f38d85055815f902a`)
+ * as opposed to a license-server URL.
+ */
+private fun isRawClearKey(value: String): Boolean {
+    val parts = value.split(":")
+    if (parts.size != 2) return false
+    return parts.all { part ->
+        part.length >= 2 && part.all { it in "0123456789abcdefABCDEF" }
+    }
+}
+
+private fun hexToByteArray(hex: String): ByteArray {
+    val cleanHex = hex.lowercase()
+    return ByteArray(cleanHex.length / 2) { i ->
+        cleanHex.substring(i * 2, i * 2 + 2).toInt(16).toByte()
+    }
+}
+
+/**
+ * A [MediaDrmCallback] that responds to ClearKey key requests with a locally
+ * stored key — no network license-server round-trip required.
+ *
+ * The ClearKey protocol expects a JSON response like:
+ * ```json
+ * {"keys":[{"kty":"oct","kid":"<base64url>","k":"<base64url>"}]}
+ * ```
+ */
+private class LocalClearKeyCallback(
+    keyIdHex: String,
+    keyHex: String,
+) : MediaDrmCallback {
+
+    private val keyIdB64: String
+    private val keyB64: String
+
+    init {
+        val keyIdBytes = hexToByteArray(keyIdHex)
+        val keyBytes = hexToByteArray(keyHex)
+        keyIdB64 = Base64.encodeToString(
+            keyIdBytes,
+            Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING,
+        )
+        keyB64 = Base64.encodeToString(
+            keyBytes,
+            Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING,
+        )
+    }
+
+    override fun executeProvisionRequest(
+        uuid: java.util.UUID,
+        request: ExoMediaDrm.ProvisionRequest,
+    ): ByteArray {
+        throw UnsupportedOperationException("ClearKey provisioning not supported")
+    }
+
+    override fun executeKeyRequest(
+        uuid: java.util.UUID,
+        request: ExoMediaDrm.KeyRequest,
+        url: String,
+    ): ByteArray {
+        Log.d(TAG, "LocalClearKeyCallback: returning embedded key for ClearKey")
+        return """{"keys":[{"kty":"oct","kid":"$keyIdB64","k":"$keyB64"}]}"""
+            .toByteArray(Charsets.UTF_8)
+    }
+
+    companion object {
+        private const val TAG = "ExoPlayerController"
+    }
+}
 
 @UnstableApi
 class ExoPlayerController(
@@ -200,6 +276,32 @@ class ExoPlayerController(
             context, OkHttpDataSource.Factory(okHttpClient),
         )
 
+        // Detect raw ClearKey (hex keyId:key) vs license-server URL
+        val rawClearKeyParts = if (currentDrmType?.lowercase() == "clearkey"
+            && !currentDrmLicenseUrl.isNullOrEmpty()
+            && isRawClearKey(currentDrmLicenseUrl!!)
+        ) {
+            currentDrmLicenseUrl!!.split(":")
+        } else {
+            null
+        }
+
+        // For raw ClearKey, provide a local DRM callback so ExoPlayer doesn't
+        // try to POST to a non-URL string.
+        val mediaSourceFactory = if (rawClearKeyParts != null) {
+            Log.d(TAG, "Using local ClearKey callback (raw key detected)")
+            val callback = LocalClearKeyCallback(rawClearKeyParts[0], rawClearKeyParts[1])
+            val drmSessionManager = DefaultDrmSessionManager.Builder()
+                .build(C.CLEARKEY_UUID, callback)
+            DefaultMediaSourceFactory(dataSourceFactory)
+                .setDrmSessionManagerProvider { drmConfig ->
+                    if (drmConfig.uuid == C.CLEARKEY_UUID) drmSessionManager
+                    else DefaultDrmSessionManager.Builder().build()
+                }
+        } else {
+            DefaultMediaSourceFactory(dataSourceFactory)
+        }
+
         val audioAttrs = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
@@ -222,7 +324,7 @@ class ExoPlayerController(
         val player = ExoPlayer.Builder(context)
             .setRenderersFactory(renderersFactory)
             .setTrackSelector(trackSelector)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+            .setMediaSourceFactory(mediaSourceFactory)
             .setAudioAttributes(audioAttrs, false)
             .setHandleAudioBecomingNoisy(true)
             .build()
@@ -248,9 +350,15 @@ class ExoPlayerController(
                 else        -> null
             }
             if (uuid != null) {
-                val drmCfg = DrmConfiguration.Builder(uuid).setLicenseUri(currentDrmLicenseUrl)
-                if (!drmHeaders.isNullOrEmpty()) drmCfg.setLicenseRequestHeaders(drmHeaders)
-                mediaItemBuilder.setDrmConfiguration(drmCfg.build())
+                if (rawClearKeyParts != null) {
+                    mediaItemBuilder.setDrmConfiguration(
+                        DrmConfiguration.Builder(uuid).build()
+                    )
+                } else {
+                    val drmCfg = DrmConfiguration.Builder(uuid).setLicenseUri(currentDrmLicenseUrl)
+                    if (!drmHeaders.isNullOrEmpty()) drmCfg.setLicenseRequestHeaders(drmHeaders)
+                    mediaItemBuilder.setDrmConfiguration(drmCfg.build())
+                }
             }
         }
 
