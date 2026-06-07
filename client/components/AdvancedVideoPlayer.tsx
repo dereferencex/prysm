@@ -239,6 +239,8 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   const nhReadyCount = useRef(0);
   const NH_READY_MIN = 3; // backBtn, playPause, seekBar
   const [isPlaying, setIsPlaying] = useState(autoPlay);
+  const isPlayingRef = useRef(autoPlay);
+  isPlayingRef.current = isPlaying;
   const [isLoading, setIsLoading] = useState(true);
   const [isBuffering, setIsBuffering] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -283,6 +285,10 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   const [isInPiP, setIsInPiP] = useState(false);
   // Ref mirror — read by setShowControls guard to block controls in PiP
   const isInPiPRef = useRef(false);
+  // Transient flag set when the user taps PiP, cleared by handlePipChange.
+  // Bridges the gap between handleEnterPip() and the onPictureInPictureModeChanged
+  // callback so the AppState handler doesn't pause during PiP entry.
+  const isEnteringPipRef = useRef(false);
 
   // Track consecutive errors for automatic fallback
   const consecutiveErrorCountRef = useRef(0);
@@ -573,7 +579,8 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
       if (nextAppState === "background" || nextAppState === "inactive") {
         // Mobile: do NOT auto-enter PiP — user must tap the PiP button explicitly
         // If background play is disabled, stop playback when app goes to background
-        if (!backgroundPlay) {
+        // Skip if in PiP or entering PiP — the system PiP window manages its own playback.
+        if (!backgroundPlay && !isInPiPRef.current && !isEnteringPipRef.current) {
           // Stop background service if it was running
           if (isBackgroundPlayingRef.current) {
             TvPlayerCommands.disableBackgroundAudio(tvPlayerRef);
@@ -664,6 +671,10 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   // view event (primary) and the DeviceEventEmitter fallback.
   const handlePipChange = useCallback(
     (isInPip: boolean) => {
+      // Clear the intent flag — onPictureInPictureModeChanged has fired
+      isEnteringPipRef.current = false;
+      // Ignore duplicate events (native view event + DeviceEventEmitter fallback)
+      if (isInPip === isInPiPRef.current) return;
       isInPiPRef.current = isInPip;
       setIsInPiP(isInPip);
       if (isInPip) {
@@ -678,12 +689,12 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
         // Exiting PiP — restore the user's chosen aspect-ratio mode and
         // ensure the video surface is reattached.
         TvPlayerCommands.setResizeMode(tvPlayerRef, contentFitRef.current);
-        if (isPlaying) {
+        if (isPlayingRef.current) {
           TvPlayerCommands.play(tvPlayerRef);
         }
       }
     },
-    [setShowControls, isPlaying],
+    [setShowControls],
   );
 
   // Fallback: listen for PiP mode changes via DeviceEventEmitter from
@@ -854,6 +865,9 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
     if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     cancelHideTimerRef.current();
     setShowControls(false);
+    // Set intent flag BEFORE calling native enterPip — the AppState handler
+    // fires during the PiP transition and must not pause the player.
+    isEnteringPipRef.current = true;
     TvPlayerCommands.enterPip(tvPlayerRef);
   }, [isPlaying]);
 

@@ -347,7 +347,7 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         // when it tries to draw to the destroyed surface (SIGSEGV).
         val vlcNeedsRelease = playerManager.getCurrentEngine() == PlayerEngine.VLC
 
-        if (!backgroundAudioEnabled && !PipRegistry.isInPipMode && !PipRegistry.isEnteringPip || vlcNeedsRelease) {
+        if ((!backgroundAudioEnabled && !PipRegistry.isInPipMode && !PipRegistry.isEnteringPip) || vlcNeedsRelease) {
             releasePlayer()
             PlayerRegistry.clearActiveView()
         } else {
@@ -357,8 +357,10 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         }
 
         super.onDetachedFromWindow()
-        if (!isTV) PipRegistry.onPipModeChanged = null
-        
+        // Don't null the callback while entering PiP — onPictureInPictureModeChanged
+        // still needs it to relay the state change to JS.
+        if (!isTV && !PipRegistry.isEnteringPip) PipRegistry.onPipModeChanged = null
+
         if (backgroundAudioEnabled || PipRegistry.isInPipMode) {
             stopPoller()
         }
@@ -366,13 +368,14 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        val playing = playerManager.isPlaying()
         if (backgroundAudioEnabled || PipRegistry.isInPipMode) {
             when {
                 isTV && surfaceView != null -> playerManager.setVideoSurfaceView(surfaceView)
                 textureView != null -> playerManager.setTextureView(textureView)
             }
-            startPoller()
+            if (playerManager.isPlaying()) {
+                startPoller()
+            }
         }
     }
 }
