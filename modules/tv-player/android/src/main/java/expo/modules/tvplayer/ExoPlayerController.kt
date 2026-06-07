@@ -87,7 +87,6 @@ private class LocalClearKeyCallback(
     override fun executeKeyRequest(
         uuid: java.util.UUID,
         request: ExoMediaDrm.KeyRequest,
-        url: String,
     ): ByteArray {
         Log.d(TAG, "LocalClearKeyCallback: returning embedded key for ClearKey")
         return """{"keys":[{"kty":"oct","kid":"$keyIdB64","k":"$keyB64"}]}"""
@@ -292,11 +291,11 @@ class ExoPlayerController(
             Log.d(TAG, "Using local ClearKey callback (raw key detected)")
             val callback = LocalClearKeyCallback(rawClearKeyParts[0], rawClearKeyParts[1])
             val drmSessionManager = DefaultDrmSessionManager.Builder()
-                .build(C.CLEARKEY_UUID, callback)
+                .build(callback)
             DefaultMediaSourceFactory(dataSourceFactory)
-                .setDrmSessionManagerProvider { drmConfig ->
+                .setDrmSessionManagerProvider { drmConfig: DrmConfiguration ->
                     if (drmConfig.uuid == C.CLEARKEY_UUID) drmSessionManager
-                    else DefaultDrmSessionManager.Builder().build()
+                    else DefaultDrmSessionManager.Builder().build(callback)
                 }
         } else {
             DefaultMediaSourceFactory(dataSourceFactory)
