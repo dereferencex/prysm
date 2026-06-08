@@ -410,10 +410,12 @@ class ExoPlayerController(
             if (uuid != null) {
                 if (rawClearKeyParts != null || isClearKeyJsonBody) {
                     mediaItemBuilder.setDrmConfiguration(
-                        DrmConfiguration.Builder(uuid).build()
+                        DrmConfiguration.Builder(uuid).setMultiSession(true).build()
                     )
                 } else {
-                    val drmCfg = DrmConfiguration.Builder(uuid).setLicenseUri(currentDrmLicenseUrl)
+                    val drmCfg = DrmConfiguration.Builder(uuid)
+                        .setLicenseUri(currentDrmLicenseUrl)
+                        .setMultiSession(true)
                     if (!drmHeaders.isNullOrEmpty()) drmCfg.setLicenseRequestHeaders(drmHeaders)
                     mediaItemBuilder.setDrmConfiguration(drmCfg.build())
                 }

@@ -28,7 +28,7 @@ function parseDRM(
   let foundDRM = false;
   let foundHeaders = false;
 
-  for (let i = Math.max(0, currentIndex - 5); i < currentIndex; i++) {
+  for (let i = Math.max(0, currentIndex - 20); i < currentIndex; i++) {
     const line = lines[i];
 
     if (line.includes("#KODIPROP:inputstream.adaptive.license_type=")) {
@@ -86,7 +86,7 @@ function parseDRM(
 
   return {
     drm: foundDRM ? drm : undefined,
-    headers: foundHeaders && !foundDRM ? headers : undefined,
+    headers: foundHeaders ? headers : undefined,
   };
 }
 
@@ -586,12 +586,9 @@ export async function fetchAndParsePlaylist(
     content = await response.text();
   }
 
-  if (
-    !content ||
-    (!content.includes("#EXTM3U") && !content.includes("#EXTINF"))
-  ) {
+  if (!content) {
     throw new Error(
-      "Unsupported playlist format. Supported formats: M3U, M3U8, PLS, XSPF, JSON",
+      "Could not fetch playlist. The server may be blocking requests or require specific app authentication.",
     );
   }
 

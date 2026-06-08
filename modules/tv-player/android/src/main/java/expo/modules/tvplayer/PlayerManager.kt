@@ -161,6 +161,11 @@ class PlayerManager(
         consecutiveErrorCount++
         Log.w(TAG, "Consecutive error count: $consecutiveErrorCount")
         if (consecutiveErrorCount >= MAX_CONSECUTIVE_ERRORS && currentEngine == PlayerEngine.EXOPLAYER) {
+            val hasDrm = !lastLoadParams?.drmType.isNullOrEmpty()
+            if (hasDrm) {
+                Log.w(TAG, "Max errors reached but DRM is configured — not switching to VLC (unsupported)")
+                return
+            }
             Log.e(TAG, "Max consecutive errors reached, auto-switching to VLC")
             switchEngine(PlayerEngine.VLC)
         }

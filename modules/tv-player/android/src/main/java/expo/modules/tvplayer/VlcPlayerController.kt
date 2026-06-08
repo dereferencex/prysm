@@ -123,6 +123,12 @@ class VlcPlayerController(
         drmHeaders: Map<String, String>?,
         autoPlay: Boolean,
     ) {
+        if (!drmType.isNullOrEmpty()) {
+            Log.e(TAG, "DRM ($drmType) is not supported by VLC — refusing to play")
+            callbacks?.onError("DRM content ($drmType) cannot be played with VLC. Switch to ExoPlayer.")
+            return
+        }
+
         Log.d(TAG, "Loading URL: $url with VLC")
         currentUrl = url
         currentHeaders = headers

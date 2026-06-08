@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useCallback } from "react";
+import React, { useEffect, useMemo, useCallback, useState } from "react";
 import {
   StyleSheet,
   View,
@@ -22,6 +22,7 @@ import {
 } from "@/components/AdvancedVideoPlayer";
 import { usePlaylist } from "@/context/PlaylistContext";
 import { Colors, Spacing, BorderRadius } from "@/constants/theme";
+import { extractDRMFromManifest } from "@/lib/manifest-drm-extractor";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type PlayerRouteProp = RouteProp<RootStackParamList, "Player">;
@@ -88,6 +89,24 @@ export default function PlayerScreen() {
 
   const channel = getChannelById(channelId);
   const isFavorite = favorites.includes(channelId);
+
+  const [manifestDrm, setManifestDrm] = useState<import("@/types/playlist").DRMInfo | undefined>(undefined);
+
+  useEffect(() => {
+    if (!channel) return;
+    // If the channel already has KODIPROP DRM, no need to fetch from manifest
+    if (channel.drm?.type && channel.drm?.licenseServer) {
+      setManifestDrm(undefined);
+      return;
+    }
+    let cancelled = false;
+    extractDRMFromManifest(channel.url).then((drm) => {
+      if (!cancelled && drm?.type) {
+        setManifestDrm(drm);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [channel?.url, channel?.drm?.type, channel?.drm?.licenseServer]);
 
   const recentChannelObjects = useMemo(() => {
     if (!playlist) return [];
@@ -164,16 +183,32 @@ export default function PlayerScreen() {
   }, []);
 
   const getDRMConfig = useCallback((): DRMConfig | undefined => {
-    if (!channel?.drm || !channel.drm.type || !channel.drm.licenseServer)
-      return undefined;
+    // Prefer KODIPROP-extracted DRM from the playlist
+    if (channel?.drm?.type && channel.drm.licenseServer) {
+      return {
+        type: channel.drm.type,
+        licenseServer: channel.drm.licenseServer,
+        headers: channel.drm.headers,
+        certificateUrl: channel.drm.certificateUrl,
+      };
+    }
 
-    return {
-      type: channel.drm.type,
-      licenseServer: channel.drm.licenseServer,
-      headers: channel.drm.headers,
-      certificateUrl: channel.drm.certificateUrl,
-    };
-  }, [channel]);
+    // Fall back to DRM extracted from the manifest itself
+    if (manifestDrm?.type && manifestDrm.licenseServer) {
+      return {
+        type: manifestDrm.type,
+        licenseServer: manifestDrm.licenseServer,
+        headers: manifestDrm.headers,
+        certificateUrl: manifestDrm.certificateUrl,
+      };
+    }
+
+    if (channel?.drm?.type && !channel.drm.licenseServer) {
+      console.warn(`DRM type "${channel.drm.type}" found but no license server/key provided for "${channel.name}"`);
+    }
+
+    return undefined;
+  }, [channel, manifestDrm]);
 
   const getStreamHeaders = useCallback(():
     | Record<string, string>
@@ -181,9 +216,6 @@ export default function PlayerScreen() {
     const streamHeaders: Record<string, string> = {};
     if (channel?.headers) {
       Object.assign(streamHeaders, channel.headers);
-    }
-    if (channel?.drm?.headers) {
-      Object.assign(streamHeaders, channel.drm.headers);
     }
     if (Object.keys(streamHeaders).length === 0) {
       return undefined;
