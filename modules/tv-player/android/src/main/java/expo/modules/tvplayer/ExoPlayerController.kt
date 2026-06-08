@@ -28,15 +28,18 @@ import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import okhttp3.OkHttpClient
 
 /**
- * Detects whether [value] is a raw ClearKey in `hex_keyId:hex_key` format
- * (e.g. `1539f043249e413d91906036f305831e:671e24fd8d234c7f38d85055815f902a`)
- * as opposed to a license-server URL.
+ * Detects whether [value] is a raw ClearKey in `keyId:key` format as opposed
+ * to a license-server URL.  Accepts both hex-encoded
+ * (`1539f043249e413d…:671e24fd8d23…`) and base64url-encoded
+ * (`nrQFDeRLSAKTLifX…:FmY0xnWCPCNaSpRG…`) pairs.
  */
 private fun isRawClearKey(value: String): Boolean {
     val parts = value.split(":")
     if (parts.size != 2) return false
     return parts.all { part ->
         part.length >= 2 && part.all { it in "0123456789abcdefABCDEF" }
+    } || parts.all { part ->
+        part.length >= 2 && part.all { it in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_=" }
     }
 }
 
@@ -45,6 +48,17 @@ private fun hexToByteArray(hex: String): ByteArray {
     return ByteArray(cleanHex.length / 2) { i ->
         cleanHex.substring(i * 2, i * 2 + 2).toInt(16).toByte()
     }
+}
+
+/**
+ * Detects whether [value] is a ClearKey JSON response body, e.g.
+ * ```json
+ * {"keys":[{"kty":"oct","kid":"…","k":"…"}],"type":"temporary"}
+ * ```
+ */
+private fun isClearKeyJson(value: String): Boolean {
+    val trimmed = value.trimStart()
+    return trimmed.startsWith("{") && trimmed.contains("\"keys\"")
 }
 
 /**
@@ -65,16 +79,22 @@ private class LocalClearKeyCallback(
     private val keyB64: String
 
     init {
-        val keyIdBytes = hexToByteArray(keyIdHex)
-        val keyBytes = hexToByteArray(keyHex)
-        keyIdB64 = Base64.encodeToString(
-            keyIdBytes,
-            Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING,
-        )
-        keyB64 = Base64.encodeToString(
-            keyBytes,
-            Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING,
-        )
+        keyIdB64 = toBase64Url(keyIdHex)
+        keyB64 = toBase64Url(keyHex)
+    }
+
+    private fun toBase64Url(value: String): String {
+        // If the value contains base64url-specific characters, treat as already base64url-encoded
+        return if (value.any { it == '-' || it == '_' || it == '=' }) {
+            value
+        } else {
+            // Treat as hex-encoded and convert to base64url
+            val bytes = hexToByteArray(value)
+            Base64.encodeToString(
+                bytes,
+                Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING,
+            )
+        }
     }
 
     override fun executeProvisionRequest(
@@ -91,6 +111,35 @@ private class LocalClearKeyCallback(
         Log.d(TAG, "LocalClearKeyCallback: returning embedded key for ClearKey")
         return """{"keys":[{"kty":"oct","kid":"$keyIdB64","k":"$keyB64"}]}"""
             .toByteArray(Charsets.UTF_8)
+    }
+
+    companion object {
+        private const val TAG = "ExoPlayerController"
+    }
+}
+
+/**
+ * A [MediaDrmCallback] that returns a pre-built ClearKey JSON response body
+ * verbatim — used when the playlist embeds the JSON directly in `#KODIPROP`
+ * `license_key` instead of a license-server URL.
+ */
+private class LocalClearKeyJsonCallback(
+    private val jsonResponse: String,
+) : MediaDrmCallback {
+
+    override fun executeProvisionRequest(
+        uuid: java.util.UUID,
+        request: ExoMediaDrm.ProvisionRequest,
+    ): ByteArray {
+        throw UnsupportedOperationException("ClearKey provisioning not supported")
+    }
+
+    override fun executeKeyRequest(
+        uuid: java.util.UUID,
+        request: ExoMediaDrm.KeyRequest,
+    ): ByteArray {
+        Log.d(TAG, "LocalClearKeyJsonCallback: returning embedded JSON for ClearKey")
+        return jsonResponse.toByteArray(Charsets.UTF_8)
     }
 
     companion object {
@@ -275,7 +324,7 @@ class ExoPlayerController(
             context, OkHttpDataSource.Factory(okHttpClient),
         )
 
-        // Detect raw ClearKey (hex keyId:key) vs license-server URL
+        // Detect raw ClearKey (hex keyId:key) vs JSON response vs license-server URL
         val rawClearKeyParts = if (currentDrmType?.lowercase() == "clearkey"
             && !currentDrmLicenseUrl.isNullOrEmpty()
             && isRawClearKey(currentDrmLicenseUrl!!)
@@ -284,12 +333,21 @@ class ExoPlayerController(
         } else {
             null
         }
+        val isClearKeyJsonBody = currentDrmType?.lowercase() == "clearkey"
+            && !currentDrmLicenseUrl.isNullOrEmpty()
+            && rawClearKeyParts == null
+            && isClearKeyJson(currentDrmLicenseUrl!!)
 
-        // For raw ClearKey, provide a local DRM callback so ExoPlayer doesn't
-        // try to POST to a non-URL string.
-        val mediaSourceFactory = if (rawClearKeyParts != null) {
-            Log.d(TAG, "Using local ClearKey callback (raw key detected)")
-            val callback = LocalClearKeyCallback(rawClearKeyParts[0], rawClearKeyParts[1])
+        // For raw ClearKey or embedded JSON, provide a local DRM callback so
+        // ExoPlayer doesn't try to POST to a non-URL string.
+        val mediaSourceFactory = if (rawClearKeyParts != null || isClearKeyJsonBody) {
+            val callback: MediaDrmCallback = if (rawClearKeyParts != null) {
+                Log.d(TAG, "Using local ClearKey callback (raw key detected)")
+                LocalClearKeyCallback(rawClearKeyParts[0], rawClearKeyParts[1])
+            } else {
+                Log.d(TAG, "Using local ClearKey JSON callback (embedded JSON detected)")
+                LocalClearKeyJsonCallback(currentDrmLicenseUrl!!)
+            }
             val drmSessionManager = DefaultDrmSessionManager.Builder()
                 .build(callback)
             DefaultMediaSourceFactory(dataSourceFactory)
@@ -350,7 +408,7 @@ class ExoPlayerController(
                 else        -> null
             }
             if (uuid != null) {
-                if (rawClearKeyParts != null) {
+                if (rawClearKeyParts != null || isClearKeyJsonBody) {
                     mediaItemBuilder.setDrmConfiguration(
                         DrmConfiguration.Builder(uuid).build()
                     )
