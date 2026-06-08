@@ -182,7 +182,7 @@ export default function PlayerScreen() {
     console.error("Player error:", error);
   }, []);
 
-  const getDRMConfig = useCallback((): DRMConfig | undefined => {
+  const drmConfig = useMemo((): DRMConfig | undefined => {
     // Prefer KODIPROP-extracted DRM from the playlist
     if (channel?.drm?.type && channel.drm.licenseServer) {
       return {
@@ -203,25 +203,15 @@ export default function PlayerScreen() {
       };
     }
 
-    if (channel?.drm?.type && !channel.drm.licenseServer) {
-      console.warn(`DRM type "${channel.drm.type}" found but no license server/key provided for "${channel.name}"`);
-    }
-
     return undefined;
-  }, [channel, manifestDrm]);
+  }, [channel?.drm?.type, channel?.drm?.licenseServer, channel?.drm?.headers, channel?.drm?.certificateUrl, manifestDrm]);
 
-  const getStreamHeaders = useCallback(():
+  const streamHeaders = useMemo(():
     | Record<string, string>
     | undefined => {
-    const streamHeaders: Record<string, string> = {};
-    if (channel?.headers) {
-      Object.assign(streamHeaders, channel.headers);
-    }
-    if (Object.keys(streamHeaders).length === 0) {
-      return undefined;
-    }
-    return streamHeaders;
-  }, [channel]);
+    if (!channel?.headers) return undefined;
+    return Object.keys(channel.headers).length > 0 ? channel.headers : undefined;
+  }, [channel?.headers]);
 
   if (!channel) {
     return (
@@ -258,8 +248,8 @@ export default function PlayerScreen() {
         channelId={channel.id}
         autoPlay={settings.autoPlay}
         backgroundPlay={settings.backgroundPlay}
-        drm={getDRMConfig()}
-        headers={getStreamHeaders()}
+        drm={drmConfig}
+        headers={streamHeaders}
         qualities={DEFAULT_QUALITIES}
         recentChannels={recentChannelObjects}
         onError={handleError}
