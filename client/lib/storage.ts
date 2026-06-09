@@ -35,7 +35,7 @@ export interface PlaylistInfo {
 
 export type AutoRefreshInterval = "off" | "5min" | "15min" | "1day";
 export type TextSizeOption = "small" | "medium" | "large";
-export type DrmScheme = "widevine" | "playready" | "clearkey";
+export type DrmScheme = "widevine" | "playready" | "clearkey" | "fairplay";
 export type UserAgent =
   | "chrome"
   | "firefox"

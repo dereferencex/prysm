@@ -1,20 +1,31 @@
 import { VideoQuality } from "@/components/AdvancedVideoPlayer";
 
+/**
+ * DASH manifest quality parser.
+ *
+ * Uses pure regex/string parsing instead of DOMParser — DOMParser is a
+ * browser API that is not available in React Native's JS environment and
+ * caused a silent ReferenceError that made DASH quality detection always
+ * return [].
+ */
+
 interface DASHRepresentation {
   id: string;
   bandwidth: number;
   width?: number;
   height?: number;
-  codecs?: string;
-  baseUrl: string;
 }
 
 export async function parseDASHQualities(
   manifestUrl: string,
+  customHeaders?: Record<string, string>,
 ): Promise<VideoQuality[]> {
   try {
     const response = await fetch(manifestUrl, {
-      headers: { Accept: "*/*" },
+      headers: {
+        Accept: "*/*",
+        ...(customHeaders || {}),
+      },
     });
 
     if (!response.ok) {
@@ -23,18 +34,15 @@ export async function parseDASHQualities(
     }
 
     const content = await response.text();
-    return parseDASHManifest(content, manifestUrl);
+    return parseDASHManifest(content);
   } catch (error) {
     console.warn("Error parsing DASH qualities:", error);
     return [];
   }
 }
 
-function parseDASHManifest(content: string, baseUrl: string): VideoQuality[] {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(content, "application/xml");
-
-  const representations = extractRepresentations(doc);
+function parseDASHManifest(content: string): VideoQuality[] {
+  const representations = extractRepresentations(content);
   if (representations.length === 0) return [];
 
   representations.sort((a, b) => b.bandwidth - a.bandwidth);
@@ -96,53 +104,77 @@ function parseDASHManifest(content: string, baseUrl: string): VideoQuality[] {
   return deduplicateQualities(qualities);
 }
 
-function extractRepresentations(doc: Document): DASHRepresentation[] {
+/**
+ * Extracts video Representation elements from a DASH MPD manifest using
+ * regex parsing — no DOM dependency.
+ *
+ * Strategy:
+ *  1. Split the manifest into AdaptationSet blocks.
+ *  2. Keep only video adaptation sets (mimeType starts with "video/" or
+ *     contentType="video", or has no type but contains Representation elements
+ *     with width/height attributes indicating video).
+ *  3. Within each video AdaptationSet, extract all Representation elements
+ *     and their bandwidth/width/height attributes.
+ */
+function extractRepresentations(content: string): DASHRepresentation[] {
   const representations: DASHRepresentation[] = [];
 
-  // Look for video adaptation sets (mimeType starts with "video/")
-  const adaptationSets = Array.from(doc.querySelectorAll("AdaptationSet"));
+  // Split on AdaptationSet opening tags — captures everything up to the next one
+  // or to the end of the manifest.
+  const adaptationSetRegex = /<AdaptationSet([^>]*)>([\s\S]*?)<\/AdaptationSet>/gi;
+  let asMatch: RegExpExecArray | null;
 
-  for (const adaptationSet of adaptationSets) {
-    const mimeType = adaptationSet.getAttribute("mimeType") || "";
+  while ((asMatch = adaptationSetRegex.exec(content)) !== null) {
+    const asAttrs = asMatch[1];
+    const asBody = asMatch[2];
 
-    // Skip non-video adaptation sets (audio, subtitles)
-    if (mimeType && !mimeType.startsWith("video/")) continue;
+    // Determine if this is a video AdaptationSet
+    const mimeType = getAttr(asAttrs, "mimeType") ?? getAttr(asAttrs, "mimetype") ?? "";
+    const contentType = getAttr(asAttrs, "contentType") ?? getAttr(asAttrs, "contenttype") ?? "";
 
-    // Check for video-specific attributes to confirm it's a video set
-    const contentType = adaptationSet.getAttribute("contentType");
-    if (contentType && contentType !== "video") continue;
+    const isVideo =
+      mimeType.startsWith("video/") ||
+      contentType === "video" ||
+      // If neither attribute is present, check if Representations have height/width
+      // (audio-only tracks won't have these)
+      (!mimeType && !contentType && /height=["']\d+["']/i.test(asBody));
 
-    const reps = Array.from(adaptationSet.querySelectorAll("Representation"));
+    if (!isVideo) continue;
 
-    for (const rep of reps) {
-      const id = rep.getAttribute("id") || "";
-      const bandwidth = parseInt(rep.getAttribute("bandwidth") || "0", 10);
-      const width = rep.getAttribute("width")
-        ? parseInt(rep.getAttribute("width")!, 10)
-        : undefined;
-      const height = rep.getAttribute("height")
-        ? parseInt(rep.getAttribute("height")!, 10)
-        : undefined;
-      const codecs = rep.getAttribute("codecs") || undefined;
+    // Extract each Representation within this AdaptationSet
+    // Inherit width/height/codecs from AdaptationSet if not on the Representation itself
+    const asWidth = parseInt(getAttr(asAttrs, "width") ?? "0", 10) || undefined;
+    const asHeight = parseInt(getAttr(asAttrs, "height") ?? "0", 10) || undefined;
 
-      // Get the base URL for this representation
-      const baseUrlEl = rep.querySelector("BaseURL");
-      const baseUrl = baseUrlEl?.textContent?.trim() || "";
+    const repRegex = /<Representation([^>]*)\/?>/gi;
+    let repMatch: RegExpExecArray | null;
+
+    while ((repMatch = repRegex.exec(asBody)) !== null) {
+      const repAttrs = repMatch[1];
+      const id = getAttr(repAttrs, "id") ?? "";
+      const bandwidth = parseInt(getAttr(repAttrs, "bandwidth") ?? "0", 10);
+      const width = parseInt(getAttr(repAttrs, "width") ?? "0", 10) || asWidth;
+      const height = parseInt(getAttr(repAttrs, "height") ?? "0", 10) || asHeight;
 
       if (bandwidth > 0) {
         representations.push({
           id,
           bandwidth,
-          width,
-          height,
-          codecs,
-          baseUrl,
+          width: width || undefined,
+          height: height || undefined,
         });
       }
     }
   }
 
   return representations;
+}
+
+/** Extracts the value of a named XML attribute from an attribute string. */
+function getAttr(attrs: string, name: string): string | undefined {
+  const regex = new RegExp(`\\b${name}\\s*=\\s*["']([^"']*)["']`, "i");
+  const match = attrs.match(regex);
+  return match ? match[1] : undefined;
 }
 
 function deduplicateQualities(qualities: VideoQuality[]): VideoQuality[] {

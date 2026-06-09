@@ -9,11 +9,13 @@ interface HLSVariant {
 
 export async function parseHLSQualities(
   masterPlaylistUrl: string,
+  customHeaders?: Record<string, string>,
 ): Promise<VideoQuality[]> {
   try {
     const response = await fetch(masterPlaylistUrl, {
       headers: {
         Accept: "*/*",
+        ...(customHeaders || {}),
       },
     });
 

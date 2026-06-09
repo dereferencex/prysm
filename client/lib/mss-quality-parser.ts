@@ -1,19 +1,31 @@
 import { VideoQuality } from "@/components/AdvancedVideoPlayer";
 
+/**
+ * Microsoft Smooth Streaming manifest quality parser.
+ *
+ * Uses pure regex/string parsing instead of DOMParser — DOMParser is a
+ * browser API that is not available in React Native's JS environment and
+ * caused a silent ReferenceError that made MSS quality detection always
+ * return [].
+ */
+
 interface MSSQualityLevel {
   index: number;
   bitrate: number;
   width?: number;
   height?: number;
-  codecPrivateData?: string;
 }
 
 export async function parseMSSQualities(
   manifestUrl: string,
+  customHeaders?: Record<string, string>,
 ): Promise<VideoQuality[]> {
   try {
     const response = await fetch(manifestUrl, {
-      headers: { Accept: "*/*" },
+      headers: {
+        Accept: "*/*",
+        ...(customHeaders || {}),
+      },
     });
 
     if (!response.ok) {
@@ -22,27 +34,23 @@ export async function parseMSSQualities(
     }
 
     const content = await response.text();
-    return parseMSSManifest(content, manifestUrl);
+    return parseMSSManifest(content);
   } catch (error) {
     console.warn("Error parsing MSS qualities:", error);
     return [];
   }
 }
 
-function parseMSSManifest(content: string, baseUrl: string): VideoQuality[] {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(content, "application/xml");
+function parseMSSManifest(content: string): VideoQuality[] {
+  // Verify this is a SmoothStreamingMedia document
+  if (!/<SmoothStreamingMedia/i.test(content)) return [];
 
-  // Check if it's a valid SmoothStreamingMedia document
-  const root = doc.querySelector("SmoothStreamingMedia");
-  if (!root) return [];
+  const levels = extractQualityLevels(content);
+  if (levels.length === 0) return [];
 
-  const representations = extractQualityLevels(doc);
-  if (representations.length === 0) return [];
+  levels.sort((a, b) => b.bitrate - a.bitrate);
 
-  representations.sort((a, b) => b.bitrate - a.bitrate);
-
-  const qualities: VideoQuality[] = representations.map((rep) => {
+  const qualities: VideoQuality[] = levels.map((rep) => {
     let label: string;
     let resolution: string;
 
@@ -99,44 +107,57 @@ function parseMSSManifest(content: string, baseUrl: string): VideoQuality[] {
   return deduplicateQualities(qualities);
 }
 
-function extractQualityLevels(doc: Document): MSSQualityLevel[] {
+/**
+ * Extracts QualityLevel elements from the video StreamIndex of a Smooth
+ * Streaming manifest using regex parsing — no DOM dependency.
+ *
+ * Structure:
+ *   <SmoothStreamingMedia>
+ *     <StreamIndex Type="video" ...>
+ *       <QualityLevel Index="0" Bitrate="..." MaxWidth="..." MaxHeight="..." .../>
+ *     </StreamIndex>
+ *   </SmoothStreamingMedia>
+ */
+function extractQualityLevels(content: string): MSSQualityLevel[] {
   const levels: MSSQualityLevel[] = [];
 
-  // SmoothStreamingMedia > StreamIndex > QualityLevel
-  const streamIndexes = Array.from(doc.querySelectorAll("StreamIndex"));
+  // Match each StreamIndex block
+  const streamIndexRegex = /<StreamIndex([^>]*)>([\s\S]*?)<\/StreamIndex>/gi;
+  let siMatch: RegExpExecArray | null;
 
-  for (const streamIndex of streamIndexes) {
-    const type = streamIndex.getAttribute("Type") || "";
+  while ((siMatch = streamIndexRegex.exec(content)) !== null) {
+    const siAttrs = siMatch[1];
+    const siBody = siMatch[2];
 
     // Only process video stream indexes
+    const type = getAttr(siAttrs, "Type") ?? getAttr(siAttrs, "type") ?? "";
     if (type.toLowerCase() !== "video") continue;
 
-    const qualityLevels = Array.from(streamIndex.querySelectorAll("QualityLevel"));
+    // Extract each QualityLevel within this StreamIndex
+    const qlRegex = /<QualityLevel([^>]*)\/?>/gi;
+    let qlMatch: RegExpExecArray | null;
 
-    for (const level of qualityLevels) {
-      const index = parseInt(level.getAttribute("Index") || "0", 10);
-      const bitrate = parseInt(level.getAttribute("Bitrate") || "0", 10);
-      const width = level.getAttribute("MaxWidth")
-        ? parseInt(level.getAttribute("MaxWidth")!, 10)
-        : undefined;
-      const height = level.getAttribute("MaxHeight")
-        ? parseInt(level.getAttribute("MaxHeight")!, 10)
-        : undefined;
-      const codecPrivateData = level.getAttribute("CodecPrivateData") || undefined;
+    while ((qlMatch = qlRegex.exec(siBody)) !== null) {
+      const qlAttrs = qlMatch[1];
+      const index = parseInt(getAttr(qlAttrs, "Index") ?? "0", 10);
+      const bitrate = parseInt(getAttr(qlAttrs, "Bitrate") ?? "0", 10);
+      const width = parseInt(getAttr(qlAttrs, "MaxWidth") ?? "0", 10) || undefined;
+      const height = parseInt(getAttr(qlAttrs, "MaxHeight") ?? "0", 10) || undefined;
 
       if (bitrate > 0) {
-        levels.push({
-          index,
-          bitrate,
-          width,
-          height,
-          codecPrivateData,
-        });
+        levels.push({ index, bitrate, width, height });
       }
     }
   }
 
   return levels;
+}
+
+/** Extracts the value of a named XML attribute from an attribute string. */
+function getAttr(attrs: string, name: string): string | undefined {
+  const regex = new RegExp(`\\b${name}\\s*=\\s*["']([^"']*)["']`, "i");
+  const match = attrs.match(regex);
+  return match ? match[1] : undefined;
 }
 
 function deduplicateQualities(qualities: VideoQuality[]): VideoQuality[] {

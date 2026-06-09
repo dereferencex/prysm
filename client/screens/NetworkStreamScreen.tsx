@@ -91,6 +91,7 @@ const DRM_SCHEME_OPTIONS: { label: string; value: DrmScheme; desc: string }[] =
     { label: "Widevine", value: "widevine", desc: "Android / Chrome" },
     { label: "PlayReady", value: "playready", desc: "Windows / Xbox" },
     { label: "ClearKey", value: "clearkey", desc: "Open standard" },
+    { label: "FairPlay", value: "fairplay", desc: "Apple / iOS (future)" },
   ];
 
 // ─── sub-components ──────────────────────────────────────────────────────────

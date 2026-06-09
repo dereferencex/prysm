@@ -13,6 +13,7 @@ import {
 import { Colors, Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { USER_AGENT_STRINGS, UserAgent } from "@/lib/storage";
+import { usePlaylist } from "@/context/PlaylistContext";
 
 const isTV = Platform.isTV;
 
@@ -49,10 +50,25 @@ async function showNavBar() {
   }
 }
 
+/** Safe trim — returns "" if value is null/undefined (guards against corrupted AsyncStorage). */
+function safeTrim(value: string | null | undefined): string {
+  return value?.trim() ?? "";
+}
+
+/** Derive a human-readable title from a URL (hostname), falling back to a default. */
+function titleFromUrl(url: string): string {
+  try {
+    return new URL(url).hostname || "Network Stream";
+  } catch {
+    return "Network Stream";
+  }
+}
+
 export default function NetworkPlayerScreen() {
   const navigation = useNavigation<NetworkPlayerNavProp>();
   const route = useRoute<NetworkPlayerRouteProp>();
   const { config } = route.params;
+  const { settings } = usePlaylist();
 
   useEffect(() => {
     loadNavBar().then(() => hideNavBar());
@@ -72,7 +88,7 @@ export default function NetworkPlayerScreen() {
 
   /** Build DRMConfig only when a recognisable DRM scheme and license URL are provided. */
   const drm: DRMConfig | undefined = (() => {
-    const licenseUrl = config.drmLicenseUrl?.trim();
+    const licenseUrl = safeTrim(config.drmLicenseUrl);
     if (!licenseUrl) return undefined;
 
     const scheme = config.drmScheme?.toLowerCase?.() ?? "";
@@ -92,19 +108,26 @@ export default function NetworkPlayerScreen() {
     return { type, licenseServer: licenseUrl };
   })();
 
-  /** Build request headers from cookie / referer / origin / user-agent */
+  /** Build request headers from cookie / referer / origin / user-agent.
+   *  All fields use safeTrim() to guard against null/undefined from
+   *  corrupted AsyncStorage data (e.g. values written by an older app version). */
   const headers: Record<string, string> = {};
-  if (config.cookie.trim()) headers["Cookie"] = config.cookie.trim();
-  if (config.referer.trim()) headers["Referer"] = config.referer.trim();
-  if (config.origin.trim()) headers["Origin"] = config.origin.trim();
+  const cookie = safeTrim(config.cookie);
+  const referer = safeTrim(config.referer);
+  const origin = safeTrim(config.origin);
+  if (cookie) headers["Cookie"] = cookie;
+  if (referer) headers["Referer"] = referer;
+  if (origin) headers["Origin"] = origin;
 
   const uaString =
     config.userAgent === "custom"
-      ? config.customUserAgent.trim()
-      : USER_AGENT_STRINGS[config.userAgent as UserAgent];
+      ? safeTrim(config.customUserAgent)
+      : (USER_AGENT_STRINGS[config.userAgent as UserAgent] ?? "");
   if (uaString) headers["User-Agent"] = uaString;
 
-  if (!config.url.trim()) {
+  const streamUrl = safeTrim(config.url);
+
+  if (!streamUrl) {
     return (
       <View style={[styles.container, styles.center]}>
         <StatusBar hidden />
@@ -135,13 +158,22 @@ export default function NetworkPlayerScreen() {
     <View style={styles.container}>
       <StatusBar hidden translucent backgroundColor="transparent" />
       <AdvancedVideoPlayer
-        source={config.url.trim()}
-        title="Network Stream"
+        source={streamUrl}
+        title={titleFromUrl(streamUrl)}
         autoPlay={true}
         drm={drm}
         headers={Object.keys(headers).length > 0 ? headers : undefined}
         onError={handleError}
         onBack={handleBack}
+        // Respect the user's global backgroundPlay and playerEngine settings.
+        // Previously these were always left at their defaults (false / "exoplayer"),
+        // meaning background audio never worked and the engine preference was ignored.
+        backgroundPlay={settings.backgroundPlay}
+        playerEngine={settings.playerEngine}
+        // isLive is intentionally left at its default (true) here because network
+        // streams are usually live. Users who need VOD playback can use PlayerScreen
+        // via a playlist. Keeping it true avoids showing a misleading duration for
+        // actual live streams which report C.TIME_UNSET as their duration.
         isLive={true}
       />
     </View>

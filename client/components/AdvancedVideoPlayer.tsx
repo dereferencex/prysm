@@ -450,14 +450,18 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   useEffect(() => {
     if (!currentSource) return;
 
+    // Forward the stream's custom headers so authenticated manifests don't
+    // return 401/403 during quality detection.
+    const reqHeaders = headers && Object.keys(headers).length > 0 ? headers : undefined;
+
     let parser: Promise<VideoQuality[]>;
 
     if (isHLSStream(currentSource)) {
-      parser = parseHLSQualities(currentSource);
+      parser = parseHLSQualities(currentSource, reqHeaders);
     } else if (isDASHStream(currentSource)) {
-      parser = parseDASHQualities(currentSource);
+      parser = parseDASHQualities(currentSource, reqHeaders);
     } else if (isMSSStream(currentSource)) {
-      parser = parseMSSQualities(currentSource);
+      parser = parseMSSQualities(currentSource, reqHeaders);
     } else {
       return;
     }
@@ -467,7 +471,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
         if (q.length > 0) setDetectedQualities(q);
       })
       .catch(() => {});
-  }, [currentSource]);
+  }, [currentSource, headers]);
 
   // ── Load per-channel player engine ────────────────────────────────────────
   useEffect(() => {
