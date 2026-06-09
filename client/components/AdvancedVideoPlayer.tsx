@@ -249,6 +249,16 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   const [error, setError] = useState<string | null>(null);
   const [positionMs, setPositionMs] = useState(0);
   const [durationMs, setDurationMs] = useState(0);
+
+  // Runtime live/VOD detection: if ExoPlayer reports a finite, positive duration
+  // we override the isLive prop and treat the stream as VOD. This handles the
+  // common case where every M3U channel has isLive=true hardcoded in the
+  // playlist but the stream is actually a VOD file (MP4, VOD HLS, etc.).
+  // C.TIME_UNSET is exposed as 0 or a very large value by the position poller;
+  // we treat anything over 10 hours as "effectively unknown" (live radio/TV).
+  const MAX_VOD_DURATION_MS = 10 * 60 * 60 * 1000; // 10 hours
+  const effectiveIsLive =
+    durationMs > 0 && durationMs < MAX_VOD_DURATION_MS ? false : isLive;
   const [isBackgroundPlaying, setIsBackgroundPlaying] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const [contentFit, setContentFit] = useState<ContentFit>("contain");
@@ -1502,7 +1512,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 </GestureDetector>
               )}
               <ThemedText type="caption" style={st.timeText}>
-                {isLive ? "LIVE" : formatTime(durationMs)}
+                {effectiveIsLive ? "LIVE" : formatTime(durationMs)}
               </ThemedText>
             </View>
 
@@ -1510,7 +1520,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
             <View style={st.bottomRow}>
               {/* Left badges */}
               <View style={st.badgeRow}>
-                {isLive ? (
+                {effectiveIsLive ? (
                   <View style={st.liveBadge}>
                     <View style={st.liveDot} />
                     <ThemedText type="small" style={st.liveText}>
