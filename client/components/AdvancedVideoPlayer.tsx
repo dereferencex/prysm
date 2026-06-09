@@ -318,6 +318,18 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
     ? Math.floor(seekDrag.progress * durationMs)
     : null;
 
+  // Animated values for YouTube-style seek bar feedback
+  // trackScale: 0→1 animates the track height expanding on drag begin
+  // thumbScale: 0→1 animates the thumb growing on drag begin
+  // tooltipOpacity: fades the time tooltip in/out
+  const seekTrackScale = useSharedValue(0);
+  const seekThumbScale = useSharedValue(0);
+  const seekTooltipOpacity = useSharedValue(0);
+
+  // Whether the player was playing when the drag started — used to resume
+  // playback after the seek commits.
+  const wasPlayingRef = useRef(false);
+
   // Seek flash
   const [seekFlash, setSeekFlash] = useState<{
     visible: boolean;
@@ -970,34 +982,103 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
 
   const composedGesture = Gesture.Exclusive(doubleTapGesture, tapGesture);
 
-  // Seek bar pan gesture — drag the thumb to preview and commit a seek position
+  // ── YouTube-style seek bar helpers ───────────────────────────────────────
+
+  const beginSeekDrag = useCallback((pct: number) => {
+    // Remember whether video was playing so we can resume after seek
+    wasPlayingRef.current = isPlayingRef.current;
+    // Pause while scrubbing so the user sees the exact frame they're seeking to
+    TvPlayerCommands.pause(tvPlayerRef);
+    // Cancel auto-hide timer — controls must stay visible during scrubbing
+    cancelHideTimerRef.current();
+    if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSeekDrag({ active: true, progress: pct });
+  }, []);
+
+  const updateSeekDrag = useCallback((pct: number) => {
+    setSeekDrag({ active: true, progress: pct });
+  }, []);
+
+  const commitSeekDrag = useCallback((progress: number) => {
+    TvPlayerCommands.seekTo(tvPlayerRef, Math.floor(progress * durationMs));
+    // Resume playback only if it was playing before the drag
+    if (wasPlayingRef.current) {
+      TvPlayerCommands.play(tvPlayerRef);
+    }
+    setSeekDrag({ active: false, progress });
+    // Re-arm the auto-hide timer now that scrubbing is done
+    scheduleHideRef.current();
+    if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [durationMs]);
+
+  const cancelSeekDrag = useCallback(() => {
+    // User lifted without moving (e.g. gesture cancelled) — resume if needed
+    if (wasPlayingRef.current) {
+      TvPlayerCommands.play(tvPlayerRef);
+    }
+    setSeekDrag({ active: false, progress: 0 });
+    scheduleHideRef.current();
+  }, []);
+
+  // Seek bar pan gesture — YouTube-style: track expands, thumb grows,
+  // playback pauses while scrubbing and resumes on release.
   const seekBarPan = Gesture.Pan()
     .minDistance(0)
     .onBegin((evt) => {
       if (seekBarWidthRef.current <= 0 || durationMs <= 0) return;
       const pct = Math.min(1, Math.max(0, evt.x / seekBarWidthRef.current));
-      runOnJS(setSeekDrag)({ active: true, progress: pct });
+      // Animate track + thumb expanding and tooltip fading in
+      seekTrackScale.value = withSpring(1, { damping: 15, stiffness: 300 });
+      seekThumbScale.value = withSpring(1, { damping: 15, stiffness: 300 });
+      seekTooltipOpacity.value = withTiming(1, { duration: 120 });
+      runOnJS(beginSeekDrag)(pct);
     })
     .onUpdate((evt) => {
       if (seekBarWidthRef.current <= 0 || durationMs <= 0) return;
       const pct = Math.min(1, Math.max(0, evt.x / seekBarWidthRef.current));
-      runOnJS(setSeekDrag)({ active: true, progress: pct });
+      runOnJS(updateSeekDrag)(pct);
     })
-    .onEnd(() => {
-      runOnJS(setSeekDrag)((prev) => {
-        if (!prev.active) return prev;
-        // Commit the seek
-        runOnJS(handleSeekToPercent)(prev.progress);
-        return { active: false, progress: prev.progress };
-      });
+    .onEnd((evt) => {
+      if (seekBarWidthRef.current <= 0 || durationMs <= 0) {
+        runOnJS(cancelSeekDrag)();
+      } else {
+        const pct = Math.min(1, Math.max(0, evt.x / seekBarWidthRef.current));
+        runOnJS(commitSeekDrag)(pct);
+      }
+      // Animate track + thumb shrinking and tooltip fading out
+      seekTrackScale.value = withSpring(0, { damping: 18, stiffness: 300 });
+      seekThumbScale.value = withSpring(0, { damping: 18, stiffness: 300 });
+      seekTooltipOpacity.value = withTiming(0, { duration: 150 });
     })
     .onFinalize(() => {
-      runOnJS(setSeekDrag)({ active: false, progress: 0 });
+      // Safety: ensure animations always complete even if onEnd didn't fire
+      seekTrackScale.value = withSpring(0, { damping: 18, stiffness: 300 });
+      seekThumbScale.value = withSpring(0, { damping: 18, stiffness: 300 });
+      seekTooltipOpacity.value = withTiming(0, { duration: 150 });
     });
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const progress = durationMs > 0 ? positionMs / durationMs : 0;
   const displayedRecent = recentChannels.slice(0, 5);
+
+  // Animated seek bar styles — track height expands from 4→8px, thumb grows
+  // from 14→22px, and the tooltip fades in when scrubbing starts.
+  const animSeekTrack = useAnimatedStyle(() => ({
+    height: 4 + seekTrackScale.value * 4, // 4px → 8px
+  }));
+  const animSeekThumb = useAnimatedStyle(() => ({
+    width: 14 + seekThumbScale.value * 8,  // 14px → 22px
+    height: 14 + seekThumbScale.value * 8,
+    borderRadius: (14 + seekThumbScale.value * 8) / 2,
+    top: -((14 + seekThumbScale.value * 8) / 2) + 2,
+    marginLeft: -((14 + seekThumbScale.value * 8) / 2),
+  }));
+  const animSeekTooltip = useAnimatedStyle(() => ({
+    opacity: seekTooltipOpacity.value,
+    transform: [
+      { translateY: (1 - seekTooltipOpacity.value) * 6 },
+    ],
+  }));
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -1434,7 +1515,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                LIVE: shows elapsed time + LIVE badge, no seek bar.
                VOD:  shows position / duration with a tappable seek bar. */}
             <View style={st.progressRow}>
-              <ThemedText type="caption" style={st.timeText}>
+              <ThemedText type="caption" style={[st.timeText, seekDrag.active && st.timeTextScrubbing]}>
                 {formatTime(seekDrag.active ? seekDragPreviewMs! : positionMs)}
               </ThemedText>
               {durationMs <= 0 ? (
@@ -1445,7 +1526,12 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                   </View>
                 </View>
               ) : (
-                /* Draggable seek bar (VOD + live with DVR) */
+                /* YouTube-style seek bar:
+                   - Track height expands on touch (4→8px)
+                   - Thumb grows on touch (14→22px) with spring animation
+                   - Tooltip fades/slides in above the thumb
+                   - Playback pauses while scrubbing, resumes on release
+                   - Controls auto-hide timer paused during scrub */
                 <GestureDetector gesture={seekBarPan}>
                   <Pressable
                     ref={seekBarRef}
@@ -1470,10 +1556,12 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                       );
                     }}
                   >
-                    <View
+                    {/* Track — animates height on drag */}
+                    <Animated.View
                       style={[
                         st.seekBarTrack,
                         seekBarFocused && st.seekBarTrackFocused,
+                        animSeekTrack,
                       ]}
                     >
                       <View
@@ -1484,30 +1572,31 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                           },
                         ]}
                       />
-                      <View
+                      {/* Thumb — animates size on drag */}
+                      <Animated.View
                         style={[
                           st.seekThumb,
                           {
                             left: `${(seekDrag.active ? seekDrag.progress : progress) * 100}%`,
                           },
                           seekBarFocused && st.seekThumbFocused,
+                          animSeekThumb,
                         ]}
                       />
-                    </View>
-                    {/* Preview tooltip while dragging */}
-                    {seekDrag.active && (
-                      <View
-                        style={[
-                          st.seekTooltip,
-                          { left: `${seekDrag.progress * 100}%` },
-                        ]}
-                        pointerEvents="none"
-                      >
-                        <ThemedText type="caption" style={st.seekTooltipText}>
-                          {formatTime(seekDragPreviewMs!)}
-                        </ThemedText>
-                      </View>
-                    )}
+                    </Animated.View>
+                    {/* Tooltip — fades and slides in above thumb while dragging */}
+                    <Animated.View
+                      style={[
+                        st.seekTooltip,
+                        { left: `${(seekDrag.active ? seekDrag.progress : progress) * 100}%` },
+                        animSeekTooltip,
+                      ]}
+                      pointerEvents="none"
+                    >
+                      <ThemedText type="caption" style={st.seekTooltipText}>
+                        {formatTime(seekDrag.active ? seekDragPreviewMs! : positionMs)}
+                      </ThemedText>
+                    </Animated.View>
                   </Pressable>
                 </GestureDetector>
               )}
@@ -2535,9 +2624,11 @@ const st = StyleSheet.create({
     borderColor: Colors.dark.primary,
   },
   seekBarTrack: {
+    // Base height 4px; animated style overrides height when scrubbing
     height: 4,
     backgroundColor: "rgba(255,255,255,0.3)",
     borderRadius: 2,
+    overflow: "visible",
   },
   seekBarTrackFocused: {
     height: 6,
@@ -2550,6 +2641,7 @@ const st = StyleSheet.create({
   },
   seekThumb: {
     position: "absolute",
+    // Base dimensions — animated style overrides width/height/top/marginLeft
     top: -5,
     width: 14,
     height: 14,
@@ -2569,16 +2661,22 @@ const st = StyleSheet.create({
   seekTooltip: {
     position: "absolute",
     bottom: "100%",
-    marginBottom: 8,
-    marginLeft: -24,
-    backgroundColor: "rgba(0,0,0,0.85)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.xs,
+    marginBottom: 10,
+    marginLeft: -28,
+    backgroundColor: "rgba(0,0,0,0.88)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.sm,
+    minWidth: 56,
+    alignItems: "center",
   },
   seekTooltipText: {
     color: "#fff",
-    fontWeight: "600",
+    fontWeight: "700",
+    fontSize: 12,
+  },
+  timeTextScrubbing: {
+    color: Colors.dark.primary,
   },
   bottomRow: {
     flexDirection: "row",
