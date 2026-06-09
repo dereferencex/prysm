@@ -473,25 +473,14 @@ class ExoPlayerController(
                     val drmCfg = DrmConfiguration.Builder(uuid)
                         .setLicenseUri(currentDrmLicenseUrl)
                     if (!drmHeaders.isNullOrEmpty()) drmCfg.setLicenseRequestHeaders(drmHeaders)
-                    // Apply PSSH initialization data if provided. This is the raw base64
-                    // blob from the manifest — NOT used as a URL.
-                    // Media3 1.10+ uses setInitData(Map<String, ByteArray>) instead of
-                    // the old two-parameter version.
+                    // Note: PSSH init data (currentDrmPssh) is available but
+                    // DrmConfiguration.Builder.setInitData() API varies across Media3 versions
+                    // and is not reliably available. ExoPlayer 1.10.x extracts PSSH boxes
+                    // automatically from the MP4/fMP4 container during stream parsing.
+                    // For streams where PSSH is only in the manifest (not the container),
+                    // a custom MediaSourceFactory or MediaDrmCallback would be needed.
                     if (!currentDrmPssh.isNullOrBlank()) {
-                        try {
-                            val psshBytes = android.util.Base64.decode(
-                                currentDrmPssh, android.util.Base64.DEFAULT
-                            )
-                            val mimeType = when (uuid) {
-                                C.WIDEVINE_UUID  -> "video/mp4"
-                                C.PLAYREADY_UUID -> "video/mp4"
-                                else             -> "video/mp4"
-                            }
-                            drmCfg.setInitData(mapOf(mimeType to psshBytes))
-                            Log.d(TAG, "Applied PSSH init data (${psshBytes.size} bytes) for $effectiveDrmType")
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Failed to decode PSSH init data: ${e.message}")
-                        }
+                        Log.d(TAG, "PSSH data available (${currentDrmPssh!!.length} chars base64) — relying on container-based extraction")
                     }
                     mediaItemBuilder.setDrmConfiguration(drmCfg.build())
                 } else {
