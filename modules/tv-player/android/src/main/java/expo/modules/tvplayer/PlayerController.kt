@@ -21,6 +21,8 @@ interface PlayerController {
         drmType: String?,
         drmLicenseUrl: String?,
         drmHeaders: Map<String, String>?,
+        drmCertificateUrl: String? = null,
+        drmPssh: String? = null,
         autoPlay: Boolean,
     )
 

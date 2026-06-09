@@ -29,18 +29,29 @@ import okhttp3.OkHttpClient
 
 /**
  * Detects whether [value] is a raw ClearKey in `keyId:key` format as opposed
- * to a license-server URL.  Accepts both hex-encoded
- * (`1539f043249e413d…:671e24fd8d23…`) and base64url-encoded
- * (`nrQFDeRLSAKTLifX…:FmY0xnWCPCNaSpRG…`) pairs.
+ * to a license-server URL.  Accepts both hex-encoded and base64url-encoded
+ * pairs.  A 128-bit AES key is exactly 16 bytes which encodes to:
+ *   - 32 hex characters
+ *   - 22 base64url characters (without padding) or 24 with padding
+ *
+ * The two character-set checks are performed separately so hex values (which
+ * are a strict subset of base64url alphanumerics) are not ambiguously matched
+ * by the base64url branch.
  */
 private fun isRawClearKey(value: String): Boolean {
     val parts = value.split(":")
     if (parts.size != 2) return false
-    return parts.all { part ->
-        part.length >= 2 && part.all { it in "0123456789abcdefABCDEF" }
-    } || parts.all { part ->
-        part.length >= 2 && part.all { it in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_=" }
+
+    fun isHex(s: String): Boolean =
+        s.length == 32 && s.all { it in "0123456789abcdefABCDEF" }
+
+    fun isBase64Url(s: String): Boolean {
+        val stripped = s.trimEnd('=')
+        return (stripped.length == 22 || stripped.length == 32) &&
+            stripped.all { it in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_" }
     }
+
+    return parts.all { isHex(it) } || parts.all { isBase64Url(it) }
 }
 
 private fun hexToByteArray(hex: String): ByteArray {
@@ -84,11 +95,26 @@ private class LocalClearKeyCallback(
     }
 
     private fun toBase64Url(value: String): String {
-        // If the value contains base64url-specific characters, treat as already base64url-encoded
-        return if (value.any { it == '-' || it == '_' || it == '=' }) {
-            value
+        // Detect encoding using exact length checks for a 16-byte AES-128 key:
+        //   hex       = 32 chars, all [0-9a-fA-F]
+        //   base64url = 22 chars (no padding) or 24 chars (with padding)
+        val stripped = value.trimEnd('=')
+        val isHex = value.length == 32 && value.all { it in "0123456789abcdefABCDEF" }
+        return if (isHex) {
+            val bytes = hexToByteArray(value)
+            Base64.encodeToString(
+                bytes,
+                Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING,
+            )
+        } else if ((stripped.length == 22 || stripped.length == 32) &&
+            stripped.all { it in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_" }) {
+            // Already valid base64url — pass through as-is (strip any padding that
+            // the ExoPlayer ClearKey engine doesn't expect)
+            stripped
         } else {
-            // Treat as hex-encoded and convert to base64url
+            // Unrecognised format — attempt hex decode as a last resort. If this
+            // throws, the exception propagates and buildPlayer() logs the error
+            // before returning, preventing a silent garbage-key scenario.
             val bytes = hexToByteArray(value)
             Base64.encodeToString(
                 bytes,
@@ -161,6 +187,8 @@ class ExoPlayerController(
     private var currentDrmType: String? = null
     private var currentDrmLicenseUrl: String? = null
     private var currentDrmHeaders: Map<String, String>? = null
+    private var currentDrmCertificateUrl: String? = null
+    private var currentDrmPssh: String? = null
     private var currentAutoPlay: Boolean = true
     private var savedPosition: Long = 0L
     @Volatile
@@ -180,6 +208,8 @@ class ExoPlayerController(
         drmType: String?,
         drmLicenseUrl: String?,
         drmHeaders: Map<String, String>?,
+        drmCertificateUrl: String?,
+        drmPssh: String?,
         autoPlay: Boolean,
     ) {
         Log.d(TAG, "Loading URL: $url with DRM: ${drmType ?: "none"}")
@@ -188,6 +218,8 @@ class ExoPlayerController(
         currentDrmType = drmType
         currentDrmLicenseUrl = drmLicenseUrl
         currentDrmHeaders = drmHeaders
+        currentDrmCertificateUrl = drmCertificateUrl
+        currentDrmPssh = drmPssh
         currentAutoPlay = autoPlay
         buildPlayer()
     }
@@ -348,13 +380,24 @@ class ExoPlayerController(
                 Log.d(TAG, "Using local ClearKey JSON callback (embedded JSON detected)")
                 LocalClearKeyJsonCallback(currentDrmLicenseUrl!!)
             }
-            val drmSessionManager = DefaultDrmSessionManager.Builder()
+            // Build a single shared DRM session manager for this playback session.
+            // Previously a new DefaultDrmSessionManager was constructed inside the
+            // provider lambda which is called per-track, causing a resource leak.
+            val drmSessionManagerForClearKey = DefaultDrmSessionManager.Builder()
+                .apply {
+                    // Apply any custom license-request headers to the ClearKey session
+                    if (!currentDrmHeaders.isNullOrEmpty()) {
+                        setKeyRequestParameters(currentDrmHeaders!!)
+                    }
+                }
                 .build(callback)
             DefaultMediaSourceFactory(dataSourceFactory)
                 .setDrmSessionManagerProvider { mediaItem ->
                     val uuid = mediaItem.localConfiguration?.drmConfiguration?.uuid
-                    if (uuid == C.CLEARKEY_UUID) drmSessionManager
-                    else DefaultDrmSessionManager.Builder().build(callback)
+                    // Always return the pre-built manager — never create a new one
+                    // inside the lambda to avoid MediaDrm instance leaks.
+                    if (uuid == C.CLEARKEY_UUID) drmSessionManagerForClearKey
+                    else drmSessionManagerForClearKey
                 }
         } else {
             DefaultMediaSourceFactory(dataSourceFactory)
@@ -400,24 +443,59 @@ class ExoPlayerController(
 
         val drmType = currentDrmType
         val drmHeaders = currentDrmHeaders
-        if (!drmType.isNullOrEmpty() && !currentDrmLicenseUrl.isNullOrEmpty()) {
-            val uuid = when (drmType.lowercase()) {
+        // Guard against both null/empty drmType and empty-string drmLicenseUrl.
+        // "fairplay" is iOS-only — silently ignore it on Android rather than
+        // passing an unknown UUID to ExoPlayer.
+        val effectiveDrmType = drmType?.lowercase()?.takeIf {
+            it.isNotEmpty() && it != "fairplay"
+        }
+        if (effectiveDrmType != null) {
+            val uuid = when (effectiveDrmType) {
                 "widevine"  -> C.WIDEVINE_UUID
                 "playready" -> C.PLAYREADY_UUID
                 "clearkey"  -> C.CLEARKEY_UUID
-                else        -> null
+                else        -> {
+                    Log.w(TAG, "Unknown DRM type '$drmType' — skipping DRM configuration")
+                    null
+                }
             }
             if (uuid != null) {
                 if (rawClearKeyParts != null || isClearKeyJsonBody) {
+                    // Local key — no network license request, no multi-session needed.
                     mediaItemBuilder.setDrmConfiguration(
-                        DrmConfiguration.Builder(uuid).setMultiSession(true).build()
+                        DrmConfiguration.Builder(uuid).build()
                     )
-                } else {
+                } else if (!currentDrmLicenseUrl.isNullOrBlank()) {
+                    // Remote license server URL.
+                    // setMultiSession(true) is only needed for live streams with key
+                    // rotation. For standard single-session VOD/live streams it wastes
+                    // resources and can confuse some license servers. Disabled by default.
                     val drmCfg = DrmConfiguration.Builder(uuid)
                         .setLicenseUri(currentDrmLicenseUrl)
-                        .setMultiSession(true)
                     if (!drmHeaders.isNullOrEmpty()) drmCfg.setLicenseRequestHeaders(drmHeaders)
+                    // Apply PSSH initialization data if provided. This is the raw base64
+                    // blob from the manifest — NOT used as a URL.
+                    if (!currentDrmPssh.isNullOrBlank()) {
+                        try {
+                            val psshBytes = android.util.Base64.decode(
+                                currentDrmPssh, android.util.Base64.DEFAULT
+                            )
+                            drmCfg.setInitData(
+                                when (uuid) {
+                                    C.WIDEVINE_UUID  -> "video/mp4"
+                                    C.PLAYREADY_UUID -> "video/mp4"
+                                    else             -> "video/mp4"
+                                },
+                                psshBytes,
+                            )
+                            Log.d(TAG, "Applied PSSH init data (${psshBytes.size} bytes) for $effectiveDrmType")
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to decode PSSH init data: ${e.message}")
+                        }
+                    }
                     mediaItemBuilder.setDrmConfiguration(drmCfg.build())
+                } else {
+                    Log.w(TAG, "DRM type '$drmType' set but no license URL provided — skipping DRM configuration")
                 }
             }
         }
@@ -487,8 +565,32 @@ class ExoPlayerController(
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            Log.e(TAG, "Playback error: ${error.errorCodeName} - ${error.message}")
-            callbacks?.onError(error.message ?: "Unknown playback error")
+            Log.e(TAG, "Playback error: ${error.errorCodeName} (${error.errorCode}) - ${error.message}")
+
+            // Map structured ExoPlayer DRM error codes to user-readable messages so
+            // the JS layer (and the fallback dialog) can distinguish DRM failures
+            // from generic network errors. This prevents the VLC fallback from being
+            // offered for DRM errors where VLC would also fail.
+            val message = when (error.errorCode) {
+                PlaybackException.ERROR_CODE_DRM_SCHEME_UNSUPPORTED ->
+                    "DRM_ERROR: DRM scheme not supported on this device (${error.errorCodeName})"
+                PlaybackException.ERROR_CODE_DRM_PROVISIONING_FAILED ->
+                    "DRM_ERROR: Device provisioning failed — try clearing app data (${error.errorCodeName})"
+                PlaybackException.ERROR_CODE_DRM_CONTENT_ERROR ->
+                    "DRM_ERROR: Stream is encrypted but no valid DRM session could be established (${error.errorCodeName})"
+                PlaybackException.ERROR_CODE_DRM_LICENSE_ACQUISITION_FAILED ->
+                    "DRM_ERROR: License acquisition failed — check license server URL and network (${error.errorCodeName})"
+                PlaybackException.ERROR_CODE_DRM_DISALLOWED_OPERATION ->
+                    "DRM_ERROR: Operation not permitted by the DRM license (${error.errorCodeName})"
+                PlaybackException.ERROR_CODE_DRM_SYSTEM_ERROR ->
+                    "DRM_ERROR: DRM system error — device may not support the required security level (${error.errorCodeName})"
+                PlaybackException.ERROR_CODE_DRM_SESSION_NOT_OPENED ->
+                    "DRM_ERROR: DRM session could not be opened (${error.errorCodeName})"
+                PlaybackException.ERROR_CODE_DRM_DEVICE_REVOKED ->
+                    "DRM_ERROR: Device has been revoked by the DRM system (${error.errorCodeName})"
+                else -> error.message ?: "Unknown playback error (${error.errorCodeName})"
+            }
+            callbacks?.onError(message)
         }
 
         override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {

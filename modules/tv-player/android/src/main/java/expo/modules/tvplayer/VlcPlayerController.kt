@@ -121,11 +121,16 @@ class VlcPlayerController(
         drmType: String?,
         drmLicenseUrl: String?,
         drmHeaders: Map<String, String>?,
+        drmCertificateUrl: String?,
+        drmPssh: String?,
         autoPlay: Boolean,
     ) {
         if (!drmType.isNullOrEmpty()) {
             Log.e(TAG, "DRM ($drmType) is not supported by VLC — refusing to play")
-            callbacks?.onError("DRM content ($drmType) cannot be played with VLC. Switch to ExoPlayer.")
+            // Prefix with DRM_ERROR so the JS layer can detect this as a DRM-specific
+            // failure and suppress the "Switch to VLC?" fallback dialog (VLC cannot
+            // play DRM content regardless of the error count).
+            callbacks?.onError("DRM_ERROR: DRM content ($drmType) cannot be played with VLC. Switch to ExoPlayer in settings.")
             return
         }
 
@@ -204,7 +209,10 @@ class VlcPlayerController(
                     }
                     org.videolan.libvlc.MediaPlayer.Event.EncounteredError -> {
                         Log.e(TAG, "VLC: Playback error encountered")
-                        callbacks?.onError("VLC playback error")
+                        // Provide a more actionable error message. If the stream requires
+                        // DRM this path is not reached (the DRM check at the top of load()
+                        // fires first), so this is a genuine VLC playback failure.
+                        callbacks?.onError("VLC playback error — stream may be incompatible with VLC. Try switching to ExoPlayer.")
                     }
                     org.videolan.libvlc.MediaPlayer.Event.Buffering -> {
                         val buffering = event.getBuffering()

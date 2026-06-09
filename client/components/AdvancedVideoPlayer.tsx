@@ -81,10 +81,13 @@ function formatTime(ms: number): string {
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface DRMConfig {
-  type: "widevine" | "playready" | "clearkey";
-  licenseServer: string;
+  /** "fairplay" is reserved for future iOS support and is a no-op on Android. */
+  type: "widevine" | "playready" | "clearkey" | "fairplay";
+  licenseServer?: string;
   headers?: Record<string, string>;
   certificateUrl?: string;
+  /** Raw base64 PSSH initialization data extracted from DASH manifests. */
+  pssh?: string;
 }
 
 export interface VideoQuality {
@@ -495,9 +498,11 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
       TvPlayerCommands.loadSource(tvPlayerRef, {
         url: currentSource,
         headers: headers && Object.keys(headers).length > 0 ? headers : undefined,
-        drmType: drm?.type as any,
+        drmType: drm?.type,
         drmLicenseUrl: drm?.licenseServer,
         drmHeaders: drm?.headers,
+        drmCertificateUrl: drm?.certificateUrl,
+        drmPssh: drm?.pssh,
         autoPlay: true,
       });
     }
@@ -513,9 +518,11 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
     TvPlayerCommands.loadSource(tvPlayerRef, {
       url: currentSource,
       headers: headers && Object.keys(headers).length > 0 ? headers : undefined,
-      drmType: drm?.type as any,
+      drmType: drm?.type,
       drmLicenseUrl: drm?.licenseServer,
       drmHeaders: drm?.headers,
+      drmCertificateUrl: drm?.certificateUrl,
+      drmPssh: drm?.pssh,
       autoPlay,
     });
   }, [currentSource, headers, drm, autoPlay, activePlayerEngine]);
@@ -1000,7 +1007,16 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
               setIsBuffering(false);
               setError(msg);
               consecutiveErrorCountRef.current += 1;
-              if (consecutiveErrorCountRef.current >= 2 && activePlayerEngine === "exoplayer") {
+              // DRM errors are prefixed with "DRM_ERROR:" by the native layer.
+              // VLC cannot play DRM content either, so offering the VLC fallback
+              // is misleading. Suppress the dialog for DRM failures.
+              const isDrmError = msg.startsWith("DRM_ERROR:");
+              if (
+                consecutiveErrorCountRef.current >= 2 &&
+                activePlayerEngine === "exoplayer" &&
+                !isDrmError &&
+                !drm
+              ) {
                 setShowFallbackDialog(true);
               }
               onError?.(msg);
@@ -1785,7 +1801,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 marginBottom: Spacing.xl,
               }}
             >
-              Playback failed. Switch to VLC for better compatibility?
+              Playback failed repeatedly. Switch to VLC for better compatibility with non-DRM streams?
             </ThemedText>
             <TVFocusablePressable
               onPress={() => {

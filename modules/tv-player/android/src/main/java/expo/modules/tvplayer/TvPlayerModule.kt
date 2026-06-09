@@ -71,20 +71,22 @@ class TvPlayerModule : Module() {
             // ── Commands (imperative API, auto-added to React ref) ─────────
 
             AsyncFunction("loadSource") { view: TvPlayerView, params: Map<String, Any?> ->
-                val url           = params["url"] as? String ?: return@AsyncFunction
-                val headers       = (params["headers"] as? Map<*, *>)
-                                        ?.mapNotNull { (k, v) ->
-                                            if (k is String && v is String) k to v else null
-                                        }?.toMap() ?: emptyMap()
-                val drmType       = params["drmType"] as? String
-                val drmLicenseUrl = params["drmLicenseUrl"] as? String
-                val drmHeaders    = (params["drmHeaders"] as? Map<*, *>)
-                                        ?.mapNotNull { (k, v) ->
-                                            if (k is String && v is String) k to v else null
-                                        }?.toMap()
-                val autoPlay      = params["autoPlay"] as? Boolean ?: true
+                val url                = params["url"] as? String ?: return@AsyncFunction
+                val headers            = (params["headers"] as? Map<*, *>)
+                                             ?.mapNotNull { (k, v) ->
+                                                 if (k is String && v is String) k to v else null
+                                             }?.toMap() ?: emptyMap()
+                val drmType            = params["drmType"] as? String
+                val drmLicenseUrl      = params["drmLicenseUrl"] as? String
+                val drmHeaders         = (params["drmHeaders"] as? Map<*, *>)
+                                             ?.mapNotNull { (k, v) ->
+                                                 if (k is String && v is String) k to v else null
+                                             }?.toMap()
+                val drmCertificateUrl  = params["drmCertificateUrl"] as? String
+                val drmPssh            = params["drmPssh"] as? String
+                val autoPlay           = params["autoPlay"] as? Boolean ?: true
 
-                view.load(url, headers, drmType, drmLicenseUrl, drmHeaders, autoPlay)
+                view.load(url, headers, drmType, drmLicenseUrl, drmHeaders, drmCertificateUrl, drmPssh, autoPlay)
             }
 
             AsyncFunction("play") { view: TvPlayerView ->

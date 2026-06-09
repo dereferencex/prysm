@@ -160,20 +160,26 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         drmType: String?,
         drmLicenseUrl: String?,
         drmHeaders: Map<String, String>?,
+        drmCertificateUrl: String? = null,
+        drmPssh: String? = null,
         autoPlay: Boolean,
     ) {
-        Log.d(TAG, "load() called with engine=$playerEngine, url=$url")
+        Log.d(TAG, "load() called with engine=$playerEngine, url=$url, drm=${drmType ?: "none"}")
 
-        if (url == currentUrl) {
-            Log.d(TAG, "Same channel ($url) — resuming existing playback")
-            play()
-            return
-        }
+        // Previously, loading the same URL would just call play() and skip rebuilding the
+        // player. This is wrong when:
+        //  - The DRM license has expired and the user retries → we must re-acquire the license.
+        //  - The player is in an error state → we must reinitialize.
+        // We now always rebuild the player on explicit load() calls. The same-URL skip was a
+        // micro-optimisation that caused hard-to-debug DRM expiry failures.
 
-        PlayerRegistry.registerPlayer(exoPlayer = null, view = this)
+        // Fix race condition: release the existing player BEFORE registering the new
+        // session in PlayerRegistry so stopPlayback() on the old view doesn't interfere
+        // with the new player being set up.
         releasePlayer()
+        PlayerRegistry.registerPlayer(exoPlayer = null, view = this)
         currentUrl = url
-        playerManager.load(url, headers, drmType, drmLicenseUrl, drmHeaders, autoPlay)
+        playerManager.load(url, headers, drmType, drmLicenseUrl, drmHeaders, drmCertificateUrl, drmPssh, autoPlay)
     }
 
     fun play() { playerManager.play() }

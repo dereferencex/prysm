@@ -1,8 +1,15 @@
 export interface DRMInfo {
-  type?: "widevine" | "playready" | "clearkey";
+  /** DRM system type. "fairplay" is reserved for future iOS support. */
+  type?: "widevine" | "playready" | "clearkey" | "fairplay";
+  /** License server URL. Must be a valid HTTP(S) URL — never a PSSH blob. */
   licenseServer?: string;
+  /** Optional HTTP headers for license requests. */
   headers?: Record<string, string>;
+  /** Optional certificate URL (Widevine provisioning / PlayReady cert chain). */
   certificateUrl?: string;
+  /** Raw base64 PSSH initialization data extracted from the manifest.
+   *  Passed as DRM initialization data to the player — NOT used as a URL. */
+  pssh?: string;
 }
 
 export interface Channel {

@@ -70,18 +70,27 @@ export default function NetworkPlayerScreen() {
     console.error("Network stream error:", error);
   }, []);
 
-  /** Build DRMConfig only when a license URL / key is provided */
-  const drm: DRMConfig | undefined = config.drmLicenseUrl.trim()
-    ? {
-        type:
-          config.drmScheme === "widevine"
-            ? "widevine"
-            : config.drmScheme === "playready"
-              ? "playready"
-              : "clearkey",
-        licenseServer: config.drmLicenseUrl.trim(),
-      }
-    : undefined;
+  /** Build DRMConfig only when a recognisable DRM scheme and license URL are provided. */
+  const drm: DRMConfig | undefined = (() => {
+    const licenseUrl = config.drmLicenseUrl?.trim();
+    if (!licenseUrl) return undefined;
+
+    const scheme = config.drmScheme?.toLowerCase?.() ?? "";
+    let type: DRMConfig["type"];
+    if (scheme === "widevine") type = "widevine";
+    else if (scheme === "playready") type = "playready";
+    else if (scheme === "clearkey") type = "clearkey";
+    else if (scheme === "fairplay") type = "fairplay";
+    else {
+      // Unknown DRM scheme — do not silently default to clearkey. Log and skip
+      // DRM configuration so ExoPlayer attempts cleartext playback rather than
+      // trying an incorrect DRM scheme which would always fail.
+      console.warn(`[NetworkPlayer] Unknown DRM scheme "${config.drmScheme}" — DRM disabled`);
+      return undefined;
+    }
+
+    return { type, licenseServer: licenseUrl };
+  })();
 
   /** Build request headers from cookie / referer / origin / user-agent */
   const headers: Record<string, string> = {};

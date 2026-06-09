@@ -11,9 +11,14 @@ import { ViewStyle } from "react-native";
 export interface TvPlayerLoadParams {
   url: string;
   headers?: Record<string, string>;
-  drmType?: "widevine" | "playready" | "clearkey";
+  /** "fairplay" is reserved for future iOS support and is a no-op on Android. */
+  drmType?: "widevine" | "playready" | "clearkey" | "fairplay";
   drmLicenseUrl?: string;
   drmHeaders?: Record<string, string>;
+  /** Certificate URL for Widevine provisioning or PlayReady certificate chains. */
+  drmCertificateUrl?: string;
+  /** Raw base64 PSSH initialization data (passed as DRM init data, not as a URL). */
+  drmPssh?: string;
   autoPlay?: boolean;
 }
 

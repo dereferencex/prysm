@@ -21,22 +21,38 @@ function stableChannelId(url: string): string {
 function parseDRM(
   lines: string[],
   currentIndex: number,
-  url: string,
+  _url: string,
 ): { drm?: DRMInfo; headers?: Record<string, string> } {
   const drm: DRMInfo = {};
   const headers: Record<string, string> = {};
   let foundDRM = false;
   let foundHeaders = false;
 
-  for (let i = Math.max(0, currentIndex - 20); i < currentIndex; i++) {
+  // Search both before AND after the URL line within a reasonable window.
+  // Some providers place #KODIPROP tags after #EXTINF but before the URL,
+  // while others may interleave them with other metadata lines.
+  // We scan 30 lines before the URL and up to 5 lines after (the URL itself
+  // is at currentIndex, so lines[currentIndex] is the URL — skip it).
+  const windowStart = Math.max(0, currentIndex - 30);
+  const windowEnd = Math.min(lines.length - 1, currentIndex + 5);
+
+  for (let i = windowStart; i <= windowEnd; i++) {
+    if (i === currentIndex) continue; // skip the URL line itself
     const line = lines[i];
 
     if (line.includes("#KODIPROP:inputstream.adaptive.license_type=")) {
-      const type = line.split("=")[1]?.toLowerCase().trim();
-      if (type?.includes("widevine")) drm.type = "widevine";
-      else if (type?.includes("playready")) drm.type = "playready";
-      else if (type?.includes("clearkey")) drm.type = "clearkey";
-      // FairPlay removed - not supported on Android
+      // Use slice(1).join("=") to correctly handle type strings that might
+      // theoretically contain "=" — keeps parity with the license_key parsing.
+      const typeRaw = line.split("=").slice(1).join("=").toLowerCase().trim();
+      if (typeRaw.includes("widevine")) drm.type = "widevine";
+      else if (typeRaw.includes("playready")) drm.type = "playready";
+      else if (typeRaw.includes("clearkey")) drm.type = "clearkey";
+      else if (typeRaw.includes("fairplay")) drm.type = "fairplay";
+      else {
+        // Unknown DRM type — set a flag so we know DRM was declared even if
+        // we can't map it. Callers will see foundDRM=true but drm.type=undefined
+        // and can handle it (e.g. log a warning) rather than silently proceeding.
+      }
       foundDRM = true;
     }
 
@@ -61,23 +77,13 @@ function parseDRM(
     }
   }
 
-  if (!foundDRM && url) {
-    try {
-      const urlObj = new URL(url);
-      if (urlObj.searchParams.has("hdnea")) {
-        drm.type = "widevine";
-        const hdntl = urlObj.searchParams.get("hdntl");
-        const hdnea = urlObj.searchParams.get("hdnea");
-        drm.licenseServer = hdntl || undefined;
-        if (hdnea) headers["Authorization"] = hdnea;
-        if (drm.licenseServer || headers["Authorization"]) {
-          foundDRM = true;
-        }
-      }
-    } catch {
-      // Invalid URL, ignore
-    }
-  }
+  // NOTE: Akamai token-auth parameters (`hdnea`, `hdntl`) are CDN access
+  // tokens — they protect the stream delivery at the CDN layer and are NOT
+  // related to EME/CDM DRM (Widevine/PlayReady/ClearKey). We deliberately do
+  // NOT treat them as a DRM signal. If present they should be forwarded as
+  // request headers or kept as URL query parameters, not used to configure a
+  // DRM session. Removed previous incorrect behaviour that set drm.type =
+  // "widevine" when hdnea was detected.
 
   // Attach headers to DRM object for license requests
   if (foundDRM && foundHeaders) {
@@ -179,14 +185,12 @@ export function parseM3U(
   const categoriesSet = new Set<string>();
 
   let currentChannel: Partial<Channel> = {};
-  let extinfIndex = -1;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
     if (line.startsWith("#EXTINF:")) {
       currentChannel = parseExtInf(line);
-      extinfIndex = i;
     } else if (line && !line.startsWith("#") && currentChannel.name) {
       const { drm, headers: drmHeaders } = parseDRM(lines, i, line);
 
@@ -219,7 +223,6 @@ export function parseM3U(
       channels.push(channel);
       categoriesSet.add(channel.group);
       currentChannel = {};
-      extinfIndex = -1;
     }
   }
 
@@ -478,7 +481,8 @@ export function parsePlaylist(
   }
 
   // Check for XSPF (XML-based)
-  if (trimmed.includes("<playlist") && trimmed.includes("<tracklist>")) {
+  // The XSPF standard uses <trackList> (camelCase) — not <tracklist>.
+  if (trimmed.includes("<playlist") && (trimmed.includes("<trackList>") || trimmed.includes("<tracklist>"))) {
     return parseXSPF(content, playlistName);
   }
 

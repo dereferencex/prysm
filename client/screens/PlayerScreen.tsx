@@ -94,19 +94,27 @@ export default function PlayerScreen() {
 
   useEffect(() => {
     if (!channel) return;
-    // If the channel already has KODIPROP DRM, no need to fetch from manifest
+    // If the channel already has KODIPROP DRM with a valid license URL, no
+    // need to fetch from the manifest.
     if (channel.drm?.type && channel.drm?.licenseServer) {
       setManifestDrm(undefined);
       return;
     }
     let cancelled = false;
-    extractDRMFromManifest(channel.url).then((drm) => {
-      if (!cancelled && drm?.type) {
-        setManifestDrm(drm);
+    extractDRMFromManifest(channel.url, channel.headers).then((drm) => {
+      if (!cancelled) {
+        // Only store DRM info that has both a type AND a usable licenseServer URL,
+        // or is ClearKey (which may not need a license server URL). This prevents
+        // partial DRM state (type set, licenseServer undefined) from being stored.
+        if (drm?.type && (drm.licenseServer || drm.type === "clearkey")) {
+          setManifestDrm(drm);
+        } else {
+          setManifestDrm(undefined);
+        }
       }
     });
     return () => { cancelled = true; };
-  }, [channel?.url, channel?.drm?.type, channel?.drm?.licenseServer]);
+  }, [channel?.url, channel?.drm?.type, channel?.drm?.licenseServer, channel?.headers]);
 
   const recentChannelObjects = useMemo(() => {
     if (!playlist) return [];
@@ -186,25 +194,28 @@ export default function PlayerScreen() {
     // Prefer KODIPROP-extracted DRM from the playlist
     if (channel?.drm?.type && channel.drm.licenseServer) {
       return {
-        type: channel.drm.type,
+        type: channel.drm.type as DRMConfig["type"],
         licenseServer: channel.drm.licenseServer,
         headers: channel.drm.headers,
         certificateUrl: channel.drm.certificateUrl,
+        pssh: channel.drm.pssh,
       };
     }
 
-    // Fall back to DRM extracted from the manifest itself
-    if (manifestDrm?.type && manifestDrm.licenseServer) {
+    // Fall back to DRM extracted from the manifest itself.
+    // manifestDrm is only set when it has both type and licenseServer (or is ClearKey).
+    if (manifestDrm?.type && (manifestDrm.licenseServer || manifestDrm.type === "clearkey")) {
       return {
-        type: manifestDrm.type,
+        type: manifestDrm.type as DRMConfig["type"],
         licenseServer: manifestDrm.licenseServer,
         headers: manifestDrm.headers,
         certificateUrl: manifestDrm.certificateUrl,
+        pssh: manifestDrm.pssh,
       };
     }
 
     return undefined;
-  }, [channel?.drm?.type, channel?.drm?.licenseServer, channel?.drm?.headers, channel?.drm?.certificateUrl, manifestDrm]);
+  }, [channel?.drm, manifestDrm]);
 
   const streamHeaders = useMemo(():
     | Record<string, string>
@@ -259,7 +270,7 @@ export default function PlayerScreen() {
         onChannelSelect={handleChannelSelect}
         isFavorite={isFavorite}
         onFavoritePress={handleFavorite}
-        isLive={true}
+        isLive={channel.isLive !== false}
       />
     </View>
   );

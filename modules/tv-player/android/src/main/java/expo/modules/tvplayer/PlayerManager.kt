@@ -31,6 +31,8 @@ class PlayerManager(
         val drmType: String?,
         val drmLicenseUrl: String?,
         val drmHeaders: Map<String, String>?,
+        val drmCertificateUrl: String?,
+        val drmPssh: String?,
         val autoPlay: Boolean,
     )
 
@@ -75,6 +77,8 @@ class PlayerManager(
                 params.drmType,
                 params.drmLicenseUrl,
                 params.drmHeaders,
+                params.drmCertificateUrl,
+                params.drmPssh,
                 false,
             )
             if (savedPosition > 0) {
@@ -95,10 +99,12 @@ class PlayerManager(
         drmType: String?,
         drmLicenseUrl: String?,
         drmHeaders: Map<String, String>?,
+        drmCertificateUrl: String? = null,
+        drmPssh: String? = null,
         autoPlay: Boolean,
     ) {
         consecutiveErrorCount = 0
-        lastLoadParams = LoadParams(url, headers, drmType, drmLicenseUrl, drmHeaders, autoPlay)
+        lastLoadParams = LoadParams(url, headers, drmType, drmLicenseUrl, drmHeaders, drmCertificateUrl, drmPssh, autoPlay)
 
         if (activeController == null) {
             activeController = getOrCreateController(currentEngine)
@@ -106,7 +112,7 @@ class PlayerManager(
             applyPendingSurface(activeController!!)
         }
 
-        activeController?.load(url, headers, drmType, drmLicenseUrl, drmHeaders, autoPlay)
+        activeController?.load(url, headers, drmType, drmLicenseUrl, drmHeaders, drmCertificateUrl, drmPssh, autoPlay)
     }
 
     fun setVideoSurfaceView(surfaceView: SurfaceView) {
@@ -157,12 +163,24 @@ class PlayerManager(
     fun getDuration(): Long = activeController?.getDuration() ?: 0L
     fun isPlaying(): Boolean = activeController?.isPlaying() ?: false
 
-    fun reportError() {
+    fun reportError(isDrmError: Boolean = false) {
         consecutiveErrorCount++
-        Log.w(TAG, "Consecutive error count: $consecutiveErrorCount")
+        Log.w(TAG, "Consecutive error count: $consecutiveErrorCount (isDrmError=$isDrmError)")
+
+        val hasDrm = !lastLoadParams?.drmType.isNullOrEmpty()
+
+        // If VLC is the active engine and DRM is configured, VLC will never succeed.
+        // Auto-switch to ExoPlayer immediately on the first error rather than letting
+        // the user see repeated "DRM not supported by VLC" messages.
+        if (currentEngine == PlayerEngine.VLC && hasDrm) {
+            Log.e(TAG, "VLC cannot play DRM content — auto-switching to ExoPlayer")
+            consecutiveErrorCount = 0
+            switchEngine(PlayerEngine.EXOPLAYER)
+            return
+        }
+
         if (consecutiveErrorCount >= MAX_CONSECUTIVE_ERRORS && currentEngine == PlayerEngine.EXOPLAYER) {
-            val hasDrm = !lastLoadParams?.drmType.isNullOrEmpty()
-            if (hasDrm) {
+            if (hasDrm || isDrmError) {
                 Log.w(TAG, "Max errors reached but DRM is configured — not switching to VLC (unsupported)")
                 return
             }
@@ -216,7 +234,11 @@ class PlayerManager(
         }
 
         override fun onError(message: String) {
-            reportError()
+            // DRM errors are prefixed with "DRM_ERROR:" by ExoPlayerController and
+            // VlcPlayerController. Pass this flag to reportError() so it doesn't
+            // offer the VLC fallback for errors that VLC also cannot handle.
+            val isDrmError = message.startsWith("DRM_ERROR:")
+            reportError(isDrmError)
             outer?.onError(message)
         }
 
