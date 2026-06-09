@@ -126,17 +126,17 @@ private class LocalClearKeyCallback(
     override fun executeProvisionRequest(
         uuid: java.util.UUID,
         request: ExoMediaDrm.ProvisionRequest,
-    ): ByteArray {
+    ): MediaDrmCallback.Response {
         throw UnsupportedOperationException("ClearKey provisioning not supported")
     }
 
     override fun executeKeyRequest(
         uuid: java.util.UUID,
         request: ExoMediaDrm.KeyRequest,
-    ): ByteArray {
+    ): MediaDrmCallback.Response {
         Log.d(TAG, "LocalClearKeyCallback: returning embedded key for ClearKey")
-        return """{"keys":[{"kty":"oct","kid":"$keyIdB64","k":"$keyB64"}]}"""
-            .toByteArray(Charsets.UTF_8)
+        return MediaDrmCallback.Response("""{"keys":[{"kty":"oct","kid":"$keyIdB64","k":"$keyB64"}]}"""
+            .toByteArray(Charsets.UTF_8))
     }
 
     companion object {
@@ -156,16 +156,16 @@ private class LocalClearKeyJsonCallback(
     override fun executeProvisionRequest(
         uuid: java.util.UUID,
         request: ExoMediaDrm.ProvisionRequest,
-    ): ByteArray {
+    ): MediaDrmCallback.Response {
         throw UnsupportedOperationException("ClearKey provisioning not supported")
     }
 
     override fun executeKeyRequest(
         uuid: java.util.UUID,
         request: ExoMediaDrm.KeyRequest,
-    ): ByteArray {
+    ): MediaDrmCallback.Response {
         Log.d(TAG, "LocalClearKeyJsonCallback: returning embedded JSON for ClearKey")
-        return jsonResponse.toByteArray(Charsets.UTF_8)
+        return MediaDrmCallback.Response(jsonResponse.toByteArray(Charsets.UTF_8))
     }
 
     companion object {
@@ -475,19 +475,19 @@ class ExoPlayerController(
                     if (!drmHeaders.isNullOrEmpty()) drmCfg.setLicenseRequestHeaders(drmHeaders)
                     // Apply PSSH initialization data if provided. This is the raw base64
                     // blob from the manifest — NOT used as a URL.
+                    // Media3 1.10+ uses setInitData(Map<String, ByteArray>) instead of
+                    // the old two-parameter version.
                     if (!currentDrmPssh.isNullOrBlank()) {
                         try {
                             val psshBytes = android.util.Base64.decode(
                                 currentDrmPssh, android.util.Base64.DEFAULT
                             )
-                            drmCfg.setInitData(
-                                when (uuid) {
-                                    C.WIDEVINE_UUID  -> "video/mp4"
-                                    C.PLAYREADY_UUID -> "video/mp4"
-                                    else             -> "video/mp4"
-                                },
-                                psshBytes,
-                            )
+                            val mimeType = when (uuid) {
+                                C.WIDEVINE_UUID  -> "video/mp4"
+                                C.PLAYREADY_UUID -> "video/mp4"
+                                else             -> "video/mp4"
+                            }
+                            drmCfg.setInitData(mapOf(mimeType to psshBytes))
                             Log.d(TAG, "Applied PSSH init data (${psshBytes.size} bytes) for $effectiveDrmType")
                         } catch (e: Exception) {
                             Log.w(TAG, "Failed to decode PSSH init data: ${e.message}")
@@ -584,7 +584,9 @@ class ExoPlayerController(
                     "DRM_ERROR: Operation not permitted by the DRM license (${error.errorCodeName})"
                 PlaybackException.ERROR_CODE_DRM_SYSTEM_ERROR ->
                     "DRM_ERROR: DRM system error — device may not support the required security level (${error.errorCodeName})"
-                PlaybackException.ERROR_CODE_DRM_SESSION_NOT_OPENED ->
+                // ERROR_CODE_DRM_SESSION_NOT_OPENED (2006) — use raw integer
+                // since the named constant may not be available in all Media3 versions.
+                2006 ->
                     "DRM_ERROR: DRM session could not be opened (${error.errorCodeName})"
                 PlaybackException.ERROR_CODE_DRM_DEVICE_REVOKED ->
                     "DRM_ERROR: Device has been revoked by the DRM system (${error.errorCodeName})"
