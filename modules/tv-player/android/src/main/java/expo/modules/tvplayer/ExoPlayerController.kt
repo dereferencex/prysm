@@ -10,10 +10,12 @@ import android.view.SurfaceView
 import android.view.TextureView
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.DrmInitData
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaItem.DrmConfiguration
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackGroup
 import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
@@ -25,8 +27,14 @@ import androidx.media3.exoplayer.drm.ExoMediaDrm
 import androidx.media3.exoplayer.drm.HttpMediaDrmCallback
 import androidx.media3.exoplayer.drm.MediaDrmCallback
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.MediaPeriod
 import androidx.media3.exoplayer.source.MediaSource
+import androidx.media3.exoplayer.source.SampleStream
+import androidx.media3.exoplayer.source.TrackGroupArray
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import androidx.media3.exoplayer.trackselection.ExoTrackSelection
+import androidx.media3.exoplayer.upstream.Allocator
+import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import okhttp3.OkHttpClient
 import java.nio.ByteBuffer
 import java.util.UUID
@@ -89,6 +97,39 @@ private fun normalizeToBase64Url(value: String): String? {
     }
 }
 
+private fun buildClearKeyPssh(keyId: String): ByteArray {
+    val stripped = keyId.trimEnd('=')
+    val keyIdBytes = if (stripped.length == 22 || stripped.length == 24) {
+        Base64.decode(keyId, Base64.URL_SAFE or Base64.NO_WRAP)
+    } else {
+        hexToByteArray(keyId)
+    }
+
+    require(keyIdBytes.size == 16) {
+        "ClearKey KID must be exactly 16 bytes (128 bits), got ${keyIdBytes.size} bytes"
+    }
+
+    val clearKeyUuid = byteArrayOf(
+        0x10, 0x77, 0xef.toByte(), 0xec.toByte(),
+        0xc0.toByte(), 0xb2.toByte(), 0x4d, 0x02,
+        0xac.toByte(), 0xe3.toByte(), 0x3c, 0x1e,
+        0x52, 0xe2.toByte(), 0xfb.toByte(), 0x4b,
+    )
+    val kidCount = 1
+    val dataSize = 0
+    val boxSize = 4 + 4 + 4 + 16 + 4 + keyIdBytes.size + 4
+    val buf = ByteBuffer.allocate(boxSize).order(java.nio.ByteOrder.BIG_ENDIAN)
+    buf.putInt(boxSize)
+    buf.put("pssh".toByteArray(Charsets.US_ASCII))
+    buf.put(1)
+    buf.put(byteArrayOf(0, 0, 0))
+    buf.put(clearKeyUuid)
+    buf.putInt(kidCount)
+    buf.put(keyIdBytes)
+    buf.putInt(dataSize)
+    return buf.array()
+}
+
 private class LocalClearKeyCallback(
     keyIdHex: String,
     keyHex: String,
@@ -148,6 +189,118 @@ private class LocalClearKeyJsonCallback(
 
     companion object {
         private const val TAG = "ExoPlayerController"
+    }
+}
+
+@UnstableApi
+private class PsshInjectingMediaSourceFactory(
+    private val delegate: MediaSource.Factory,
+    private val psshData: ByteArray,
+) : MediaSource.Factory {
+
+    private val drmInitData = DrmInitData(
+        arrayOf(DrmInitData.SchemeData(C.CLEARKEY_UUID, "cenc", psshData)),
+    )
+
+    override fun createMediaSource(mediaItem: MediaItem): MediaSource {
+        val source = delegate.createMediaSource(mediaItem)
+        return PsshInjectingMediaSource(source, drmInitData)
+    }
+
+    override fun setDrmSessionManagerProvider(
+        drmSessionManagerProvider: androidx.media3.exoplayer.drm.DrmSessionManagerProvider,
+    ): MediaSource.Factory {
+        return PsshInjectingMediaSourceFactory(
+            delegate.setDrmSessionManagerProvider(drmSessionManagerProvider),
+            psshData,
+        )
+    }
+
+    override fun setLoadErrorHandlingPolicy(
+        loadErrorHandlingPolicy: LoadErrorHandlingPolicy,
+    ): MediaSource.Factory {
+        return PsshInjectingMediaSourceFactory(
+            delegate.setLoadErrorHandlingPolicy(loadErrorHandlingPolicy),
+            psshData,
+        )
+    }
+
+    override fun getSupportedTypes(): IntArray = delegate.supportedTypes
+}
+
+@UnstableApi
+private class PsshInjectingMediaSource(
+    private val delegate: MediaSource,
+    private val drmInitData: DrmInitData,
+) : MediaSource by delegate {
+
+    override fun createPeriod(
+        id: MediaSource.MediaPeriodId,
+        allocator: Allocator,
+        startPositionUs: Long,
+    ): MediaPeriod {
+        val period = delegate.createPeriod(id, allocator, startPositionUs)
+        return PsshInjectingMediaPeriod(period, drmInitData)
+    }
+
+    override fun releasePeriod(mediaPeriod: MediaPeriod) {
+        if (mediaPeriod is PsshInjectingMediaPeriod) {
+            delegate.releasePeriod(mediaPeriod.delegate)
+        } else {
+            delegate.releasePeriod(mediaPeriod)
+        }
+    }
+}
+
+@UnstableApi
+private class PsshInjectingMediaPeriod(
+    val delegate: MediaPeriod,
+    private val drmInitData: DrmInitData,
+) : MediaPeriod by delegate {
+
+    private var injectedTrackGroups: TrackGroupArray? = null
+    private val injectedToOriginal = HashMap<TrackGroup, TrackGroup>()
+
+    override fun getTrackGroups(): TrackGroupArray {
+        injectedTrackGroups?.let { return it }
+
+        val original = delegate.trackGroups
+        val injectedGroups = Array(original.length) { groupIndex ->
+            val group = original[groupIndex]
+            val injectedTracks = Array(group.length) { trackIndex ->
+                group.getFormat(trackIndex).buildUpon()
+                    .setDrmInitData(drmInitData)
+                    .build()
+            }
+            TrackGroup(*injectedTracks).also { injectedToOriginal[it] = group }
+        }
+        val result = TrackGroupArray(injectedGroups)
+        injectedTrackGroups = result
+        return result
+    }
+
+    override fun selectTracks(
+        selections: Array<out ExoTrackSelection?>,
+        mayRetainStreamFlags: BooleanArray,
+        streams: Array<out SampleStream?>,
+        streamResetFlags: BooleanArray,
+        positionUs: Long,
+    ): Long {
+        val mappedSelections = Array(selections.size) { i ->
+            val sel = selections[i] ?: return@Array null
+            val originalGroup = injectedToOriginal[sel.group] ?: return@Array sel
+            object : ExoTrackSelection by sel {
+                override fun getGroup(): TrackGroup = originalGroup
+            }
+        }
+        @Suppress("UNCHECKED_CAST")
+        return delegate.selectTracks(
+            mappedSelections as Array<ExoTrackSelection?>,
+            mayRetainStreamFlags,
+            streams as Array<SampleStream?>,
+            streamResetFlags,
+            positionUs,
+        )
     }
 }
 
@@ -419,6 +572,13 @@ class ExoPlayerController(
                 .setDrmSessionManagerProvider { drmSessionManager }
         }
 
+        val needsPsshInjection = rawClearKeyParts != null && drmSessionManager != null
+        if (needsPsshInjection) {
+            val psshData = buildClearKeyPssh(rawClearKeyParts!![0])
+            Log.d(TAG, "Built ClearKey PSSH from keyId (${psshData.size} bytes)")
+            mediaSourceFactory = PsshInjectingMediaSourceFactory(mediaSourceFactory, psshData)
+        }
+
         val audioAttrs = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
@@ -474,7 +634,7 @@ class ExoPlayerController(
             }
             if (uuid != null) {
                 if (rawClearKeyParts != null || isClearKeyJsonBody) {
-                    Log.d(TAG, "ClearKey local playback — callback handles key exchange")
+                    Log.d(TAG, "ClearKey local playback — PSSH injected via MediaSource wrapper")
                 } else if (!currentDrmLicenseUrl.isNullOrBlank()) {
                     val drmCfg = DrmConfiguration.Builder(uuid)
                         .setLicenseUri(currentDrmLicenseUrl)
@@ -649,7 +809,7 @@ class ExoPlayerController(
                 when (group.type) {
                     C.TRACK_TYPE_AUDIO -> {
                         for (trackIdx in 0 until group.length) {
-                            val format = group.getTrackFormat(trackIdx)
+                            val format = group.getFormat(trackIdx)
                             audioTracks.add(
                                 mapOf(
                                     "groupIndex" to groupIdx,
@@ -665,7 +825,7 @@ class ExoPlayerController(
                     }
                     C.TRACK_TYPE_TEXT -> {
                         for (trackIdx in 0 until group.length) {
-                            val format = group.getTrackFormat(trackIdx)
+                            val format = group.getFormat(trackIdx)
                             subtitleTracks.add(
                                 mapOf(
                                     "groupIndex" to groupIdx,
