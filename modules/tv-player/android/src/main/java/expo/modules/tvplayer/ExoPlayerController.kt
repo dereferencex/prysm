@@ -24,6 +24,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.drm.DefaultDrmSessionManager
 import androidx.media3.exoplayer.drm.ExoMediaDrm
+import androidx.media3.exoplayer.drm.FrameworkMediaDrm
 import androidx.media3.exoplayer.drm.HttpMediaDrmCallback
 import androidx.media3.exoplayer.drm.MediaDrmCallback
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -199,7 +200,7 @@ private class PsshInjectingMediaSourceFactory(
 ) : MediaSource.Factory {
 
     private val drmInitData = DrmInitData(
-        arrayOf(DrmInitData.SchemeData(C.CLEARKEY_UUID, "cenc", psshData)),
+        listOf(DrmInitData.SchemeData(C.CLEARKEY_UUID, "cenc", psshData)),
     )
 
     override fun createMediaSource(mediaItem: MediaItem): MediaSource {
@@ -274,7 +275,7 @@ private class PsshInjectingMediaPeriod(
             }
             TrackGroup(*injectedTracks).also { injectedToOriginal[it] = group }
         }
-        val result = TrackGroupArray(injectedGroups)
+        val result = TrackGroupArray(*injectedGroups)
         injectedTrackGroups = result
         return result
     }
@@ -288,9 +289,9 @@ private class PsshInjectingMediaPeriod(
     ): Long {
         val mappedSelections = Array(selections.size) { i ->
             val sel = selections[i] ?: return@Array null
-            val originalGroup = injectedToOriginal[sel.group] ?: return@Array sel
+            val originalGroup = injectedToOriginal[sel.trackGroup] ?: return@Array sel
             object : ExoTrackSelection by sel {
-                override fun getGroup(): TrackGroup = originalGroup
+                override fun getTrackGroup(): TrackGroup = originalGroup
             }
         }
         @Suppress("UNCHECKED_CAST")
@@ -537,6 +538,7 @@ class ExoPlayerController(
                     LocalClearKeyJsonCallback(currentDrmLicenseUrl!!)
                 }
                 DefaultDrmSessionManager.Builder()
+                    .setUuidAndExoMediaDrmProvider(C.CLEARKEY_UUID, FrameworkMediaDrm.DEFAULT_PROVIDER)
                     .apply {
                         if (!currentDrmHeaders.isNullOrEmpty()) {
                             setKeyRequestParameters(currentDrmHeaders!!)
@@ -551,9 +553,15 @@ class ExoPlayerController(
                     currentDrmLicenseUrl!!,
                     dataSourceFactory,
                 )
+                val drmUuid = when (currentDrmType!!.lowercase()) {
+                    "widevine" -> C.WIDEVINE_UUID
+                    "playready" -> C.PLAYREADY_UUID
+                    else -> C.WIDEVINE_UUID
+                }
                 Log.d(TAG, "Built HttpMediaDrmCallback for $currentDrmType " +
                     "(license URL: $currentDrmLicenseUrl)")
                 DefaultDrmSessionManager.Builder()
+                    .setUuidAndExoMediaDrmProvider(drmUuid, FrameworkMediaDrm.DEFAULT_PROVIDER)
                     .apply {
                         if (!currentDrmHeaders.isNullOrEmpty()) {
                             setKeyRequestParameters(currentDrmHeaders!!)
@@ -809,7 +817,7 @@ class ExoPlayerController(
                 when (group.type) {
                     C.TRACK_TYPE_AUDIO -> {
                         for (trackIdx in 0 until group.length) {
-                            val format = group.getFormat(trackIdx)
+                            val format = group.getTrackFormat(trackIdx)
                             audioTracks.add(
                                 mapOf(
                                     "groupIndex" to groupIdx,
@@ -825,7 +833,7 @@ class ExoPlayerController(
                     }
                     C.TRACK_TYPE_TEXT -> {
                         for (trackIdx in 0 until group.length) {
-                            val format = group.getFormat(trackIdx)
+                            val format = group.getTrackFormat(trackIdx)
                             subtitleTracks.add(
                                 mapOf(
                                     "groupIndex" to groupIdx,
