@@ -284,7 +284,9 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   const [showRecentPanel, setShowRecentPanel] = useState(false);
 
   // Per-channel player engine — loaded from storage, falls back to defaultEngine prop
-  const [activePlayerEngine, setActivePlayerEngine] = useState<"exoplayer" | "vlc">(defaultEngine);
+  const [activePlayerEngine, setActivePlayerEngine] = useState<
+    "exoplayer" | "vlc"
+  >(defaultEngine);
 
   // Modals
   const [showStopAudioModal, setShowStopAudioModal] = useState(false);
@@ -405,7 +407,13 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
       showAudioModal ||
       showSubtitleModal ||
       showPlayerEngineModal;
-  }, [showSettingsModal, showQualityModal, showAudioModal, showSubtitleModal, showPlayerEngineModal]);
+  }, [
+    showSettingsModal,
+    showQualityModal,
+    showAudioModal,
+    showSubtitleModal,
+    showPlayerEngineModal,
+  ]);
 
   // Start/reset the auto-hide timer for both TV and phone.
   const scheduleHide = useCallback(() => {
@@ -449,17 +457,14 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   // ── TV nextFocus node handles ─────────────────────────────────────────────
   // Computed via onLayout callbacks on each ref'd button — no timeouts.
   // Each callback updates one slot in the nh state object.
-  const updateNh = useCallback(
-    (key: keyof typeof nh, e: any) => {
-      const nodeHandle = findNodeHandle(e.target);
-      if (nodeHandle == null) return;
-      setNh((prev) => {
-        if (prev[key] === nodeHandle) return prev; // no change
-        return { ...prev, [key]: nodeHandle };
-      });
-    },
-    [],
-  );
+  const updateNh = useCallback((key: keyof typeof nh, e: any) => {
+    const nodeHandle = findNodeHandle(e.target);
+    if (nodeHandle == null) return;
+    setNh((prev) => {
+      if (prev[key] === nodeHandle) return prev; // no change
+      return { ...prev, [key]: nodeHandle };
+    });
+  }, []);
 
   // ── Source change ─────────────────────────────────────────────────────────
 
@@ -474,7 +479,8 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
 
     // Forward the stream's custom headers so authenticated manifests don't
     // return 401/403 during quality detection.
-    const reqHeaders = headers && Object.keys(headers).length > 0 ? headers : undefined;
+    const reqHeaders =
+      headers && Object.keys(headers).length > 0 ? headers : undefined;
 
     let parser: Promise<VideoQuality[]>;
 
@@ -507,32 +513,38 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
         setActivePlayerEngine(saved || defaultEngine);
       }
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [channelId, defaultEngine]);
 
   // ── Change player engine (saves per-channel) ──────────────────────────────
-  const changePlayerEngine = useCallback((engine: "exoplayer" | "vlc") => {
-    setActivePlayerEngine(engine);
-    if (channelId) {
-      setChannelPlayerEngine(channelId, engine);
-    }
-    if (tvPlayerRef.current) {
-      TvPlayerCommands.setPlayerEngine(tvPlayerRef, engine);
-      setError(null);
-      setIsLoading(true);
-      consecutiveErrorCountRef.current = 0;
-      TvPlayerCommands.loadSource(tvPlayerRef, {
-        url: currentSource,
-        headers: headers && Object.keys(headers).length > 0 ? headers : undefined,
-        drmType: drm?.type,
-        drmLicenseUrl: drm?.licenseServer,
-        drmHeaders: drm?.headers,
-        drmCertificateUrl: drm?.certificateUrl,
-        drmPssh: drm?.pssh,
-        autoPlay: true,
-      });
-    }
-  }, [channelId, currentSource, headers, drm]);
+  const changePlayerEngine = useCallback(
+    (engine: "exoplayer" | "vlc") => {
+      setActivePlayerEngine(engine);
+      if (channelId) {
+        setChannelPlayerEngine(channelId, engine);
+      }
+      if (tvPlayerRef.current) {
+        TvPlayerCommands.setPlayerEngine(tvPlayerRef, engine);
+        setError(null);
+        setIsLoading(true);
+        consecutiveErrorCountRef.current = 0;
+        TvPlayerCommands.loadSource(tvPlayerRef, {
+          url: currentSource,
+          headers:
+            headers && Object.keys(headers).length > 0 ? headers : undefined,
+          drmType: drm?.type,
+          drmLicenseUrl: drm?.licenseServer,
+          drmHeaders: drm?.headers,
+          drmCertificateUrl: drm?.certificateUrl,
+          drmPssh: drm?.pssh,
+          autoPlay: true,
+        });
+      }
+    },
+    [channelId, currentSource, headers, drm],
+  );
 
   // ── Native player load ────────────────────────────────────────────────────
   const loadSource = useCallback(() => {
@@ -593,13 +605,14 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   // Sync background audio state on mount
   useEffect(() => {
     const syncBackgroundState = async () => {
-      const isEnabled = await TvPlayerCommands.isBackgroundAudioEnabled(tvPlayerRef);
+      const isEnabled =
+        await TvPlayerCommands.isBackgroundAudioEnabled(tvPlayerRef);
       if (isEnabled !== undefined) {
         isBackgroundPlayingRef.current = isEnabled;
         setIsBackgroundPlaying(isEnabled);
       }
     };
-    
+
     // Small delay to ensure native view is ready
     const timer = setTimeout(syncBackgroundState, 100);
     return () => clearTimeout(timer);
@@ -613,7 +626,11 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
         // Mobile: do NOT auto-enter PiP — user must tap the PiP button explicitly
         // If background play is disabled, stop playback when app goes to background
         // Skip if in PiP or entering PiP — the system PiP window manages its own playback.
-        if (!backgroundPlay && !isInPiPRef.current && !isEnteringPipRef.current) {
+        if (
+          !backgroundPlay &&
+          !isInPiPRef.current &&
+          !isEnteringPipRef.current
+        ) {
           // Stop background service if it was running
           if (isBackgroundPlayingRef.current) {
             TvPlayerCommands.disableBackgroundAudio(tvPlayerRef);
@@ -627,13 +644,21 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
           // Re-attach video surface if background audio was active
           TvPlayerCommands.play(tvPlayerRef);
         }
-        
+
         // Enable background audio if setting is on and video is playing
-        if (backgroundPlay && isPlaying && nativeReady && !isBackgroundPlayingRef.current) {
+        if (
+          backgroundPlay &&
+          isPlaying &&
+          nativeReady &&
+          !isBackgroundPlayingRef.current
+        ) {
           // Small delay to ensure everything is ready
-          await new Promise(resolve => setTimeout(resolve, 100));
-          
-          if (Platform.OS === "android" && parseInt(String(Platform.Version), 10) >= 33) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+
+          if (
+            Platform.OS === "android" &&
+            parseInt(String(Platform.Version), 10) >= 33
+          ) {
             try {
               const granted = await PermissionsAndroid.request(
                 PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
@@ -644,7 +669,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
               return;
             }
           }
-          
+
           TvPlayerCommands.enableBackgroundAudio(tvPlayerRef);
           TvPlayerCommands.setMediaMetadata(tvPlayerRef, {
             title: title || "",
@@ -665,13 +690,16 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   // Enable background audio when the setting is on and video is playing.
   useEffect(() => {
     if (!backgroundPlay || !isPlaying || !nativeReady) return;
-    
+
     const enableBackground = async () => {
       // Small delay to ensure player is fully initialized
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
       // Request notification permission on Android 13+
-      if (Platform.OS === "android" && parseInt(String(Platform.Version), 10) >= 33) {
+      if (
+        Platform.OS === "android" &&
+        parseInt(String(Platform.Version), 10) >= 33
+      ) {
         try {
           const granted = await PermissionsAndroid.request(
             PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
@@ -682,7 +710,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
           return;
         }
       }
-      
+
       TvPlayerCommands.enableBackgroundAudio(tvPlayerRef);
       TvPlayerCommands.setMediaMetadata(tvPlayerRef, {
         title: title || "",
@@ -690,7 +718,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
         artworkUri: poster,
       });
     };
-    
+
     enableBackground();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [backgroundPlay, isPlaying, nativeReady]);
@@ -999,17 +1027,20 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
     setSeekDrag({ active: true, progress: pct });
   }, []);
 
-  const commitSeekDrag = useCallback((progress: number) => {
-    TvPlayerCommands.seekTo(tvPlayerRef, Math.floor(progress * durationMs));
-    // Resume playback only if it was playing before the drag
-    if (wasPlayingRef.current) {
-      TvPlayerCommands.play(tvPlayerRef);
-    }
-    setSeekDrag({ active: false, progress });
-    // Re-arm the auto-hide timer now that scrubbing is done
-    scheduleHideRef.current();
-    if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [durationMs]);
+  const commitSeekDrag = useCallback(
+    (progress: number) => {
+      TvPlayerCommands.seekTo(tvPlayerRef, Math.floor(progress * durationMs));
+      // Resume playback only if it was playing before the drag
+      if (wasPlayingRef.current) {
+        TvPlayerCommands.play(tvPlayerRef);
+      }
+      setSeekDrag({ active: false, progress });
+      // Re-arm the auto-hide timer now that scrubbing is done
+      scheduleHideRef.current();
+      if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    },
+    [durationMs],
+  );
 
   const cancelSeekDrag = useCallback(() => {
     // User lifted without moving (e.g. gesture cancelled) — resume if needed
@@ -1022,6 +1053,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
 
   // Seek bar pan gesture — YouTube-style: track expands, thumb grows,
   // playback pauses while scrubbing and resumes on release.
+  // Also handles tap-to-seek on mobile (translation < 5px is treated as a tap).
   const seekBarPan = Gesture.Pan()
     .minDistance(0)
     .onBegin((evt) => {
@@ -1043,7 +1075,17 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
         runOnJS(cancelSeekDrag)();
       } else {
         const pct = Math.min(1, Math.max(0, evt.x / seekBarWidthRef.current));
-        runOnJS(commitSeekDrag)(pct);
+        const isTap =
+          Math.abs(evt.translationX) < 5 && Math.abs(evt.translationY) < 5;
+        if (isTap) {
+          // Quick tap — resume playback (beginSeekDrag paused it)
+          if (wasPlayingRef.current) {
+            TvPlayerCommands.play(tvPlayerRef);
+          }
+          runOnJS(handleSeekToPercent)(pct);
+        } else {
+          runOnJS(commitSeekDrag)(pct);
+        }
       }
       // Animate track + thumb shrinking and tooltip fading out
       seekTrackScale.value = withSpring(0, { damping: 18, stiffness: 300 });
@@ -1067,7 +1109,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
     height: 4 + seekTrackScale.value * 4, // 4px → 8px
   }));
   const animSeekThumb = useAnimatedStyle(() => ({
-    width: 14 + seekThumbScale.value * 8,  // 14px → 22px
+    width: 14 + seekThumbScale.value * 8, // 14px → 22px
     height: 14 + seekThumbScale.value * 8,
     borderRadius: (14 + seekThumbScale.value * 8) / 2,
     top: -((14 + seekThumbScale.value * 8) / 2) + 2,
@@ -1075,9 +1117,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   }));
   const animSeekTooltip = useAnimatedStyle(() => ({
     opacity: seekTooltipOpacity.value,
-    transform: [
-      { translateY: (1 - seekTooltipOpacity.value) * 6 },
-    ],
+    transform: [{ translateY: (1 - seekTooltipOpacity.value) * 6 }],
   }));
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -1515,7 +1555,10 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                LIVE: shows elapsed time + LIVE badge, no seek bar.
                VOD:  shows position / duration with a tappable seek bar. */}
             <View style={st.progressRow}>
-              <ThemedText type="caption" style={[st.timeText, seekDrag.active && st.timeTextScrubbing]}>
+              <ThemedText
+                type="caption"
+                style={[st.timeText, seekDrag.active && st.timeTextScrubbing]}
+              >
                 {formatTime(seekDrag.active ? seekDragPreviewMs! : positionMs)}
               </ThemedText>
               {durationMs <= 0 ? (
@@ -1526,79 +1569,152 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                   </View>
                 </View>
               ) : (
-                /* YouTube-style seek bar:
-                   - Track height expands on touch (4→8px)
-                   - Thumb grows on touch (14→22px) with spring animation
-                   - Tooltip fades/slides in above the thumb
-                   - Playback pauses while scrubbing, resumes on release
-                   - Controls auto-hide timer paused during scrub */
-                <GestureDetector gesture={seekBarPan}>
-                  <Pressable
-                    ref={seekBarRef}
-                    style={[st.seekBar, seekBarFocused && st.seekBarFocused]}
-                    focusable={showControls}
-                    onFocus={() => { setSeekBarFocused(true); seekBarFocusedRef.current = true; }}
-                    onBlur={() => { setSeekBarFocused(false); seekBarFocusedRef.current = false; }}
-                    nextFocusUp={nh.playPause ?? undefined}
-                    nextFocusDown={nh.firstTool ?? undefined}
-                    onLayout={(e) => {
-                      seekBarWidthRef.current = e.nativeEvent.layout.width || 1;
-                    }}
-                    onPress={(e) => {
-                      handleSeekToPercent(
-                        Math.min(
-                          1,
-                          Math.max(
-                            0,
-                            e.nativeEvent.locationX / seekBarWidthRef.current,
+                <>
+                  {/* YouTube-style seek bar:
+                     - Track height expands on touch (4→8px)
+                     - Thumb grows on touch (14→22px) with spring animation
+                     - Tooltip fades/slides in above the thumb
+                     - Playback pauses while scrubbing, resumes on release
+                     - Controls auto-hide timer paused during scrub */}
+                  {isTV ? (
+                    <Pressable
+                      ref={seekBarRef}
+                      style={[st.seekBar, seekBarFocused && st.seekBarFocused]}
+                      focusable={showControls}
+                      onFocus={() => {
+                        setSeekBarFocused(true);
+                        seekBarFocusedRef.current = true;
+                      }}
+                      onBlur={() => {
+                        setSeekBarFocused(false);
+                        seekBarFocusedRef.current = false;
+                      }}
+                      nextFocusUp={nh.playPause ?? undefined}
+                      nextFocusDown={nh.firstTool ?? undefined}
+                      onLayout={(e) => {
+                        seekBarWidthRef.current =
+                          e.nativeEvent.layout.width || 1;
+                      }}
+                      onPress={(e) => {
+                        handleSeekToPercent(
+                          Math.min(
+                            1,
+                            Math.max(
+                              0,
+                              e.nativeEvent.locationX / seekBarWidthRef.current,
+                            ),
                           ),
-                        ),
-                      );
-                    }}
-                  >
-                    {/* Track — animates height on drag */}
-                    <Animated.View
-                      style={[
-                        st.seekBarTrack,
-                        seekBarFocused && st.seekBarTrackFocused,
-                        animSeekTrack,
-                      ]}
+                        );
+                      }}
                     >
-                      <View
-                        style={[
-                          st.seekBarFill,
-                          {
-                            width: `${(seekDrag.active ? seekDrag.progress : progress) * 100}%`,
-                          },
-                        ]}
-                      />
-                      {/* Thumb — animates size on drag */}
+                      {/* Track — animates height on drag */}
                       <Animated.View
                         style={[
-                          st.seekThumb,
+                          st.seekBarTrack,
+                          seekBarFocused && st.seekBarTrackFocused,
+                          animSeekTrack,
+                        ]}
+                      >
+                        <View
+                          style={[
+                            st.seekBarFill,
+                            {
+                              width: `${(seekDrag.active ? seekDrag.progress : progress) * 100}%`,
+                            },
+                          ]}
+                        />
+                        {/* Thumb — animates size on drag */}
+                        <Animated.View
+                          style={[
+                            st.seekThumb,
+                            {
+                              left: `${(seekDrag.active ? seekDrag.progress : progress) * 100}%`,
+                            },
+                            seekBarFocused && st.seekThumbFocused,
+                            animSeekThumb,
+                          ]}
+                        />
+                      </Animated.View>
+                      {/* Tooltip — fades and slides in above thumb while dragging */}
+                      <Animated.View
+                        style={[
+                          st.seekTooltip,
                           {
                             left: `${(seekDrag.active ? seekDrag.progress : progress) * 100}%`,
                           },
-                          seekBarFocused && st.seekThumbFocused,
-                          animSeekThumb,
+                          animSeekTooltip,
                         ]}
-                      />
-                    </Animated.View>
-                    {/* Tooltip — fades and slides in above thumb while dragging */}
-                    <Animated.View
-                      style={[
-                        st.seekTooltip,
-                        { left: `${(seekDrag.active ? seekDrag.progress : progress) * 100}%` },
-                        animSeekTooltip,
-                      ]}
-                      pointerEvents="none"
-                    >
-                      <ThemedText type="caption" style={st.seekTooltipText}>
-                        {formatTime(seekDrag.active ? seekDragPreviewMs! : positionMs)}
-                      </ThemedText>
-                    </Animated.View>
-                  </Pressable>
-                </GestureDetector>
+                        pointerEvents="none"
+                      >
+                        <ThemedText type="caption" style={st.seekTooltipText}>
+                          {formatTime(
+                            seekDrag.active ? seekDragPreviewMs! : positionMs,
+                          )}
+                        </ThemedText>
+                      </Animated.View>
+                    </Pressable>
+                  ) : (
+                    <GestureDetector gesture={seekBarPan}>
+                      <View
+                        ref={seekBarRef}
+                        style={[
+                          st.seekBar,
+                          seekBarFocused && st.seekBarFocused,
+                        ]}
+                        onLayout={(e) => {
+                          seekBarWidthRef.current =
+                            e.nativeEvent.layout.width || 1;
+                        }}
+                      >
+                        {/* Track — animates height on drag */}
+                        <Animated.View
+                          style={[
+                            st.seekBarTrack,
+                            seekBarFocused && st.seekBarTrackFocused,
+                            animSeekTrack,
+                          ]}
+                        >
+                          <View
+                            style={[
+                              st.seekBarFill,
+                              {
+                                width: `${(seekDrag.active ? seekDrag.progress : progress) * 100}%`,
+                              },
+                            ]}
+                          />
+                          {/* Thumb — animates size on drag */}
+                          <Animated.View
+                            style={[
+                              st.seekThumb,
+                              {
+                                left: `${(seekDrag.active ? seekDrag.progress : progress) * 100}%`,
+                              },
+                              seekBarFocused && st.seekThumbFocused,
+                              animSeekThumb,
+                            ]}
+                          />
+                        </Animated.View>
+                        {/* Tooltip — fades and slides in above thumb while dragging */}
+                        <Animated.View
+                          style={[
+                            st.seekTooltip,
+                            {
+                              left: `${(seekDrag.active ? seekDrag.progress : progress) * 100}%`,
+                            },
+                            animSeekTooltip,
+                          ]}
+                          pointerEvents="none"
+                        >
+                          <ThemedText type="caption" style={st.seekTooltipText}>
+                            {formatTime(
+                              seekDrag.active ? seekDragPreviewMs! : positionMs,
+                            )}
+                          </ThemedText>
+                        </Animated.View>
+                      </View>
+                    </GestureDetector>
+                  )}
+                </>
               )}
               <ThemedText type="caption" style={st.timeText}>
                 {effectiveIsLive ? "LIVE" : formatTime(durationMs)}
@@ -1685,7 +1801,9 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 </TVFocusablePressable>
 
                 {/* PiP — mobile only, ExoPlayer only */}
-                {!isTV && Platform.OS === "android" && activePlayerEngine === "exoplayer" ? (
+                {!isTV &&
+                Platform.OS === "android" &&
+                activePlayerEngine === "exoplayer" ? (
                   <TVFocusablePressable
                     onPress={handleEnterPip}
                     baseStyle={st.toolBtn}
@@ -1722,7 +1840,6 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
               </View>
             </View>
           </View>
-
         </Animated.View>
       ) : null}
 
@@ -1904,12 +2021,15 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 marginBottom: Spacing.xl,
               }}
             >
-              Playback failed repeatedly. Switch to VLC for better compatibility with non-DRM streams?
+              Playback failed repeatedly. Switch to VLC for better compatibility
+              with non-DRM streams?
             </ThemedText>
             <TVFocusablePressable
               onPress={() => {
                 setShowFallbackDialog(false);
-                changePlayerEngine(activePlayerEngine === "vlc" ? "exoplayer" : "vlc");
+                changePlayerEngine(
+                  activePlayerEngine === "vlc" ? "exoplayer" : "vlc",
+                );
               }}
               baseStyle={st.optionRow}
               focusedStyle={st.optionRowFocused}
@@ -2103,7 +2223,12 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                     selectedQuality === q.label && st.optionRowActive,
                   ]}
                   focusedStyle={st.optionRowFocused}
-                  hasTVPreferredFocus={isTV && selectedQuality === q.label && idx === 0 && selectedQuality !== "auto"}
+                  hasTVPreferredFocus={
+                    isTV &&
+                    selectedQuality === q.label &&
+                    idx === 0 &&
+                    selectedQuality !== "auto"
+                  }
                 >
                   <View style={{ flex: 1 }}>
                     <ThemedText type="body" style={{ color: "#fff" }}>
