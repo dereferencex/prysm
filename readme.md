@@ -81,7 +81,7 @@ It is designed for large playlists, fast channel browsing, smooth playback, and 
 1. Clone the repository and navigate into the directory:
 
    ```bash
-   git clone https://github.com/ExWhyZed9/prysm.git
+   git clone https://github.com/dereferencex/prysm.git
    cd prysm
    ```
 
@@ -146,4 +146,4 @@ This project is licensed under the MIT License.
 
 If you find Prysm useful, consider giving it a ⭐ on GitHub!
 
-**Author:** ExWhyZed9
+**Author:** dereferencex

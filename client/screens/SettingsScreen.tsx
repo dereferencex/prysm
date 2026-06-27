@@ -683,9 +683,9 @@ export default function SettingsScreen() {
               <SettingsRow
                 icon="code-slash"
                 title="Developer"
-                subtitle="ExWhyZed9"
+                subtitle="dereferencex"
                 value=""
-                onPress={() => Linking.openURL("https://github.com/ExWhyZed9")}
+                onPress={() => Linking.openURL("https://github.com/dereferencex")}
                 showChevron
               />
               {updateInfo?.available ? (

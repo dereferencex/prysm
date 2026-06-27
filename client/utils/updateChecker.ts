@@ -3,7 +3,7 @@ import * as FileSystemLegacy from "expo-file-system/legacy";
 import { Platform } from "react-native";
 
 const GITHUB_RELEASES_URL =
-  "https://api.github.com/repos/ExWhyZed9/prysm/releases/latest";
+  "https://api.github.com/repos/dereferencex/prysm/releases/latest";
 const APK_DOWNLOAD_DIR = FileSystemLegacy.documentDirectory;
 
 export interface UpdateInfo {
