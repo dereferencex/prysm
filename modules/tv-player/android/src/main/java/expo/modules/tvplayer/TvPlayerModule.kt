@@ -78,6 +78,7 @@ class TvPlayerModule : Module() {
                                              }?.toMap() ?: emptyMap()
                 val drmType            = params["drmType"] as? String
                 val drmLicenseUrl      = params["drmLicenseUrl"] as? String
+                val drmLicenseKey      = params["drmLicenseKey"] as? String
                 val drmHeaders         = (params["drmHeaders"] as? Map<*, *>)
                                              ?.mapNotNull { (k, v) ->
                                                  if (k is String && v is String) k to v else null
@@ -86,7 +87,7 @@ class TvPlayerModule : Module() {
                 val drmPssh            = params["drmPssh"] as? String
                 val autoPlay           = params["autoPlay"] as? Boolean ?: true
 
-                view.load(url, headers, drmType, drmLicenseUrl, drmHeaders, drmCertificateUrl, drmPssh, autoPlay)
+                view.load(url, headers, drmType, drmLicenseUrl, drmLicenseKey, drmHeaders, drmCertificateUrl, drmPssh, autoPlay)
             }
 
             AsyncFunction("play") { view: TvPlayerView ->

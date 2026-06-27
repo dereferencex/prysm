@@ -128,14 +128,14 @@ describe("parseM3U — ClearKey formats", () => {
   test("the JSON ClearKey channel carries the full JSON license_key verbatim", () => {
     expect(channels[0].drm).toEqual({
       type: "clearkey",
-      licenseServer: JSON_LICENSE,
+      licenseKey: JSON_LICENSE,
     });
   });
 
   test("the KID:KEY ClearKey channel carries the full KID:KEY pair verbatim", () => {
     expect(channels[1].drm).toEqual({
       type: "clearkey",
-      licenseServer: KIDKEY_LICENSE,
+      licenseKey: KIDKEY_LICENSE,
     });
   });
 
@@ -184,7 +184,7 @@ describe("parseM3U — invalid #KODIPROP lines", () => {
       `#EXTM3U\n#EXTINF:-1 group-title="G",Ch\n#KODIPROP:inputstream.adaptive.license_key=KID:KEY=trail\nhttps://example.com/a.mpd`,
       "p",
     );
-    expect(playlist.channels[0].drm?.licenseServer).toBe(
+    expect(playlist.channels[0].drm?.licenseKey).toBe(
       "KID:KEY=trail",
     );
   });

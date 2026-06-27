@@ -120,9 +120,13 @@ function parseDRM(
         }
         foundDRM = true;
       } else if (kodi.key === "inputstream.adaptive.license_key") {
-        // Value preserved verbatim — may be a license URL, a ClearKey
-        // KID:KEY pair (contains ':'), or a full ClearKey JSON document.
-        drm.licenseServer = kodi.value;
+        // Value may be a URL (Widevine/PlayReady license server) or an
+        // embedded key (ClearKey KID:KEY or JSON). Route accordingly.
+        if (kodi.value.startsWith("http://") || kodi.value.startsWith("https://")) {
+          drm.licenseServer = kodi.value;
+        } else {
+          drm.licenseKey = kodi.value;
+        }
         foundDRM = true;
       }
       continue; // KODIPROP line handled — no other parsing applies

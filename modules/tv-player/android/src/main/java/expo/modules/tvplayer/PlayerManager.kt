@@ -30,6 +30,7 @@ class PlayerManager(
         val headers: Map<String, String>,
         val drmType: String?,
         val drmLicenseUrl: String?,
+        val drmLicenseKey: String?,
         val drmHeaders: Map<String, String>?,
         val drmCertificateUrl: String?,
         val drmPssh: String?,
@@ -76,6 +77,7 @@ class PlayerManager(
                 params.headers,
                 params.drmType,
                 params.drmLicenseUrl,
+                params.drmLicenseKey,
                 params.drmHeaders,
                 params.drmCertificateUrl,
                 params.drmPssh,
@@ -98,13 +100,14 @@ class PlayerManager(
         headers: Map<String, String>,
         drmType: String?,
         drmLicenseUrl: String?,
+        drmLicenseKey: String? = null,
         drmHeaders: Map<String, String>?,
         drmCertificateUrl: String? = null,
         drmPssh: String? = null,
         autoPlay: Boolean,
     ) {
         consecutiveErrorCount = 0
-        lastLoadParams = LoadParams(url, headers, drmType, drmLicenseUrl, drmHeaders, drmCertificateUrl, drmPssh, autoPlay)
+        lastLoadParams = LoadParams(url, headers, drmType, drmLicenseUrl, drmLicenseKey, drmHeaders, drmCertificateUrl, drmPssh, autoPlay)
 
         if (activeController == null) {
             activeController = getOrCreateController(currentEngine)
@@ -112,7 +115,7 @@ class PlayerManager(
             applyPendingSurface(activeController!!)
         }
 
-        activeController?.load(url, headers, drmType, drmLicenseUrl, drmHeaders, drmCertificateUrl, drmPssh, autoPlay)
+        activeController?.load(url, headers, drmType, drmLicenseUrl, drmLicenseKey, drmHeaders, drmCertificateUrl, drmPssh, autoPlay)
     }
 
     fun setVideoSurfaceView(surfaceView: SurfaceView) {

@@ -1,8 +1,14 @@
 export interface DRMInfo {
   /** DRM system type. "fairplay" is reserved for future iOS support. */
   type?: "widevine" | "playready" | "clearkey" | "fairplay";
-  /** License server URL. Must be a valid HTTP(S) URL — never a PSSH blob. */
+  /** License server URL. Must be a valid HTTP(S) URL — never a PSSH blob.
+   *  Used for Widevine / PlayReady license acquisition. May be empty for
+   *  ClearKey when the key is embedded in {@link licenseKey}. */
   licenseServer?: string;
+  /** Embedded license key, used only for ClearKey when no license server
+   *  is involved. May be either a `KID:KEY` pair or a full W3C ClearKey JSON
+   *  document ({"keys":[...],"type":...}). Never a URL. */
+  licenseKey?: string;
   /** Optional HTTP headers for license requests. */
   headers?: Record<string, string>;
   /** Optional certificate URL (Widevine provisioning / PlayReady cert chain). */

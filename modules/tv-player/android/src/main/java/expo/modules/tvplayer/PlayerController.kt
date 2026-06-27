@@ -20,6 +20,7 @@ interface PlayerController {
         headers: Map<String, String>,
         drmType: String?,
         drmLicenseUrl: String?,
+        drmLicenseKey: String? = null,
         drmHeaders: Map<String, String>?,
         drmCertificateUrl: String? = null,
         drmPssh: String? = null,

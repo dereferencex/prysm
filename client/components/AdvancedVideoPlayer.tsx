@@ -85,6 +85,8 @@ export interface DRMConfig {
   /** "fairplay" is reserved for future iOS support and is a no-op on Android. */
   type: "widevine" | "playready" | "clearkey" | "fairplay";
   licenseServer?: string;
+  /** Embedded ClearKey key (KID:KEY or JSON) when no license server is involved. */
+  licenseKey?: string;
   headers?: Record<string, string>;
   certificateUrl?: string;
   /** Raw base64 PSSH initialization data extracted from DASH manifests. */
@@ -559,6 +561,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
             headers && Object.keys(headers).length > 0 ? headers : undefined,
           drmType: drm?.type,
           drmLicenseUrl: drm?.licenseServer,
+          drmLicenseKey: drm?.licenseKey,
           drmHeaders: drm?.headers,
           drmCertificateUrl: drm?.certificateUrl,
           drmPssh: drm?.pssh,

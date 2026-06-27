@@ -2,6 +2,7 @@ package expo.modules.tvplayer
 
 import android.content.Context
 import android.graphics.SurfaceTexture
+import android.media.MediaDrm
 import android.net.Uri
 import android.util.Base64
 import android.util.Log
@@ -193,6 +194,59 @@ private class LocalClearKeyJsonCallback(
     }
 }
 
+/**
+ * Result of probing the platform Widevine CDM for diagnostics.
+ * - [mediaDrm]: the constructed CDM, reused as the DRM session manager's
+ *   provider so we don't open a second CDM just for the probe. Null when the
+ *   device has no Widevine CDM at all.
+ * - [securityLevel]: the CDM's reported security level (e.g. "L1", "L3") or
+ *   a short label describing why it's unavailable. Surfaced in DRM playback
+ *   errors so a black-screen DRM failure is diagnosable.
+ */
+@UnstableApi
+private data class WidevineProbe(
+    val mediaDrm: FrameworkMediaDrm?,
+    val securityLevel: String,
+)
+
+/**
+ * Probes the platform Widevine CDM for diagnostics (security level, vendor,
+ * description, version). Returns the constructed [FrameworkMediaDrm] instance
+ * so the caller can reuse it as the [DefaultDrmSessionManager] provider
+ * (avoids constructing a second CDM just for the probe).
+ *
+ * On devices without a Widevine CDM, [FrameworkMediaDrm.create] throws and
+ * we log a clear "not available" line — the subsequent session creation will
+ * then fail with a [PlaybackException] that surfaces in the player error path
+ * rather than silently producing a black screen.
+ */
+@UnstableApi
+private fun probeWidevineCdm(): WidevineProbe {
+    return try {
+        val mediaDrm = FrameworkMediaDrm.create(C.WIDEVINE_UUID)
+        fun prop(name: String): String = try {
+            mediaDrm.getProperty(name)
+        } catch (e: Exception) {
+            "unknown"
+        }
+        val securityLevel = prop(MediaDrm.PROPERTY_SECURITY_LEVEL).ifEmpty { "unknown" }
+        Log.i(
+            "ExoPlayerController",
+            "Widevine CDM probe: securityLevel=$securityLevel, " +
+                "vendor=${prop(MediaDrm.PROPERTY_VENDOR)}, " +
+                "description=${prop(MediaDrm.PROPERTY_DESCRIPTION)}, " +
+                "version=${prop(MediaDrm.PROPERTY_VERSION)}",
+        )
+        WidevineProbe(mediaDrm, securityLevel)
+    } catch (e: Exception) {
+        Log.w(
+            "ExoPlayerController",
+            "Widevine CDM not available on this device — DRM playback will fail: ${e.message}",
+        )
+        WidevineProbe(null, "not-available")
+    }
+}
+
 @UnstableApi
 private class PsshInjectingMediaSourceFactory(
     private val delegate: MediaSource.Factory,
@@ -319,9 +373,14 @@ class ExoPlayerController(
     private var currentHeaders: Map<String, String> = emptyMap()
     private var currentDrmType: String? = null
     private var currentDrmLicenseUrl: String? = null
+    private var currentDrmLicenseKey: String? = null
     private var currentDrmHeaders: Map<String, String>? = null
     private var currentDrmPssh: String? = null
     private var currentAutoPlay: Boolean = true
+    // Most recent Widevine security level probed at load time (e.g. "L1",
+    // "L3", "unknown", "not-available"). Appended to DRM playback errors so a
+    // black-screen DRM failure is diagnosable without logcat.
+    private var lastWidevineSecurityLevel: String? = null
     private var savedPosition: Long = 0L
     private var pendingHlsFallback = false
 
@@ -344,6 +403,7 @@ class ExoPlayerController(
         headers: Map<String, String>,
         drmType: String?,
         drmLicenseUrl: String?,
+        drmLicenseKey: String?,
         drmHeaders: Map<String, String>?,
         drmCertificateUrl: String?,
         drmPssh: String?,
@@ -354,6 +414,7 @@ class ExoPlayerController(
         currentHeaders = headers
         currentDrmType = drmType
         currentDrmLicenseUrl = drmLicenseUrl
+        currentDrmLicenseKey = drmLicenseKey
         currentDrmHeaders = drmHeaders
         currentDrmPssh = drmPssh
         currentAutoPlay = autoPlay
@@ -516,17 +577,17 @@ class ExoPlayerController(
         )
 
         val rawClearKeyParts = if (currentDrmType?.lowercase() == "clearkey"
-            && !currentDrmLicenseUrl.isNullOrEmpty()
-            && isRawClearKey(currentDrmLicenseUrl!!)
+            && !currentDrmLicenseKey.isNullOrEmpty()
+            && isRawClearKey(currentDrmLicenseKey!!)
         ) {
-            currentDrmLicenseUrl!!.split(":")
+            currentDrmLicenseKey!!.split(":")
         } else {
             null
         }
         val isClearKeyJsonBody = currentDrmType?.lowercase() == "clearkey"
-            && !currentDrmLicenseUrl.isNullOrEmpty()
+            && !currentDrmLicenseKey.isNullOrEmpty()
             && rawClearKeyParts == null
-            && isClearKeyJson(currentDrmLicenseUrl!!)
+            && isClearKeyJson(currentDrmLicenseKey!!)
 
         val drmSessionManager: DefaultDrmSessionManager? = when {
             rawClearKeyParts != null || isClearKeyJsonBody -> {
@@ -535,15 +596,10 @@ class ExoPlayerController(
                     LocalClearKeyCallback(rawClearKeyParts[0], rawClearKeyParts[1])
                 } else {
                     Log.d(TAG, "Using local ClearKey JSON callback (embedded JSON detected)")
-                    LocalClearKeyJsonCallback(currentDrmLicenseUrl!!)
+                    LocalClearKeyJsonCallback(currentDrmLicenseKey!!)
                 }
                 DefaultDrmSessionManager.Builder()
                     .setUuidAndExoMediaDrmProvider(C.CLEARKEY_UUID, FrameworkMediaDrm.DEFAULT_PROVIDER)
-                    .apply {
-                        if (!currentDrmHeaders.isNullOrEmpty()) {
-                            setKeyRequestParameters(currentDrmHeaders!!)
-                        }
-                    }
                     .build(callback)
             }
 
@@ -553,15 +609,22 @@ class ExoPlayerController(
                     currentDrmLicenseUrl!!,
                     dataSourceFactory,
                 )
-                val drmUuid = when (currentDrmType!!.lowercase()) {
-                    "widevine" -> C.WIDEVINE_UUID
-                    "playready" -> C.PLAYREADY_UUID
-                    else -> C.WIDEVINE_UUID
-                }
+                val isWidevine = currentDrmType!!.lowercase() == "widevine"
+                val drmUuid = if (isWidevine) C.WIDEVINE_UUID else C.PLAYREADY_UUID
+
+                val probe = if (isWidevine) probeWidevineCdm() else null
+                lastWidevineSecurityLevel = probe?.securityLevel
+
                 Log.d(TAG, "Built HttpMediaDrmCallback for $currentDrmType " +
                     "(license URL: $currentDrmLicenseUrl)")
+
                 DefaultDrmSessionManager.Builder()
-                    .setUuidAndExoMediaDrmProvider(drmUuid, FrameworkMediaDrm.DEFAULT_PROVIDER)
+                    .setUuidAndExoMediaDrmProvider(
+                        drmUuid,
+                        { probe?.mediaDrm ?: FrameworkMediaDrm.DEFAULT_PROVIDER.acquireExoMediaDrm(drmUuid) },
+                    )
+                    .setMultiSession(true)
+                    .forceSessionsForAudioAndVideoTraits()
                     .apply {
                         if (!currentDrmHeaders.isNullOrEmpty()) {
                             setKeyRequestParameters(currentDrmHeaders!!)
@@ -777,6 +840,7 @@ class ExoPlayerController(
                         currentHeaders,
                         currentDrmType,
                         currentDrmLicenseUrl,
+                        currentDrmLicenseKey,
                         currentDrmHeaders,
                         drmCertificateUrl = null,
                         currentDrmPssh,
@@ -787,23 +851,24 @@ class ExoPlayerController(
             }
             pendingHlsFallback = false
 
+            val levelSuffix = lastWidevineSecurityLevel?.let { " [device Widevine securityLevel=$it]" } ?: ""
             val message = when (error.errorCode) {
                 PlaybackException.ERROR_CODE_DRM_SCHEME_UNSUPPORTED ->
-                    "DRM_ERROR: DRM scheme not supported on this device (${error.errorCodeName})"
+                    "DRM_ERROR: DRM scheme not supported on this device (${error.errorCodeName})$levelSuffix"
                 PlaybackException.ERROR_CODE_DRM_PROVISIONING_FAILED ->
-                    "DRM_ERROR: Device provisioning failed — try clearing app data (${error.errorCodeName})"
+                    "DRM_ERROR: Device provisioning failed — try clearing app data (${error.errorCodeName})$levelSuffix"
                 PlaybackException.ERROR_CODE_DRM_CONTENT_ERROR ->
-                    "DRM_ERROR: Stream is encrypted but no valid DRM session could be established (${error.errorCodeName})"
+                    "DRM_ERROR: Stream is encrypted but no valid DRM session could be established (${error.errorCodeName})$levelSuffix"
                 PlaybackException.ERROR_CODE_DRM_LICENSE_ACQUISITION_FAILED ->
-                    "DRM_ERROR: License acquisition failed — check license server URL and network (${error.errorCodeName})"
+                    "DRM_ERROR: License acquisition failed — check license server URL and network (${error.errorCodeName})$levelSuffix"
                 PlaybackException.ERROR_CODE_DRM_DISALLOWED_OPERATION ->
-                    "DRM_ERROR: Operation not permitted by the DRM license (${error.errorCodeName})"
+                    "DRM_ERROR: Operation not permitted by the DRM license (${error.errorCodeName})$levelSuffix"
                 PlaybackException.ERROR_CODE_DRM_SYSTEM_ERROR ->
-                    "DRM_ERROR: DRM system error — device may not support the required security level (${error.errorCodeName})"
+                    "DRM_ERROR: DRM system error — device may not support the required security level (${error.errorCodeName})$levelSuffix"
                 2006 ->
-                    "DRM_ERROR: DRM session could not be opened (${error.errorCodeName})"
+                    "DRM_ERROR: DRM session could not be opened (${error.errorCodeName})$levelSuffix"
                 PlaybackException.ERROR_CODE_DRM_DEVICE_REVOKED ->
-                    "DRM_ERROR: Device has been revoked by the DRM system (${error.errorCodeName})"
+                    "DRM_ERROR: Device has been revoked by the DRM system (${error.errorCodeName})$levelSuffix"
                 else -> error.message ?: "Unknown playback error (${error.errorCodeName})"
             }
             callbacks?.onError(message)

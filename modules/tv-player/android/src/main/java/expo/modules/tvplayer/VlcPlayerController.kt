@@ -120,6 +120,7 @@ class VlcPlayerController(
         headers: Map<String, String>,
         drmType: String?,
         drmLicenseUrl: String?,
+        drmLicenseKey: String?,
         drmHeaders: Map<String, String>?,
         drmCertificateUrl: String?,
         drmPssh: String?,

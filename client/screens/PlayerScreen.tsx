@@ -94,19 +94,19 @@ export default function PlayerScreen() {
 
   useEffect(() => {
     if (!channel) return;
-    // If the channel already has KODIPROP DRM with a valid license URL, no
+    // If the channel already has KODIPROP DRM with a valid license key or URL, no
     // need to fetch from the manifest.
-    if (channel.drm?.type && channel.drm?.licenseServer) {
+    if (channel.drm?.type && (channel.drm?.licenseServer || channel.drm?.licenseKey)) {
       setManifestDrm(undefined);
       return;
     }
     let cancelled = false;
     extractDRMFromManifest(channel.url, channel.headers).then((drm) => {
       if (!cancelled) {
-        // Only store DRM info that has both a type AND a usable licenseServer URL,
-        // or is ClearKey (which may not need a license server URL). This prevents
-        // partial DRM state (type set, licenseServer undefined) from being stored.
-        if (drm?.type && (drm.licenseServer || drm.type === "clearkey")) {
+        // Only store DRM info that has both a type AND a usable licenseServer URL
+        // or licenseKey, or is ClearKey (which may not need a license server URL).
+        // This prevents partial DRM state (type set, nothing usable) from being stored.
+        if (drm?.type && (drm.licenseServer || drm.licenseKey || drm.type === "clearkey")) {
           setManifestDrm(drm);
         } else {
           setManifestDrm(undefined);
@@ -114,7 +114,7 @@ export default function PlayerScreen() {
       }
     });
     return () => { cancelled = true; };
-  }, [channel?.url, channel?.drm?.type, channel?.drm?.licenseServer, channel?.headers]);
+  }, [channel?.url, channel?.drm?.type, channel?.drm?.licenseServer, channel?.drm?.licenseKey, channel?.headers]);
 
   const recentChannelObjects = useMemo(() => {
     if (!playlist) return [];
@@ -192,10 +192,11 @@ export default function PlayerScreen() {
 
   const drmConfig = useMemo((): DRMConfig | undefined => {
     // Prefer KODIPROP-extracted DRM from the playlist
-    if (channel?.drm?.type && channel.drm.licenseServer) {
+    if (channel?.drm?.type && (channel.drm.licenseServer || channel.drm.licenseKey)) {
       return {
         type: channel.drm.type as DRMConfig["type"],
         licenseServer: channel.drm.licenseServer,
+        licenseKey: channel.drm.licenseKey,
         headers: channel.drm.headers,
         certificateUrl: channel.drm.certificateUrl,
         pssh: channel.drm.pssh,
@@ -203,11 +204,13 @@ export default function PlayerScreen() {
     }
 
     // Fall back to DRM extracted from the manifest itself.
-    // manifestDrm is only set when it has both type and licenseServer (or is ClearKey).
-    if (manifestDrm?.type && (manifestDrm.licenseServer || manifestDrm.type === "clearkey")) {
+    // manifestDrm is only set when it has both type and a usable
+    // licenseServer, licenseKey, or is ClearKey.
+    if (manifestDrm?.type && (manifestDrm.licenseServer || manifestDrm.licenseKey || manifestDrm.type === "clearkey")) {
       return {
         type: manifestDrm.type as DRMConfig["type"],
         licenseServer: manifestDrm.licenseServer,
+        licenseKey: manifestDrm.licenseKey,
         headers: manifestDrm.headers,
         certificateUrl: manifestDrm.certificateUrl,
         pssh: manifestDrm.pssh,

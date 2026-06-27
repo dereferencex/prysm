@@ -14,6 +14,10 @@ export interface TvPlayerLoadParams {
   /** "fairplay" is reserved for future iOS support and is a no-op on Android. */
   drmType?: "widevine" | "playready" | "clearkey" | "fairplay";
   drmLicenseUrl?: string;
+  /** Embedded ClearKey key (KID:KEY or JSON document) when no license server
+   *  URL is used. Passed separately from drmLicenseUrl so the native side can
+   *  build a local callback instead of making an HTTP request. */
+  drmLicenseKey?: string;
   drmHeaders?: Record<string, string>;
   /** Certificate URL for Widevine provisioning or PlayReady certificate chains. */
   drmCertificateUrl?: string;

@@ -98,7 +98,10 @@ function parseHLSDRM(content: string): DRMInfo | undefined {
           // Inline key embedded in the URI
           const keyData = parseClearKeyDataUri(uri);
           if (keyData) return keyData;
+          // Unparseable data: URI — still ClearKey, store as embedded key
+          return { type: "clearkey", licenseKey: uri };
         }
+        // Regular URL — store as license server
         return { type: "clearkey", licenseServer: uri };
       }
     }
@@ -189,7 +192,7 @@ function parseClearKeyJson(json: string): DRMInfo | undefined {
         const kidOk = isValidKeyComponent(key.kid);
         const kOk = isValidKeyComponent(key.k);
         if (!kidOk || !kOk) return undefined;
-        return { type: "clearkey", licenseServer: `${key.kid}:${key.k}` };
+        return { type: "clearkey", licenseKey: `${key.kid}:${key.k}` };
       }
     }
   } catch {

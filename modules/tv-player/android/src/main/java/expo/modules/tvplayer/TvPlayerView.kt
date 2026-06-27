@@ -159,6 +159,7 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         headers: Map<String, String>,
         drmType: String?,
         drmLicenseUrl: String?,
+        drmLicenseKey: String? = null,
         drmHeaders: Map<String, String>?,
         drmCertificateUrl: String? = null,
         drmPssh: String? = null,
@@ -179,7 +180,7 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         releasePlayer()
         PlayerRegistry.registerPlayer(exoPlayer = null, view = this)
         currentUrl = url
-        playerManager.load(url, headers, drmType, drmLicenseUrl, drmHeaders, drmCertificateUrl, drmPssh, autoPlay)
+        playerManager.load(url, headers, drmType, drmLicenseUrl, drmLicenseKey, drmHeaders, drmCertificateUrl, drmPssh, autoPlay)
     }
 
     fun play() { playerManager.play() }

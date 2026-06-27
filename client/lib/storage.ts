@@ -133,8 +133,9 @@ interface MinimalChannel {
   l?: string;
   g: string;
   drm?: {
-    type?: "widevine" | "playready" | "clearkey";
+    type?: "widevine" | "playready" | "clearkey" | "fairplay";
     licenseServer?: string;
+    licenseKey?: string;
     headers?: Record<string, string>;
     certificateUrl?: string;
   };
