@@ -8,14 +8,75 @@ function generateId(): string {
   );
 }
 
-/** Stable ID derived from a channel's stream URL so it survives playlist refreshes. */
-function stableChannelId(url: string): string {
+/** DJB2 hash of a string → unsigned 32-bit → base36 string. */
+function hashStr(s: string): number {
   let h = 5381;
-  for (let i = 0; i < url.length; i++) {
-    h = ((h << 5) + h) ^ url.charCodeAt(i);
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) + h) ^ s.charCodeAt(i);
     h = h >>> 0; // keep unsigned 32-bit
   }
-  return "ch_" + h.toString(36);
+  return h;
+}
+
+/**
+ * Stable ID derived from a channel's stream URL so it survives playlist
+ * refreshes. When two channels share the same URL (e.g. the same ClearKey
+ * test vector referenced by two entries), the URL-only id collides and
+ * list renderers that key by id (FlashList) silently drop the duplicate.
+ * Callers resolve collisions via {@link resolveChannelId}.
+ */
+function stableChannelId(url: string): string {
+  return "ch_" + hashStr(url).toString(36);
+}
+
+/**
+ * Derive a unique, stable id for a channel. Defaults to the URL-derived id;
+ * on collision (same URL reused by another channel) falls back to hashing
+ * the URL together with the channel name so both channels remain visible.
+ * The name is stable across refreshes, so the fallback id is stable too.
+ */
+function resolveChannelId(
+  url: string,
+  name: string,
+  seen: Set<string>,
+): string {
+  let id = stableChannelId(url);
+  if (seen.has(id)) {
+    id = "ch_" + hashStr(`${url}|${name}`).toString(36);
+  }
+  // Defensive: if the name-derived id also collides, perturb until unique.
+  let n = 2;
+  while (seen.has(id)) {
+    id = "ch_" + hashStr(`${url}|${name}|${n}`).toString(36);
+    n++;
+  }
+  seen.add(id);
+  return id;
+}
+
+/**
+ * Parses a single `#KODIPROP:` directive line.
+ *
+ * Strips ONLY the `#KODIPROP:` prefix (one colon, immediately after the
+ * tag name), then splits the remainder on the FIRST `=`. The value may
+ * itself contain `=` or `:` characters (e.g. ClearKey `KID:KEY` pairs or
+ * a full ClearKey JSON document), and is preserved verbatim.
+ *
+ * Returns null for lines that are not `#KODIPROP:` directives or that lack
+ * an `=` separator.
+ */
+export function parseKodiProp(
+  line: string,
+): { key: string; value: string } | null {
+  const prefix = "#KODIPROP:";
+  if (!line.startsWith(prefix)) return null;
+  const rest = line.slice(prefix.length);
+  const eq = rest.indexOf("=");
+  if (eq === -1) return null;
+  return {
+    key: rest.slice(0, eq).trim(),
+    value: rest.slice(eq + 1).trim(),
+  };
 }
 
 function parseDRM(
@@ -40,25 +101,31 @@ function parseDRM(
     if (i === currentIndex) continue; // skip the URL line itself
     const line = lines[i];
 
-    if (line.includes("#KODIPROP:inputstream.adaptive.license_type=")) {
-      // Use slice(1).join("=") to correctly handle type strings that might
-      // theoretically contain "=" — keeps parity with the license_key parsing.
-      const typeRaw = line.split("=").slice(1).join("=").toLowerCase().trim();
-      if (typeRaw.includes("widevine")) drm.type = "widevine";
-      else if (typeRaw.includes("playready")) drm.type = "playready";
-      else if (typeRaw.includes("clearkey")) drm.type = "clearkey";
-      else if (typeRaw.includes("fairplay")) drm.type = "fairplay";
-      else {
-        // Unknown DRM type — set a flag so we know DRM was declared even if
-        // we can't map it. Callers will see foundDRM=true but drm.type=undefined
-        // and can handle it (e.g. log a warning) rather than silently proceeding.
+    // #KODIPROP directives — parse via parseKodiProp so the value is split
+    // only on the first '=' and any ':' in the value (ClearKey KID:KEY pairs,
+    // ClearKey JSON documents, URL schemes like https://...) is preserved.
+    const kodi = parseKodiProp(line);
+    if (kodi) {
+      if (kodi.key === "inputstream.adaptive.license_type") {
+        const typeRaw = kodi.value.toLowerCase();
+        if (typeRaw.includes("widevine")) drm.type = "widevine";
+        else if (typeRaw.includes("playready")) drm.type = "playready";
+        else if (typeRaw.includes("clearkey")) drm.type = "clearkey";
+        else if (typeRaw.includes("fairplay")) drm.type = "fairplay";
+        else {
+          // Unknown DRM type — set a flag so we know DRM was declared even
+          // if we can't map it. Callers will see foundDRM=true but
+          // drm.type=undefined and can handle it (e.g. log a warning) rather
+          // than silently proceeding.
+        }
+        foundDRM = true;
+      } else if (kodi.key === "inputstream.adaptive.license_key") {
+        // Value preserved verbatim — may be a license URL, a ClearKey
+        // KID:KEY pair (contains ':'), or a full ClearKey JSON document.
+        drm.licenseServer = kodi.value;
+        foundDRM = true;
       }
-      foundDRM = true;
-    }
-
-    if (line.includes("#KODIPROP:inputstream.adaptive.license_key=")) {
-      drm.licenseServer = line.split("=").slice(1).join("=").trim();
-      foundDRM = true;
+      continue; // KODIPROP line handled — no other parsing applies
     }
 
     if (line.includes("#EXTVLCOPT:http-user-agent=")) {
@@ -183,6 +250,11 @@ export function parseM3U(
   const lines = content.split("\n").map((line) => line.trim());
   const channels: Channel[] = [];
   const categoriesSet = new Set<string>();
+  // Track channel ids we've already emitted so duplicate stream URLs in the
+  // playlist don't collapse into one entry (FlashList keys by id and would
+  // silently drop the duplicate). resolveChannelId falls back to a
+  // name-derived id on collision.
+  const seenIds = new Set<string>();
 
   let currentChannel: Partial<Channel> = {};
 
@@ -206,9 +278,10 @@ export function parseM3U(
       const finalHeaders =
         Object.keys(mergedHeaders).length > 0 ? mergedHeaders : undefined;
 
+      const name = currentChannel.name || "Unknown Channel";
       const channel: Channel = {
-        id: stableChannelId(cleanUrl),
-        name: currentChannel.name || "Unknown Channel",
+        id: resolveChannelId(cleanUrl, name, seenIds),
+        name,
         url: cleanUrl,
         logo: currentChannel.logo,
         group: currentChannel.group || "Uncategorized",
