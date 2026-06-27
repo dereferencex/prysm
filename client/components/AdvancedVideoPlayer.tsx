@@ -349,9 +349,6 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   const seekTooltipProgress = useSharedValue(0);
   const seekTooltipBarWidth = useSharedValue(1);
 
-  // Whether the player was playing when the drag started — used to resume
-  // playback after the seek commits.
-  const wasPlayingRef = useRef(false);
   // Seek bar's absolute screen X (left edge), measured via measureInWindow on
   // layout. Used so the thumb follows the finger absolutely
   // (evt.absoluteX - pageX) / width — the generic mobile seekbar behaviour —
@@ -896,15 +893,6 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
     [positionMs, durationMs],
   );
 
-  const handleSeekToPercent = useCallback(
-    (pct: number) => {
-      if (durationMs <= 0) return;
-      TvPlayerCommands.seekTo(tvPlayerRef, Math.floor(pct * durationMs));
-      scheduleHideRef.current();
-    },
-    [durationMs],
-  );
-
   const handleQualitySelect = useCallback(
     (q: VideoQuality | "auto") => {
       if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1039,8 +1027,6 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   // ── YouTube-style seek bar helpers ───────────────────────────────────────
 
   const beginSeekDrag = useCallback((pct: number) => {
-    // Remember whether video was playing so we can resume after seek
-    wasPlayingRef.current = isPlayingRef.current;
     // Pause while scrubbing so the user sees the exact frame they're seeking to
     TvPlayerCommands.pause(tvPlayerRef);
     // Cancel auto-hide timer — controls must stay visible during scrubbing
@@ -1056,10 +1042,8 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   const commitSeekDrag = useCallback(
     (progress: number) => {
       TvPlayerCommands.seekTo(tvPlayerRef, Math.floor(progress * durationMs));
-      // Resume playback only if it was playing before the drag
-      if (wasPlayingRef.current) {
-        TvPlayerCommands.play(tvPlayerRef);
-      }
+      // Always resume playback after a seek — generic mobile behaviour
+      TvPlayerCommands.play(tvPlayerRef);
       setSeekDrag({ active: false, progress });
       // Re-arm the auto-hide timer now that scrubbing is done
       scheduleHideRef.current();
@@ -1069,10 +1053,8 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   );
 
   const cancelSeekDrag = useCallback(() => {
-    // User lifted without moving (e.g. gesture cancelled) — resume if needed
-    if (wasPlayingRef.current) {
-      TvPlayerCommands.play(tvPlayerRef);
-    }
+    // Gesture cancelled — resume playback (beginSeekDrag paused it on touch)
+    TvPlayerCommands.play(tvPlayerRef);
     setSeekDrag({ active: false, progress: 0 });
     scheduleHideRef.current();
   }, []);
@@ -1124,18 +1106,8 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
             (evt.absoluteX - seekBarPageX.value) / seekTooltipBarWidth.value,
           ),
         );
-        const isTap =
-          Math.abs(evt.translationX) < 5 && Math.abs(evt.translationY) < 5;
-        if (isTap) {
-          // Quick tap — seek to the touched position and resume if it was
-          // playing before the touch (beginSeekDrag paused it on touch).
-          if (wasPlayingRef.current) {
-            TvPlayerCommands.play(tvPlayerRef);
-          }
-          runOnJS(handleSeekToPercent)(pct);
-        } else {
-          runOnJS(commitSeekDrag)(pct);
-        }
+        // Quick tap or drag release — seek to the position and resume playback
+        runOnJS(commitSeekDrag)(pct);
       }
       seekTrackScale.value = withSpring(0, { damping: 18, stiffness: 300 });
       seekThumbScale.value = withSpring(0, { damping: 18, stiffness: 300 });
