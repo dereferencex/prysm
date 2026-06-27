@@ -200,12 +200,16 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   const seekBarRef = useRef<View | React.ComponentRef<typeof Pressable> | null>(
     null,
   );
-  const seekBarWidthRef = useRef<number>(1); // actual rendered width, updated via onLayout
   const onSeekBarLayout = useCallback((e: LayoutChangeEvent) => {
-    const w = e.nativeEvent.layout.width || 1;
-    seekBarWidthRef.current = w;
-    seekTooltipBarWidth.value = w;
-    // seekTooltipBarWidth is a stable shared value ref — excluded from deps
+    const w = e.nativeEvent.layout.width;
+    if (w > 0) seekTooltipBarWidth.value = w;
+    // Measure the bar's absolute screen X so the Pan worklet can position the
+    // thumb via (evt.absoluteX - pageX) / width — the generic "thumb follows
+    // finger" behaviour. evt.x can be misreported on some RNGH/Android builds.
+    seekBarRef.current?.measureInWindow((x) => {
+      seekBarPageX.value = x;
+    });
+    // seekTooltipBarWidth / seekBarPageX are stable shared value refs — excluded
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const firstToolBtnRef = useRef<any>(null);
@@ -348,8 +352,11 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   // Whether the player was playing when the drag started — used to resume
   // playback after the seek commits.
   const wasPlayingRef = useRef(false);
-  // Progress (0–1) where the scrub gesture started — used for relative dragging
-  const seekStartProgressRef = useRef(0);
+  // Seek bar's absolute screen X (left edge), measured via measureInWindow on
+  // layout. Used so the thumb follows the finger absolutely
+  // (evt.absoluteX - pageX) / width — the generic mobile seekbar behaviour —
+  // without relying on evt.x, which some RNGH/Android builds misreport.
+  const seekBarPageX = useSharedValue(0);
 
   // Seek flash
   const [seekFlash, setSeekFlash] = useState<{
@@ -1070,53 +1077,58 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
     scheduleHideRef.current();
   }, []);
 
-  // Seek bar pan gesture — YouTube-style: track expands, thumb grows,
-  // playback pauses while scrubbing and resumes on release.
-  // Uses relative dragging (translationX from the gesture start) for
-  // predictable 1:1 control — absolute evt.x can be misaligned with the
-  // seekbar width on some devices/RNGH versions, causing the thumb to
-  // jump or feel hypersensitive. A tap is detected when total translation
-  // is < 5px, in which case we seek to the originally touched position.
+  // Seek bar pan gesture — generic mobile behaviour:
+  //   • Touch → thumb jumps to the finger (absolute position)
+  //   • Drag → thumb follows the finger 1:1
+  //   • Playback pauses while scrubbing, seeks on release, resumes if needed
+  //   • A tap (<5px move) seeks to the touched position and resumes
+  // Position is derived from `evt.absoluteX` (screen coords) minus the bar's
+  // measured screen X — `evt.x` is misreported by some RNGH/Android builds,
+  // which was causing the thumb to snap to the end on touch.
   const seekBarPan = Gesture.Pan()
     .minDistance(2)
     .onBegin((evt) => {
-      if (seekBarWidthRef.current <= 0 || durationMs <= 0) return;
-      const startPct = Math.min(
+      if (seekTooltipBarWidth.value <= 0 || durationMs <= 0) return;
+      const pct = Math.min(
         1,
-        Math.max(0, evt.x / seekBarWidthRef.current),
+        Math.max(
+          0,
+          (evt.absoluteX - seekBarPageX.value) / seekTooltipBarWidth.value,
+        ),
       );
-      seekStartProgressRef.current = startPct;
-      // Animate track + thumb expanding and tooltip fading in
       seekTrackScale.value = withSpring(1, { damping: 15, stiffness: 300 });
       seekThumbScale.value = withSpring(1, { damping: 15, stiffness: 300 });
       seekTooltipOpacity.value = withTiming(1, { duration: 120 });
-      runOnJS(beginSeekDrag)(startPct);
+      runOnJS(beginSeekDrag)(pct);
     })
     .onUpdate((evt) => {
-      if (seekBarWidthRef.current <= 0 || durationMs <= 0) return;
-      const delta = evt.translationX / seekBarWidthRef.current;
+      if (seekTooltipBarWidth.value <= 0 || durationMs <= 0) return;
       const pct = Math.min(
         1,
-        Math.max(0, seekStartProgressRef.current + delta),
+        Math.max(
+          0,
+          (evt.absoluteX - seekBarPageX.value) / seekTooltipBarWidth.value,
+        ),
       );
-      // Keep the tooltip's shared value in sync on the UI thread so the
-      // edge-clamp translateX is lag-free while scrubbing.
       seekTooltipProgress.value = pct;
       runOnJS(updateSeekDrag)(pct);
     })
     .onEnd((evt) => {
-      if (seekBarWidthRef.current <= 0 || durationMs <= 0) {
+      if (seekTooltipBarWidth.value <= 0 || durationMs <= 0) {
         runOnJS(cancelSeekDrag)();
       } else {
-        const delta = evt.translationX / seekBarWidthRef.current;
         const pct = Math.min(
           1,
-          Math.max(0, seekStartProgressRef.current + delta),
+          Math.max(
+            0,
+            (evt.absoluteX - seekBarPageX.value) / seekTooltipBarWidth.value,
+          ),
         );
         const isTap =
           Math.abs(evt.translationX) < 5 && Math.abs(evt.translationY) < 5;
         if (isTap) {
-          // Quick tap — seek to the originally touched position
+          // Quick tap — seek to the touched position and resume if it was
+          // playing before the touch (beginSeekDrag paused it on touch).
           if (wasPlayingRef.current) {
             TvPlayerCommands.play(tvPlayerRef);
           }
@@ -1125,7 +1137,6 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
           runOnJS(commitSeekDrag)(pct);
         }
       }
-      // Animate track + thumb shrinking and tooltip fading out
       seekTrackScale.value = withSpring(0, { damping: 18, stiffness: 300 });
       seekThumbScale.value = withSpring(0, { damping: 18, stiffness: 300 });
       seekTooltipOpacity.value = withTiming(0, { duration: 150 });
@@ -1664,17 +1675,6 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                       nextFocusUp={nh.playPause ?? undefined}
                       nextFocusDown={nh.firstTool ?? undefined}
                       onLayout={onSeekBarLayout}
-                      onPress={(e) => {
-                        handleSeekToPercent(
-                          Math.min(
-                            1,
-                            Math.max(
-                              0,
-                              e.nativeEvent.locationX / seekBarWidthRef.current,
-                            ),
-                          ),
-                        );
-                      }}
                     >
                       {/* Track — animates height on drag */}
                       <Animated.View
