@@ -205,31 +205,31 @@ private class LocalClearKeyJsonCallback(
  */
 @UnstableApi
 private data class WidevineProbe(
-    val mediaDrm: FrameworkMediaDrm?,
+    val mediaDrm: ExoMediaDrm?,
     val securityLevel: String,
 )
 
 /**
  * Probes the platform Widevine CDM for diagnostics (security level, vendor,
- * description, version). Returns the constructed [FrameworkMediaDrm] instance
+ * description, version). Returns the constructed [ExoMediaDrm] instance
  * so the caller can reuse it as the [DefaultDrmSessionManager] provider
  * (avoids constructing a second CDM just for the probe).
  *
- * On devices without a Widevine CDM, [FrameworkMediaDrm.create] throws and
- * we log a clear "not available" line — the subsequent session creation will
+ * On devices without a Widevine CDM, [FrameworkMediaDrm.DEFAULT_PROVIDER.acquireExoMediaDrm]
+ * throws and we log a clear "not available" line — the subsequent session creation will
  * then fail with a [PlaybackException] that surfaces in the player error path
  * rather than silently producing a black screen.
  */
 @UnstableApi
 private fun probeWidevineCdm(): WidevineProbe {
     return try {
-        val mediaDrm = FrameworkMediaDrm.create(C.WIDEVINE_UUID)
+        val mediaDrm = FrameworkMediaDrm.DEFAULT_PROVIDER.acquireExoMediaDrm(C.WIDEVINE_UUID)
         fun prop(name: String): String = try {
             mediaDrm.getProperty(name)
         } catch (e: Exception) {
             "unknown"
         }
-        val securityLevel = prop(MediaDrm.PROPERTY_SECURITY_LEVEL).ifEmpty { "unknown" }
+        val securityLevel = prop("securityLevel").ifEmpty { "unknown" }
         Log.i(
             "ExoPlayerController",
             "Widevine CDM probe: securityLevel=$securityLevel, " +
@@ -624,7 +624,9 @@ class ExoPlayerController(
                         { probe?.mediaDrm ?: FrameworkMediaDrm.DEFAULT_PROVIDER.acquireExoMediaDrm(drmUuid) },
                     )
                     .setMultiSession(true)
-                    .forceSessionsForAudioAndVideoTraits()
+                    .setUseDrmSessionsForClearContent(
+                        intArrayOf(C.TRACK_TYPE_AUDIO, C.TRACK_TYPE_VIDEO),
+                    )
                     .apply {
                         if (!currentDrmHeaders.isNullOrEmpty()) {
                             setKeyRequestParameters(currentDrmHeaders!!)
