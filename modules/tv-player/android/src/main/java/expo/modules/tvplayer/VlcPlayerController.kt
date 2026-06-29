@@ -122,7 +122,6 @@ class VlcPlayerController(
         drmLicenseUrl: String?,
         drmLicenseKey: String?,
         drmHeaders: Map<String, String>?,
-        drmCertificateUrl: String?,
         drmPssh: String?,
         autoPlay: Boolean,
     ) {

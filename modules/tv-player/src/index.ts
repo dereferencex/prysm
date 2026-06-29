@@ -19,8 +19,6 @@ export interface TvPlayerLoadParams {
    *  build a local callback instead of making an HTTP request. */
   drmLicenseKey?: string;
   drmHeaders?: Record<string, string>;
-  /** Certificate URL for Widevine provisioning or PlayReady certificate chains. */
-  drmCertificateUrl?: string;
   /** Raw base64 PSSH initialization data (passed as DRM init data, not as a URL). */
   drmPssh?: string;
   autoPlay?: boolean;

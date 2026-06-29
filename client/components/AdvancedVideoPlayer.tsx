@@ -563,7 +563,6 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
           drmLicenseUrl: drm?.licenseServer,
           drmLicenseKey: drm?.licenseKey,
           drmHeaders: drm?.headers,
-          drmCertificateUrl: drm?.certificateUrl,
           drmPssh: drm?.pssh,
           autoPlay: true,
         });
@@ -585,7 +584,6 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
       drmType: drm?.type,
       drmLicenseUrl: drm?.licenseServer,
       drmHeaders: drm?.headers,
-      drmCertificateUrl: drm?.certificateUrl,
       drmPssh: drm?.pssh,
       autoPlay,
     });

@@ -132,6 +132,31 @@ private fun buildClearKeyPssh(keyId: String): ByteArray {
     return buf.array()
 }
 
+/** Decodes a caller-supplied PSSH (base64, standard or URL-safe) to raw bytes.
+ *  Returns null on failure so the caller can fall back to deriving a PSSH from
+ *  the ClearKey KID. */
+private fun decodePssh(value: String): ByteArray? = try {
+    val normalized = value.replace('+', '-').replace('/', '_').trimEnd('=')
+    val decoded = Base64.decode(normalized, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+    if (decoded.isNotEmpty()) decoded else null
+} catch (e: Exception) {
+    Log.w("ExoPlayerController", "Invalid drmPssh encoding: ${e.message}")
+    null
+}
+
+/** Extracts the first "kid" from a ClearKey JSON document so we can build a
+ *  PSSH box when the key was supplied as embedded JSON (not raw kid:key). */
+private fun extractFirstClearKeyKid(json: String): String? = try {
+    val obj = org.json.JSONObject(json)
+    val keys = obj.optJSONArray("keys") ?: return null
+    if (keys.length() == 0) return null
+    val kid = keys.getJSONObject(0).optString("kid", "")
+    kid.takeIf { it.isNotEmpty() }
+} catch (e: Exception) {
+    Log.w("ExoPlayerController", "Failed to parse ClearKey JSON for KID: ${e.message}")
+    null
+}
+
 private class LocalClearKeyCallback(
     keyIdHex: String,
     keyHex: String,
@@ -225,7 +250,7 @@ private fun probeWidevineCdm(): WidevineProbe {
     return try {
         val mediaDrm = FrameworkMediaDrm.DEFAULT_PROVIDER.acquireExoMediaDrm(C.WIDEVINE_UUID)
         fun prop(name: String): String = try {
-            mediaDrm.getProperty(name)
+            mediaDrm.getPropertyString(name)
         } catch (e: Exception) {
             "unknown"
         }
@@ -405,7 +430,6 @@ class ExoPlayerController(
         drmLicenseUrl: String?,
         drmLicenseKey: String?,
         drmHeaders: Map<String, String>?,
-        drmCertificateUrl: String?,
         drmPssh: String?,
         autoPlay: Boolean,
     ) {
@@ -625,7 +649,8 @@ class ExoPlayerController(
                     )
                     .setMultiSession(true)
                     .setUseDrmSessionsForClearContent(
-                        intArrayOf(C.TRACK_TYPE_AUDIO, C.TRACK_TYPE_VIDEO),
+                        C.TRACK_TYPE_AUDIO,
+                        C.TRACK_TYPE_VIDEO,
                     )
                     .apply {
                         if (!currentDrmHeaders.isNullOrEmpty()) {
@@ -645,10 +670,19 @@ class ExoPlayerController(
                 .setDrmSessionManagerProvider { drmSessionManager }
         }
 
-        val needsPsshInjection = rawClearKeyParts != null && drmSessionManager != null
-        if (needsPsshInjection) {
-            val psshData = buildClearKeyPssh(rawClearKeyParts!![0])
-            Log.d(TAG, "Built ClearKey PSSH from keyId (${psshData.size} bytes)")
+        val clearKeyKidForPssh: String? = when {
+            rawClearKeyParts != null -> rawClearKeyParts[0]
+            isClearKeyJsonBody -> extractFirstClearKeyKid(currentDrmLicenseKey!!)
+            else -> null
+        }
+        if (clearKeyKidForPssh != null && drmSessionManager != null) {
+            val psshData = currentDrmPssh?.let { decodePssh(it) }
+                ?: buildClearKeyPssh(clearKeyKidForPssh)
+            Log.d(
+                TAG,
+                "ClearKey PSSH ready (${psshData.size} bytes)" +
+                    if (currentDrmPssh != null) " from drmPssh" else " derived from keyId",
+            )
             mediaSourceFactory = PsshInjectingMediaSourceFactory(mediaSourceFactory, psshData)
         }
 
@@ -695,7 +729,7 @@ class ExoPlayerController(
         val effectiveDrmType = drmType?.lowercase()?.takeIf {
             it.isNotEmpty() && it != "fairplay"
         }
-        if (effectiveDrmType != null) {
+        if (effectiveDrmType != null && drmSessionManager == null) {
             val uuid = when (effectiveDrmType) {
                 "widevine" -> C.WIDEVINE_UUID
                 "playready" -> C.PLAYREADY_UUID
@@ -706,17 +740,15 @@ class ExoPlayerController(
                 }
             }
             if (uuid != null) {
-                if (rawClearKeyParts != null || isClearKeyJsonBody) {
-                    Log.d(TAG, "ClearKey local playback — PSSH injected via MediaSource wrapper")
-                } else if (!currentDrmLicenseUrl.isNullOrBlank()) {
+                if (!currentDrmLicenseUrl.isNullOrBlank()) {
                     val drmCfg = DrmConfiguration.Builder(uuid)
                         .setLicenseUri(currentDrmLicenseUrl)
                     if (!drmHeaders.isNullOrEmpty()) drmCfg.setLicenseRequestHeaders(drmHeaders)
-                    Log.d(TAG, "DRM config: $effectiveDrmType, uuid=$uuid, " +
+                    Log.d(TAG, "DRM config (MediaItem): $effectiveDrmType, uuid=$uuid, " +
                         "licenseUri=$currentDrmLicenseUrl, headers=${drmHeaders?.keys}")
                     mediaItemBuilder.setDrmConfiguration(drmCfg.build())
                 } else {
-                    Log.w(TAG, "DRM type '$drmType' set but no license URL provided " +
+                    Log.w(TAG, "DRM type '$drmType' set but no license URL/key provided " +
                         "— skipping DRM configuration")
                 }
             }
@@ -844,7 +876,6 @@ class ExoPlayerController(
                         currentDrmLicenseUrl,
                         currentDrmLicenseKey,
                         currentDrmHeaders,
-                        drmCertificateUrl = null,
                         currentDrmPssh,
                         currentAutoPlay,
                     )
