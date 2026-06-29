@@ -146,15 +146,17 @@ private fun decodePssh(value: String): ByteArray? = try {
 
 /** Extracts the first "kid" from a ClearKey JSON document so we can build a
  *  PSSH box when the key was supplied as embedded JSON (not raw kid:key). */
-private fun extractFirstClearKeyKid(json: String): String? = try {
-    val obj = org.json.JSONObject(json)
-    val keys = obj.optJSONArray("keys") ?: return null
-    if (keys.length() == 0) return null
-    val kid = keys.getJSONObject(0).optString("kid", "")
-    kid.takeIf { it.isNotEmpty() }
-} catch (e: Exception) {
-    Log.w("ExoPlayerController", "Failed to parse ClearKey JSON for KID: ${e.message}")
-    null
+private fun extractFirstClearKeyKid(json: String): String? {
+    return try {
+        val obj = org.json.JSONObject(json)
+        val keys = obj.optJSONArray("keys") ?: return null
+        if (keys.length() == 0) return null
+        val kid = keys.getJSONObject(0).optString("kid", "")
+        kid.takeIf { it.isNotEmpty() }
+    } catch (e: Exception) {
+        Log.w("ExoPlayerController", "Failed to parse ClearKey JSON for KID: ${e.message}")
+        null
+    }
 }
 
 private class LocalClearKeyCallback(
