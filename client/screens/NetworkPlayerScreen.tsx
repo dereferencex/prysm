@@ -88,8 +88,8 @@ export default function NetworkPlayerScreen() {
 
   /** Build DRMConfig only when a recognisable DRM scheme and license URL are provided. */
   const drm: DRMConfig | undefined = (() => {
-    const licenseUrl = safeTrim(config.drmLicenseUrl);
-    if (!licenseUrl) return undefined;
+    const rawValue = safeTrim(config.drmLicenseUrl);
+    if (!rawValue) return undefined;
 
     const scheme = config.drmScheme?.toLowerCase?.() ?? "";
     let type: DRMConfig["type"];
@@ -105,7 +105,19 @@ export default function NetworkPlayerScreen() {
       return undefined;
     }
 
-    return { type, licenseServer: licenseUrl };
+    // ClearKey may be supplied as an embedded key (KID:KEY or a W3C ClearKey
+    // JSON document) rather than as a license-server URL. The UI hint on the
+    // input instructs users to enter the key directly for ClearKey. Detect this
+    // here so the embedded key is routed to licenseKey, and the native side
+    // builds a local ClearKey callback instead of trying to HTTP-GET the key.
+    if (type === "clearkey") {
+      const looksLikeUrl = /^https?:\/\//i.test(rawValue);
+      if (!looksLikeUrl) {
+        return { type, licenseKey: rawValue };
+      }
+    }
+
+    return { type, licenseServer: rawValue };
   })();
 
   /** Build request headers from cookie / referer / origin / user-agent.

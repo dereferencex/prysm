@@ -583,6 +583,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
       headers: headers && Object.keys(headers).length > 0 ? headers : undefined,
       drmType: drm?.type,
       drmLicenseUrl: drm?.licenseServer,
+      drmLicenseKey: drm?.licenseKey,
       drmHeaders: drm?.headers,
       drmPssh: drm?.pssh,
       autoPlay,
