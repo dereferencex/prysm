@@ -230,6 +230,11 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   // captures stale state otherwise. Both are needed: state triggers a
   // re-render for the focus style, ref is read in a long-lived callback.
   const seekBarFocusedRef = useRef(false);
+  // Tracks whether the in-progress seek-drag has been committed/cancelled.
+  // beginSeekDrag sets it false; commit/cancel set it true. onFinalize reads
+  // it to resume playback when the pan gesture fails (e.g. a tap that never
+  // reaches minDistance) after beginSeekDrag already paused the player.
+  const seekCommittedRef = useRef(true);
   // Node handles for nextFocus wiring — populated via onLayout callbacks
   const [nh, setNh] = useState<{
     backBtn: number | null;
@@ -890,6 +895,11 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
       if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       const newPos = Math.max(0, Math.min(positionMs + offsetMs, durationMs));
       TvPlayerCommands.seekTo(tvPlayerRef, newPos);
+      // Always resume playback after a D-pad seek — matches the mobile
+      // commitSeekDrag behaviour and prevents DRM/VOD streams from staying
+      // paused after seeking (ExoPlayer can flip playWhenReady off while it
+      // re-acquires the DRM keys for the new position).
+      TvPlayerCommands.play(tvPlayerRef);
       scheduleHideRef.current();
     },
     [positionMs, durationMs],
@@ -1034,6 +1044,9 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
     // Cancel auto-hide timer — controls must stay visible during scrubbing
     cancelHideTimerRef.current();
     if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // Mark the drag as uncommitted so onFinalize can recover if the pan
+    // gesture fails before onEnd fires (e.g. tap without minDistance).
+    seekCommittedRef.current = false;
     setSeekDrag({ active: true, progress: pct });
   }, []);
 
@@ -1046,6 +1059,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
       TvPlayerCommands.seekTo(tvPlayerRef, Math.floor(progress * durationMs));
       // Always resume playback after a seek — generic mobile behaviour
       TvPlayerCommands.play(tvPlayerRef);
+      seekCommittedRef.current = true;
       setSeekDrag({ active: false, progress });
       // Re-arm the auto-hide timer now that scrubbing is done
       scheduleHideRef.current();
@@ -1057,9 +1071,27 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   const cancelSeekDrag = useCallback(() => {
     // Gesture cancelled — resume playback (beginSeekDrag paused it on touch)
     TvPlayerCommands.play(tvPlayerRef);
+    seekCommittedRef.current = true;
     setSeekDrag({ active: false, progress: 0 });
     scheduleHideRef.current();
   }, []);
+
+  // Safety net: RNGH fires onFinalize for every gesture terminus, including
+  // failed gestures (touch without moving minDistance). In that case onBegin
+  // already paused the player but onEnd never runs, so commit/cancel never
+  // resume it. Re-arm here by falling back to seeking to the last known
+  // scrub position (the value captured during onBegin/onUpdate) and resuming.
+  const ensureSeekCommitted = useCallback(() => {
+    if (seekCommittedRef.current) return;
+    seekCommittedRef.current = true;
+    const pct = seekTooltipProgress.value;
+    if (durationMs > 0 && pct > 0) {
+      TvPlayerCommands.seekTo(tvPlayerRef, Math.floor(pct * durationMs));
+    }
+    TvPlayerCommands.play(tvPlayerRef);
+    setSeekDrag({ active: false, progress: 0 });
+    scheduleHideRef.current();
+  }, [durationMs]);
 
   // Seek bar pan gesture — generic mobile behaviour:
   //   • Touch → thumb jumps to the finger (absolute position)
@@ -1120,6 +1152,9 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
       seekTrackScale.value = withSpring(0, { damping: 18, stiffness: 300 });
       seekThumbScale.value = withSpring(0, { damping: 18, stiffness: 300 });
       seekTooltipOpacity.value = withTiming(0, { duration: 150 });
+      // Recover playback if beginSeekDrag paused the player but onEnd never
+      // ran (pan gesture failed because the touch didn't move minDistance).
+      runOnJS(ensureSeekCommitted)();
     });
 
   // ── Derived ───────────────────────────────────────────────────────────────
