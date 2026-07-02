@@ -1,0 +1,61 @@
+Categories:
+  - Multimedia
+License: MIT
+AuthorName: dereferencex
+SourceCode: https://github.com/dereferencex/prysm
+IssueTracker: https://github.com/dereferencex/prysm/issues
+Changelog: https://github.com/dereferencex/prysm/releases
+Donate: https://github.com/sponsors/dereferencex
+
+RepoType: git
+Repo: https://github.com/dereferencex/prysm
+
+Binaries: ~
+
+Builds:
+  - versionName: 1.4.1
+    versionCode: 10401
+    commit: 253613f9c1a8cd0820b7a5f10b112018823b3f12
+    sudo:
+      - apt-get update
+      - apt-get install -y nodejs npm
+    init:
+      - npm ci
+      - PRYSM_FDROID=1 npx expo prebuild --no-install
+    subdir: android
+    gradle: yes
+    output: app/build/outputs/apk/release/app-release.apk
+    scanignore:
+      - node_modules
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+UpdateCheckData: app.json|"versionCode":\s*(\d+)|app.json|"version":\s*"([^"]+)"
+CurrentVersion: 1.4.1
+CurrentVersionCode: 10401
+
+MaintainerNotes: |
+  STATUS: template — finalize before submitting to fdroid/fdroiddata.
+
+  The commit above (253613f) includes the PRYSM_FDROID gating but NOT yet
+  android.versionCode. Cut a final release tag on the commit that also has
+  android.versionCode (added in the last step), then update versionName,
+  versionCode, commit, CurrentVersion and CurrentVersionCode here to match
+  that release. Use the full 40-char SHA, not the tag name.
+
+  Build recipe: npm ci installs FLOSS JS deps from npm; PRYSM_FDROID=1 makes
+  app.config.js strip REQUEST_INSTALL_PACKAGES and set extra.isFdroid, which
+  hides the in-app self-updater so updates come via the F-Droid client.
+  npx expo prebuild generates the android/ project from source at build time.
+
+  scanignore: node_modules holds FLOSS JS deps resolved from npm at build
+  time. Native deps (androidx.media3, org.videolan.android:libvlc-all,
+  com.squareup.okhttp3:okhttp, Hermes engine) come from Maven Central /
+  Google Maven and are all FLOSS.
+
+  usesCleartextTraffic=true is required because the app plays user-supplied
+  IPTV streams over http://; expected for a media player.
+
+  If Node.js from Debian stable is too old for Expo SDK 54, install a newer
+  Node via nvm/nodesource in the sudo block. If the build emits per-ABI APKs
+  (ABI splits) instead of a universal APK, add VercodeOperation entries.
