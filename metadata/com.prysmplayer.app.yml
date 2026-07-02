@@ -15,7 +15,7 @@ Binaries: ~
 Builds:
   - versionName: 1.4.2
     versionCode: 10402
-    commit: 253613f9c1a8cd0820b7a5f10b112018823b3f12
+    commit: 78be12bc172b1d336ae6c75635f18d2924df08f0
     sudo:
       - apt-get update
       - apt-get install -y nodejs npm
@@ -35,13 +35,9 @@ CurrentVersion: 1.4.2
 CurrentVersionCode: 10402
 
 MaintainerNotes: |
-  STATUS: template — finalize before submitting to fdroid/fdroiddata.
-
-  The commit above (253613f) includes the PRYSM_FDROID gating but NOT yet
-  android.versionCode. Cut a final release tag on the commit that also has
-  android.versionCode (added in the last step), then update versionName,
-  versionCode, commit, CurrentVersion and CurrentVersionCode here to match
-  that release. Use the full 40-char SHA, not the tag name.
+  STATUS: ready — points at release v1.4.2 (commit 78be12b), which includes
+  the PRYSM_FDROID gating, the HLS AES-128 DRM fix, and android.versionCode
+  10402. Build from this commit with the recipe below.
 
   Build recipe: npm ci installs FLOSS JS deps from npm; PRYSM_FDROID=1 makes
   app.config.js strip REQUEST_INSTALL_PACKAGES and set extra.isFdroid, which
