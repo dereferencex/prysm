@@ -13,8 +13,8 @@ Repo: https://github.com/dereferencex/prysm
 Binaries: ~
 
 Builds:
-  - versionName: 1.4.1
-    versionCode: 10401
+  - versionName: 1.4.2
+    versionCode: 10402
     commit: 253613f9c1a8cd0820b7a5f10b112018823b3f12
     sudo:
       - apt-get update
@@ -31,8 +31,8 @@ Builds:
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
 UpdateCheckData: app.json|"versionCode":\s*(\d+)|app.json|"version":\s*"([^"]+)"
-CurrentVersion: 1.4.1
-CurrentVersionCode: 10401
+CurrentVersion: 1.4.2
+CurrentVersionCode: 10402
 
 MaintainerNotes: |
   STATUS: template — finalize before submitting to fdroid/fdroiddata.

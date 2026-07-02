@@ -2,7 +2,7 @@
   "expo": {
     "name": "Prysm",
     "slug": "prysm",
-    "version": "1.4.1",
+    "version": "1.4.2",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "prysmplayer",
@@ -22,6 +22,7 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.prysmplayer.app",
+      "versionCode": 10402,
       "jsEngine": "hermes",
       "permissions": [
         "REQUEST_INSTALL_PACKAGES"

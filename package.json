@@ -1,7 +1,7 @@
 {
   "name": "prysm",
   "main": "client/index.js",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "scripts": {
     "start": "npx expo start",
     "android": "expo run:android",

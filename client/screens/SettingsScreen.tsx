@@ -22,6 +22,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as IntentLauncher from "expo-intent-launcher";
 import Constants from "expo-constants";
+import * as Application from "expo-application";
 
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
@@ -202,6 +203,7 @@ export default function SettingsScreen() {
 
   const isTV = Platform.isTV;
   const isFdroid = Constants.expoConfig?.extra?.isFdroid === true;
+  const appVersion = Application.nativeApplicationVersion || "1.4.2";
   const useColumns = width > 700;
   // On TV and very wide screens show two columns of settings side by side
   const useTwoColumns = isTV || width > 900;
@@ -680,7 +682,7 @@ export default function SettingsScreen() {
               <SettingsRow
                 icon="prism"
                 title="Prysm"
-                subtitle="Version 1.4.1"
+                subtitle={`Version ${appVersion}`}
                 value=""
               />
               <SettingsRow
@@ -704,7 +706,7 @@ export default function SettingsScreen() {
                   <SettingsRow
                     icon="refresh"
                     title="Check for Updates"
-                    subtitle={`Current version ${updateInfo?.currentVersion || "1.2.2"}`}
+                    subtitle={`Current version ${updateInfo?.currentVersion || appVersion}`}
                     onPress={handleCheckForUpdate}
                     disabled={checkingForUpdate}
                     rightComponent={
