@@ -21,6 +21,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as IntentLauncher from "expo-intent-launcher";
+import Constants from "expo-constants";
 
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
@@ -200,11 +201,13 @@ export default function SettingsScreen() {
   const [showToast, setShowToast] = useState(false);
 
   const isTV = Platform.isTV;
+  const isFdroid = Constants.expoConfig?.extra?.isFdroid === true;
   const useColumns = width > 700;
   // On TV and very wide screens show two columns of settings side by side
   const useTwoColumns = isTV || width > 900;
 
   useEffect(() => {
+    if (isFdroid) return;
     const initializeUpdateCheck = async () => {
       const info = await checkForUpdate();
       if (info) {
@@ -233,7 +236,7 @@ export default function SettingsScreen() {
     
     const subscription = AppState.addEventListener("change", handleAppStateChange);
     return () => subscription.remove();
-  }, [installingApk]);
+  }, [installingApk, isFdroid]);
 
   const handleToggleAutoPlay = (value: boolean) => {
     if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -688,28 +691,29 @@ export default function SettingsScreen() {
                 onPress={() => Linking.openURL("https://github.com/dereferencex")}
                 showChevron
               />
-              {updateInfo?.available ? (
-                <SettingsRow
-                  icon="download"
-                  title="Update Available"
-                  subtitle={`Version ${updateInfo.latestVersion} ready to install`}
-                  onPress={handleOpenUpdateModal}
-                  showChevron
-                />
-              ) : (
-                <SettingsRow
-                  icon="refresh"
-                  title="Check for Updates"
-                  subtitle={`Current version ${updateInfo?.currentVersion || "1.2.2"}`}
-                  onPress={handleCheckForUpdate}
-                  disabled={checkingForUpdate}
-                  rightComponent={
-                    checkingForUpdate ? (
-                      <ActivityIndicator size="small" color={theme.primary} />
-                    ) : undefined
-                  }
-                />
-              )}
+              {!isFdroid &&
+                (updateInfo?.available ? (
+                  <SettingsRow
+                    icon="download"
+                    title="Update Available"
+                    subtitle={`Version ${updateInfo.latestVersion} ready to install`}
+                    onPress={handleOpenUpdateModal}
+                    showChevron
+                  />
+                ) : (
+                  <SettingsRow
+                    icon="refresh"
+                    title="Check for Updates"
+                    subtitle={`Current version ${updateInfo?.currentVersion || "1.2.2"}`}
+                    onPress={handleCheckForUpdate}
+                    disabled={checkingForUpdate}
+                    rightComponent={
+                      checkingForUpdate ? (
+                        <ActivityIndicator size="small" color={theme.primary} />
+                      ) : undefined
+                    }
+                  />
+                ))}
             </View>
           </View>
         </View>
@@ -1314,7 +1318,7 @@ export default function SettingsScreen() {
       </Modal>
 
       <Modal
-        visible={showUpdateModal}
+        visible={showUpdateModal && !isFdroid}
         transparent
         animationType="fade"
         onRequestClose={handleCloseUpdateModal}
