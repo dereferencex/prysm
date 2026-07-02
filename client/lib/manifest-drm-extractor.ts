@@ -69,7 +69,11 @@ function parseHLSDRM(content: string): DRMInfo | undefined {
 
     const attrs = parseHLSAttributes(line);
     const method = attrs.METHOD?.toUpperCase();
-    if (method !== "SAMPLE-AES" && method !== "AES-128" && method !== "SAMPLE-AES-CTR") continue;
+    // AES-128 is native HLS whole-segment encryption — ExoPlayer decrypts it
+    // directly. It is NOT EME/CDM DRM. Treating it as DRM misclassified
+    // ordinary AES-128 streams as ClearKey (esp. with KEYFORMAT="identity",
+    // the HLS default for native key delivery) and broke playback.
+    if (method !== "SAMPLE-AES" && method !== "SAMPLE-AES-CTR") continue;
 
     // KEYFORMAT attribute — parseHLSAttributes already strips surrounding quotes.
     const keyFormat = attrs.KEYFORMAT || "";
