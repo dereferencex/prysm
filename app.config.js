@@ -1,7 +1,12 @@
-module.exports = ({ config }) => {
+const baseConfig = require("./app.json");
+
+module.exports = () => {
   const isFdroid = process.env.PRYSM_FDROID === "1";
 
-  const android = { ...(config.expo.android || {}) };
+  const config = baseConfig.expo;
+
+  const android = { ...(config.android || {}) };
+
   if (isFdroid) {
     android.permissions = (android.permissions || []).filter(
       (permission) => permission !== "REQUEST_INSTALL_PACKAGES",
@@ -10,13 +15,10 @@ module.exports = ({ config }) => {
 
   return {
     ...config,
-    expo: {
-      ...config.expo,
-      android,
-      extra: {
-        ...(config.expo.extra || {}),
-        isFdroid,
-      },
+    android,
+    extra: {
+      ...(config.extra || {}),
+      isFdroid,
     },
   };
 };
