@@ -51,6 +51,10 @@
         "./modules/tv-player/plugin"
       ],
       [
+        "./plugins/withAbiSplits",
+        {}
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
