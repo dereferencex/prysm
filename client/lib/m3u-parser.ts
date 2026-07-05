@@ -128,6 +128,30 @@ function parseDRM(
           drm.licenseKey = kodi.value;
         }
         foundDRM = true;
+      } else if (kodi.key === "inputstream.adaptive.stream_headers") {
+        // Format: key1=value1&key2=value2&key3=value3
+        // Values may contain '=' or ':' so split only on first '='.
+        const pairs = kodi.value.split("&");
+        for (const pair of pairs) {
+          const eqIdx = pair.indexOf("=");
+          if (eqIdx === -1) continue;
+          const hKey = pair.slice(0, eqIdx).trim();
+          const hVal = pair.slice(eqIdx + 1).trim();
+          if (hKey && hVal) {
+            // Normalize common header names to match existing conventions
+            const lower = hKey.toLowerCase();
+            const normalized =
+              lower === "user-agent"
+                ? "User-Agent"
+                : lower === "referer"
+                  ? "Referer"
+                  : lower === "origin"
+                    ? "Origin"
+                    : hKey;
+            headers[normalized] = hVal;
+            foundHeaders = true;
+          }
+        }
       }
       continue; // KODIPROP line handled — no other parsing applies
     }
@@ -145,6 +169,25 @@ function parseDRM(
     if (line.includes("#EXTVLCOPT:http-origin=")) {
       headers["Origin"] = line.split("=").slice(1).join("=").trim();
       foundHeaders = true;
+    }
+
+    // #EXTHTTP — JSON format headers (OTT Navigator compatibility)
+    // Example: #EXTHTTP:{"User-Agent":"Chrome","Referer":"https://example.com"}
+    if (line.startsWith("#EXTHTTP:")) {
+      const jsonStr = line.slice("#EXTHTTP:".length).trim();
+      try {
+        const parsed = JSON.parse(jsonStr);
+        if (typeof parsed === "object" && parsed !== null) {
+          for (const [key, val] of Object.entries(parsed)) {
+            if (typeof val === "string" && val) {
+              headers[key] = val;
+              foundHeaders = true;
+            }
+          }
+        }
+      } catch {
+        // Malformed JSON — skip silently
+      }
     }
   }
 
