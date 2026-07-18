@@ -20,6 +20,7 @@ import {
   VideoQuality,
   DRMConfig,
 } from "@/components/AdvancedVideoPlayer";
+import { ModernVideoPlayer } from "@/components/ModernVideoPlayer";
 import { usePlaylist } from "@/context/PlaylistContext";
 import { Colors, Spacing, BorderRadius } from "@/constants/theme";
 import { extractDRMFromManifest } from "@/lib/manifest-drm-extractor";
@@ -90,13 +91,26 @@ export default function PlayerScreen() {
   const channel = getChannelById(channelId);
   const isFavorite = favorites.includes(channelId);
 
-  const [manifestDrm, setManifestDrm] = useState<import("@/types/playlist").DRMInfo | undefined>(undefined);
+  // 1-based position of the channel in the playlist — used by the modern
+  // player UI as the large "channel number" label.
+  const channelNumber = useMemo(() => {
+    if (!playlist || !channel) return undefined;
+    const idx = playlist.channels.findIndex((ch) => ch.id === channelId);
+    return idx >= 0 ? idx + 1 : undefined;
+  }, [playlist, channel, channelId]);
+
+  const [manifestDrm, setManifestDrm] = useState<
+    import("@/types/playlist").DRMInfo | undefined
+  >(undefined);
 
   useEffect(() => {
     if (!channel) return;
     // If the channel already has KODIPROP DRM with a valid license key or URL, no
     // need to fetch from the manifest.
-    if (channel.drm?.type && (channel.drm?.licenseServer || channel.drm?.licenseKey)) {
+    if (
+      channel.drm?.type &&
+      (channel.drm?.licenseServer || channel.drm?.licenseKey)
+    ) {
       setManifestDrm(undefined);
       return;
     }
@@ -106,15 +120,26 @@ export default function PlayerScreen() {
         // Only store DRM info that has both a type AND a usable licenseServer URL
         // or licenseKey, or is ClearKey (which may not need a license server URL).
         // This prevents partial DRM state (type set, nothing usable) from being stored.
-        if (drm?.type && (drm.licenseServer || drm.licenseKey || drm.type === "clearkey")) {
+        if (
+          drm?.type &&
+          (drm.licenseServer || drm.licenseKey || drm.type === "clearkey")
+        ) {
           setManifestDrm(drm);
         } else {
           setManifestDrm(undefined);
         }
       }
     });
-    return () => { cancelled = true; };
-  }, [channel?.url, channel?.drm?.type, channel?.drm?.licenseServer, channel?.drm?.licenseKey, channel?.headers]);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    channel?.url,
+    channel?.drm?.type,
+    channel?.drm?.licenseServer,
+    channel?.drm?.licenseKey,
+    channel?.headers,
+  ]);
 
   const recentChannelObjects = useMemo(() => {
     if (!playlist) return [];
@@ -192,7 +217,10 @@ export default function PlayerScreen() {
 
   const drmConfig = useMemo((): DRMConfig | undefined => {
     // Prefer KODIPROP-extracted DRM from the playlist
-    if (channel?.drm?.type && (channel.drm.licenseServer || channel.drm.licenseKey)) {
+    if (
+      channel?.drm?.type &&
+      (channel.drm.licenseServer || channel.drm.licenseKey)
+    ) {
       return {
         type: channel.drm.type as DRMConfig["type"],
         licenseServer: channel.drm.licenseServer,
@@ -206,7 +234,12 @@ export default function PlayerScreen() {
     // Fall back to DRM extracted from the manifest itself.
     // manifestDrm is only set when it has both type and a usable
     // licenseServer, licenseKey, or is ClearKey.
-    if (manifestDrm?.type && (manifestDrm.licenseServer || manifestDrm.licenseKey || manifestDrm.type === "clearkey")) {
+    if (
+      manifestDrm?.type &&
+      (manifestDrm.licenseServer ||
+        manifestDrm.licenseKey ||
+        manifestDrm.type === "clearkey")
+    ) {
       return {
         type: manifestDrm.type as DRMConfig["type"],
         licenseServer: manifestDrm.licenseServer,
@@ -220,11 +253,11 @@ export default function PlayerScreen() {
     return undefined;
   }, [channel?.drm, manifestDrm]);
 
-  const streamHeaders = useMemo(():
-    | Record<string, string>
-    | undefined => {
+  const streamHeaders = useMemo((): Record<string, string> | undefined => {
     if (!channel?.headers) return undefined;
-    return Object.keys(channel.headers).length > 0 ? channel.headers : undefined;
+    return Object.keys(channel.headers).length > 0
+      ? channel.headers
+      : undefined;
   }, [channel?.headers]);
 
   if (!channel) {
@@ -254,27 +287,52 @@ export default function PlayerScreen() {
   return (
     <View style={[styles.container, { width, height }]}>
       <StatusBar hidden translucent backgroundColor="transparent" />
-      <AdvancedVideoPlayer
-        source={channel.url}
-        title={channel.name}
-        subtitle={channel.group}
-        poster={channel.logo}
-        channelId={channel.id}
-        autoPlay={settings.autoPlay}
-        backgroundPlay={settings.backgroundPlay}
-        drm={drmConfig}
-        headers={streamHeaders}
-        qualities={DEFAULT_QUALITIES}
-        recentChannels={recentChannelObjects}
-        onError={handleError}
-        onBack={handleBack}
-        onNext={() => handleChannelNav("next")}
-        onPrevious={() => handleChannelNav("prev")}
-        onChannelSelect={handleChannelSelect}
-        isFavorite={isFavorite}
-        onFavoritePress={handleFavorite}
-        isLive={channel.isLive !== false}
-      />
+      {settings.playerStyle === "modern" ? (
+        <ModernVideoPlayer
+          source={channel.url}
+          title={channel.name}
+          subtitle={channel.group}
+          poster={channel.logo}
+          channelId={channel.id}
+          channelNumber={channelNumber}
+          autoPlay={settings.autoPlay}
+          backgroundPlay={settings.backgroundPlay}
+          drm={drmConfig}
+          headers={streamHeaders}
+          qualities={DEFAULT_QUALITIES}
+          recentChannels={recentChannelObjects}
+          onError={handleError}
+          onBack={handleBack}
+          onNext={() => handleChannelNav("next")}
+          onPrevious={() => handleChannelNav("prev")}
+          onChannelSelect={handleChannelSelect}
+          isFavorite={isFavorite}
+          onFavoritePress={handleFavorite}
+          isLive={channel.isLive !== false}
+        />
+      ) : (
+        <AdvancedVideoPlayer
+          source={channel.url}
+          title={channel.name}
+          subtitle={channel.group}
+          poster={channel.logo}
+          channelId={channel.id}
+          autoPlay={settings.autoPlay}
+          backgroundPlay={settings.backgroundPlay}
+          drm={drmConfig}
+          headers={streamHeaders}
+          qualities={DEFAULT_QUALITIES}
+          recentChannels={recentChannelObjects}
+          onError={handleError}
+          onBack={handleBack}
+          onNext={() => handleChannelNav("next")}
+          onPrevious={() => handleChannelNav("prev")}
+          onChannelSelect={handleChannelSelect}
+          isFavorite={isFavorite}
+          onFavoritePress={handleFavorite}
+          isLive={channel.isLive !== false}
+        />
+      )}
     </View>
   );
 }

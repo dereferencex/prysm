@@ -76,6 +76,7 @@ export function PlaylistProvider({ children }: { children: ReactNode }) {
     lastCategory: "All",
     textSize: "medium",
     playerEngine: "exoplayer",
+    playerStyle: "default",
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingPlaylist, setIsLoadingPlaylist] = useState(false);
@@ -426,6 +427,7 @@ export function PlaylistProvider({ children }: { children: ReactNode }) {
       lastCategory: "All",
       textSize: "medium",
       playerEngine: "exoplayer",
+      playerStyle: "default",
     });
   };
 

@@ -10,6 +10,7 @@ import {
   AdvancedVideoPlayer,
   DRMConfig,
 } from "@/components/AdvancedVideoPlayer";
+import { ModernVideoPlayer } from "@/components/ModernVideoPlayer";
 import { Colors, Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { USER_AGENT_STRINGS, UserAgent } from "@/lib/storage";
@@ -101,7 +102,9 @@ export default function NetworkPlayerScreen() {
       // Unknown DRM scheme — do not silently default to clearkey. Log and skip
       // DRM configuration so ExoPlayer attempts cleartext playback rather than
       // trying an incorrect DRM scheme which would always fail.
-      console.warn(`[NetworkPlayer] Unknown DRM scheme "${config.drmScheme}" — DRM disabled`);
+      console.warn(
+        `[NetworkPlayer] Unknown DRM scheme "${config.drmScheme}" — DRM disabled`,
+      );
       return undefined;
     }
 
@@ -169,25 +172,40 @@ export default function NetworkPlayerScreen() {
   return (
     <View style={styles.container}>
       <StatusBar hidden translucent backgroundColor="transparent" />
-      <AdvancedVideoPlayer
-        source={streamUrl}
-        title={titleFromUrl(streamUrl)}
-        autoPlay={true}
-        drm={drm}
-        headers={Object.keys(headers).length > 0 ? headers : undefined}
-        onError={handleError}
-        onBack={handleBack}
-        // Respect the user's global backgroundPlay and playerEngine settings.
-        // Previously these were always left at their defaults (false / "exoplayer"),
-        // meaning background audio never worked and the engine preference was ignored.
-        backgroundPlay={settings.backgroundPlay}
-        playerEngine={settings.playerEngine}
-        // isLive is intentionally left at its default (true) here because network
-        // streams are usually live. Users who need VOD playback can use PlayerScreen
-        // via a playlist. Keeping it true avoids showing a misleading duration for
-        // actual live streams which report C.TIME_UNSET as their duration.
-        isLive={true}
-      />
+      {settings.playerStyle === "modern" ? (
+        <ModernVideoPlayer
+          source={streamUrl}
+          title={titleFromUrl(streamUrl)}
+          autoPlay={true}
+          drm={drm}
+          headers={Object.keys(headers).length > 0 ? headers : undefined}
+          onError={handleError}
+          onBack={handleBack}
+          backgroundPlay={settings.backgroundPlay}
+          playerEngine={settings.playerEngine}
+          isLive={true}
+        />
+      ) : (
+        <AdvancedVideoPlayer
+          source={streamUrl}
+          title={titleFromUrl(streamUrl)}
+          autoPlay={true}
+          drm={drm}
+          headers={Object.keys(headers).length > 0 ? headers : undefined}
+          onError={handleError}
+          onBack={handleBack}
+          // Respect the user's global backgroundPlay and playerEngine settings.
+          // Previously these were always left at their defaults (false / "exoplayer"),
+          // meaning background audio never worked and the engine preference was ignored.
+          backgroundPlay={settings.backgroundPlay}
+          playerEngine={settings.playerEngine}
+          // isLive is intentionally left at its default (true) here because network
+          // streams are usually live. Users who need VOD playback can use PlayerScreen
+          // via a playlist. Keeping it true avoids showing a misleading duration for
+          // actual live streams which report C.TIME_UNSET as their duration.
+          isLive={true}
+        />
+      )}
     </View>
   );
 }

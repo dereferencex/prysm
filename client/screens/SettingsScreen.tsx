@@ -152,8 +152,29 @@ const TEXT_SIZE_OPTIONS = [
 ];
 
 const PLAYER_ENGINE_OPTIONS = [
-  { label: "ExoPlayer (Media3)", value: "exoplayer" as const, desc: "Default — best for most streams" },
-  { label: "VLC Player", value: "vlc" as const, desc: "Fallback — wider codec support" },
+  {
+    label: "ExoPlayer (Media3)",
+    value: "exoplayer" as const,
+    desc: "Default — best for most streams",
+  },
+  {
+    label: "VLC Player",
+    value: "vlc" as const,
+    desc: "Fallback — wider codec support",
+  },
+];
+
+const PLAYER_STYLE_OPTIONS = [
+  {
+    label: "Classic",
+    value: "default" as const,
+    desc: "The original compact transport overlay",
+  },
+  {
+    label: "Modern",
+    value: "modern" as const,
+    desc: "Cinematic info overlay with EPG-style now/next",
+  },
 ];
 
 export default function SettingsScreen() {
@@ -182,6 +203,7 @@ export default function SettingsScreen() {
   const [showAutoRefreshModal, setShowAutoRefreshModal] = useState(false);
   const [showTextSizeModal, setShowTextSizeModal] = useState(false);
   const [showPlayerEngineModal, setShowPlayerEngineModal] = useState(false);
+  const [showPlayerStyleModal, setShowPlayerStyleModal] = useState(false);
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
   const [showDeletePlaylistModal, setShowDeletePlaylistModal] = useState(false);
   const [showClearAllConfirm, setShowClearAllConfirm] = useState(false);
@@ -217,7 +239,7 @@ export default function SettingsScreen() {
       }
     };
     initializeUpdateCheck();
-    
+
     // Listen for app state changes to handle install result
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (nextAppState === "active" && installingApk) {
@@ -229,14 +251,20 @@ export default function SettingsScreen() {
           if (info) {
             setUpdateInfo(info);
             if (!info.available) {
-              Alert.alert("Update Successful", "App has been updated to the latest version.");
+              Alert.alert(
+                "Update Successful",
+                "App has been updated to the latest version.",
+              );
             }
           }
         });
       }
     };
-    
-    const subscription = AppState.addEventListener("change", handleAppStateChange);
+
+    const subscription = AppState.addEventListener(
+      "change",
+      handleAppStateChange,
+    );
     return () => subscription.remove();
   }, [installingApk, isFdroid]);
 
@@ -293,9 +321,24 @@ export default function SettingsScreen() {
     setShowPlayerEngineModal(false);
   };
 
+  const handlePlayerStyleSelect = (value: typeof settings.playerStyle) => {
+    if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    updateSettings({ playerStyle: value });
+    setShowPlayerStyleModal(false);
+  };
+
   const getPlayerEngineLabel = () => {
-    const option = PLAYER_ENGINE_OPTIONS.find((o) => o.value === settings.playerEngine);
+    const option = PLAYER_ENGINE_OPTIONS.find(
+      (o) => o.value === settings.playerEngine,
+    );
     return option?.label || "ExoPlayer (Media3)";
+  };
+
+  const getPlayerStyleLabel = () => {
+    const option = PLAYER_STYLE_OPTIONS.find(
+      (o) => o.value === settings.playerStyle,
+    );
+    return option?.label || "Classic";
   };
 
   const getTextSizeLabel = () => {
@@ -398,7 +441,7 @@ export default function SettingsScreen() {
     try {
       // Clean up any old APK first
       await clearDownloadedApk();
-      
+
       const apkPath = await downloadApk(updateInfo.apkUrl, (progress) => {
         setDownloadProgress(Math.round(progress * 100));
       });
@@ -408,23 +451,20 @@ export default function SettingsScreen() {
       }
       setDownloadingApk(false);
       setInstallingApk(true);
-      
+
       const contentUri = await getApkContentUri(apkPath);
       if (!contentUri) {
         setUpdateError("Failed to prepare update for installation");
         return;
       }
-      
+
       // Use modern intent action for Android 10+
-      await IntentLauncher.startActivityAsync(
-        "android.intent.action.VIEW",
-        {
-          data: contentUri,
-          type: "application/vnd.android.package-archive",
-          flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
-        },
-      );
-      
+      await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
+        data: contentUri,
+        type: "application/vnd.android.package-archive",
+        flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
+      });
+
       // Clean up the APK after successful install launch
       await clearDownloadedApk();
     } catch (error) {
@@ -594,6 +634,14 @@ export default function SettingsScreen() {
                 onPress={() => setShowPlayerEngineModal(true)}
                 showChevron
               />
+              <SettingsRow
+                icon="tv"
+                title="Player Style"
+                subtitle="On-screen player UI during playback"
+                value={getPlayerStyleLabel()}
+                onPress={() => setShowPlayerStyleModal(true)}
+                showChevron
+              />
             </View>
           </View>
 
@@ -690,7 +738,9 @@ export default function SettingsScreen() {
                 title="Developer"
                 subtitle="dereferencex"
                 value=""
-                onPress={() => Linking.openURL("https://github.com/dereferencex")}
+                onPress={() =>
+                  Linking.openURL("https://github.com/dereferencex")
+                }
                 showChevron
               />
               {!isFdroid &&
@@ -924,6 +974,52 @@ export default function SettingsScreen() {
                   </ThemedText>
                 </View>
                 {settings.playerEngine === option.value ? (
+                  <Ionicons name="checkmark" size={20} color={theme.primary} />
+                ) : null}
+              </FocusableOption>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={showPlayerStyleModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPlayerStyleModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowPlayerStyleModal(false)}
+          focusable={!isTV}
+        >
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: theme.backgroundDefault },
+            ]}
+          >
+            <ThemedText type="h4" style={styles.modalTitle}>
+              Player Style
+            </ThemedText>
+            {PLAYER_STYLE_OPTIONS.map((option, idx) => (
+              <FocusableOption
+                key={option.value}
+                onPress={() => handlePlayerStyleSelect(option.value)}
+                isSelected={settings.playerStyle === option.value}
+                accessibilityLabel={option.label}
+                hasTVPreferredFocus={isTV && idx === 0}
+              >
+                <View style={{ flex: 1 }}>
+                  <ThemedText type="body">{option.label}</ThemedText>
+                  <ThemedText
+                    type="caption"
+                    style={{ color: theme.textSecondary }}
+                  >
+                    {option.desc}
+                  </ThemedText>
+                </View>
+                {settings.playerStyle === option.value ? (
                   <Ionicons name="checkmark" size={20} color={theme.primary} />
                 ) : null}
               </FocusableOption>

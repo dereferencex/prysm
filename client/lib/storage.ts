@@ -85,6 +85,7 @@ export const USER_AGENT_STRINGS: Record<UserAgent, string> = {
 };
 
 export type PlayerEngine = "exoplayer" | "vlc";
+export type PlayerStyle = "default" | "modern";
 
 export interface AppSettings {
   autoPlay: boolean;
@@ -96,6 +97,8 @@ export interface AppSettings {
   lastCategory: string;
   textSize: TextSizeOption;
   playerEngine: PlayerEngine;
+  /** Which on-screen player UI to render during playback. */
+  playerStyle: PlayerStyle;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -108,6 +111,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   lastCategory: "All",
   textSize: "medium",
   playerEngine: "exoplayer",
+  playerStyle: "default",
 };
 
 interface PlaylistMeta {
@@ -600,9 +604,13 @@ export async function saveNetworkStreamConfig(
   }
 }
 
-export async function getChannelPlayerEngine(channelId: string): Promise<PlayerEngine | null> {
+export async function getChannelPlayerEngine(
+  channelId: string,
+): Promise<PlayerEngine | null> {
   try {
-    const data = await AsyncStorage.getItem(`${STORAGE_KEYS.CHANNEL_ENGINE}${channelId}`);
+    const data = await AsyncStorage.getItem(
+      `${STORAGE_KEYS.CHANNEL_ENGINE}${channelId}`,
+    );
     return (data as PlayerEngine) || null;
   } catch (error) {
     console.error("Error getting channel player engine:", error);
@@ -610,9 +618,15 @@ export async function getChannelPlayerEngine(channelId: string): Promise<PlayerE
   }
 }
 
-export async function setChannelPlayerEngine(channelId: string, engine: PlayerEngine): Promise<void> {
+export async function setChannelPlayerEngine(
+  channelId: string,
+  engine: PlayerEngine,
+): Promise<void> {
   try {
-    await AsyncStorage.setItem(`${STORAGE_KEYS.CHANNEL_ENGINE}${channelId}`, engine);
+    await AsyncStorage.setItem(
+      `${STORAGE_KEYS.CHANNEL_ENGINE}${channelId}`,
+      engine,
+    );
   } catch (error) {
     console.error("Error setting channel player engine:", error);
   }
