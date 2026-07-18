@@ -1,4 +1,5 @@
 import { VideoQuality } from "@/components/AdvancedVideoPlayer";
+import { fetchManifestText } from "@/lib/manifest-fetch-cache";
 
 /**
  * Microsoft Smooth Streaming manifest quality parser.
@@ -21,19 +22,7 @@ export async function parseMSSQualities(
   customHeaders?: Record<string, string>,
 ): Promise<VideoQuality[]> {
   try {
-    const response = await fetch(manifestUrl, {
-      headers: {
-        Accept: "*/*",
-        ...(customHeaders || {}),
-      },
-    });
-
-    if (!response.ok) {
-      console.warn("Failed to fetch MSS manifest:", response.status);
-      return [];
-    }
-
-    const content = await response.text();
+    const content = await fetchManifestText(manifestUrl, customHeaders);
     return parseMSSManifest(content);
   } catch (error) {
     console.warn("Error parsing MSS qualities:", error);
@@ -141,8 +130,10 @@ function extractQualityLevels(content: string): MSSQualityLevel[] {
       const qlAttrs = qlMatch[1];
       const index = parseInt(getAttr(qlAttrs, "Index") ?? "0", 10);
       const bitrate = parseInt(getAttr(qlAttrs, "Bitrate") ?? "0", 10);
-      const width = parseInt(getAttr(qlAttrs, "MaxWidth") ?? "0", 10) || undefined;
-      const height = parseInt(getAttr(qlAttrs, "MaxHeight") ?? "0", 10) || undefined;
+      const width =
+        parseInt(getAttr(qlAttrs, "MaxWidth") ?? "0", 10) || undefined;
+      const height =
+        parseInt(getAttr(qlAttrs, "MaxHeight") ?? "0", 10) || undefined;
 
       if (bitrate > 0) {
         levels.push({ index, bitrate, width, height });

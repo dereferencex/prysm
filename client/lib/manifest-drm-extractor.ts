@@ -1,4 +1,5 @@
 import { DRMInfo } from "@/types/playlist";
+import { fetchManifestText } from "@/lib/manifest-fetch-cache";
 
 /**
  * Extracts DRM information from HLS or DASH manifests when KODIPROP tags
@@ -18,15 +19,18 @@ function detectManifestType(url: string): "dash" | "hls" | "unknown" {
   // ?format=mpd-vod triggering DASH detection on an HLS URL.
   const withoutQuery = url.split("?")[0].toLowerCase();
   if (withoutQuery.endsWith(".mpd")) return "dash";
-  if (withoutQuery.endsWith(".m3u8") || withoutQuery.endsWith(".m3u")) return "hls";
+  if (withoutQuery.endsWith(".m3u8") || withoutQuery.endsWith(".m3u"))
+    return "hls";
   // Fallback: check common path signals (extension-less URLs)
   const lowerFull = url.toLowerCase();
-  if (lowerFull.includes("/dash/") || lowerFull.includes("manifest.mpd")) return "dash";
+  if (lowerFull.includes("/dash/") || lowerFull.includes("manifest.mpd"))
+    return "dash";
   if (
     lowerFull.includes(".m3u8") ||
     lowerFull.includes("/hls/") ||
     lowerFull.includes("playlist")
-  ) return "hls";
+  )
+    return "hls";
   return "unknown";
 }
 
@@ -45,14 +49,10 @@ async function extractDRMFromHLS(
   customHeaders?: Record<string, string>,
 ): Promise<DRMInfo | undefined> {
   try {
-    const response = await fetch(masterUrl, {
-      headers: {
-        Accept: "*/*",
-        ...(customHeaders || {}),
-      },
-    });
-    if (!response.ok) return undefined;
-    const content = await response.text();
+    // Use the shared manifest cache so this fetch collapses with the parallel
+    // fetch from the HLS quality parser for the same URL+headers. ExoPlayer's
+    // own OkHttp fetch still happens on the native side and is not cached here.
+    const content = await fetchManifestText(masterUrl, customHeaders);
     return parseHLSDRM(content);
   } catch {
     return undefined;
@@ -63,7 +63,10 @@ function parseHLSDRM(content: string): DRMInfo | undefined {
   const lines = content.split("\n").map((l) => l.trim());
 
   for (const line of lines) {
-    if (!line.startsWith("#EXT-X-SESSION-KEY:") && !line.startsWith("#EXT-X-KEY:")) {
+    if (
+      !line.startsWith("#EXT-X-SESSION-KEY:") &&
+      !line.startsWith("#EXT-X-KEY:")
+    ) {
       continue;
     }
 
@@ -143,9 +146,8 @@ function parseHLSAttributes(line: string): Record<string, string> {
     // Strip surrounding double-quotes from the value so callers can compare
     // without worrying about quoting (e.g. keyFormat === "identity" works).
     const value = match[2];
-    attrs[match[1]] = value.startsWith('"') && value.endsWith('"')
-      ? value.slice(1, -1)
-      : value;
+    attrs[match[1]] =
+      value.startsWith('"') && value.endsWith('"') ? value.slice(1, -1) : value;
   }
   return attrs;
 }
@@ -171,9 +173,17 @@ function parseClearKeyDataUri(dataUri: string): DRMInfo | undefined {
   let jsonStr: string | undefined;
 
   if (isBase64) {
-    try { jsonStr = atob(rawPayload); } catch { /* fall through */ }
+    try {
+      jsonStr = atob(rawPayload);
+    } catch {
+      /* fall through */
+    }
   } else if (isUrlEncoded) {
-    try { jsonStr = decodeURIComponent(rawPayload); } catch { /* fall through */ }
+    try {
+      jsonStr = decodeURIComponent(rawPayload);
+    } catch {
+      /* fall through */
+    }
   }
 
   // If no encoding was declared or decoding failed, try the raw payload as JSON
@@ -217,14 +227,7 @@ async function extractDRMFromDASH(
   customHeaders?: Record<string, string>,
 ): Promise<DRMInfo | undefined> {
   try {
-    const response = await fetch(manifestUrl, {
-      headers: {
-        Accept: "*/*",
-        ...(customHeaders || {}),
-      },
-    });
-    if (!response.ok) return undefined;
-    const content = await response.text();
+    const content = await fetchManifestText(manifestUrl, customHeaders);
     return parseDASHDRM(content);
   } catch {
     return undefined;
@@ -274,7 +277,10 @@ function parseDASHDRM(content: string): DRMInfo | undefined {
  *
  * Returns undefined if no URL is found (caller should NOT use the PSSH as a URL).
  */
-function extractDASHLicenseUrl(content: string, uuid: string): string | undefined {
+function extractDASHLicenseUrl(
+  content: string,
+  uuid: string,
+): string | undefined {
   // Narrow the search to the ContentProtection block for this UUID to avoid
   // matching tags from a different DRM system's block.
   const uuidLower = uuid.toLowerCase();
@@ -298,7 +304,9 @@ function extractDASHLicenseUrl(content: string, uuid: string): string | undefine
   const cpBlock = content.substring(tagStart, cpEnd);
 
   // 1. DASH-IF `<dashif:laurl>` element
-  const laurlMatch = cpBlock.match(/<dashif:laurl[^>]*>([^<]+)<\/dashif:laurl>/i);
+  const laurlMatch = cpBlock.match(
+    /<dashif:laurl[^>]*>([^<]+)<\/dashif:laurl>/i,
+  );
   if (laurlMatch) return laurlMatch[1].trim();
 
   // 2. `laurl` attribute on the ContentProtection element itself
@@ -306,7 +314,9 @@ function extractDASHLicenseUrl(content: string, uuid: string): string | undefine
   if (laurlAttrMatch) return laurlAttrMatch[1].trim();
 
   // 3. PlayReady `<mspr:pro>` — base64-encoded PlayReady Object XML containing <LA_URL>
-  const msproMatch = cpBlock.match(/<mspr:pro[^>]*>([A-Za-z0-9+/=\s]+)<\/mspr:pro>/i);
+  const msproMatch = cpBlock.match(
+    /<mspr:pro[^>]*>([A-Za-z0-9+/=\s]+)<\/mspr:pro>/i,
+  );
   if (msproMatch) {
     try {
       // The PlayReady Object is a UTF-16LE XML document.
@@ -348,7 +358,10 @@ function extractPssh(content: string, uuid: string): string | undefined {
     // For each PSSH box, look back to the nearest ContentProtection opening tag
     // and check whether it belongs to the requested DRM system UUID.
     const psshStart = match.index;
-    const cpTagStart = contentLower.lastIndexOf("<contentprotection", psshStart);
+    const cpTagStart = contentLower.lastIndexOf(
+      "<contentprotection",
+      psshStart,
+    );
     if (cpTagStart === -1) continue;
 
     const cpHeader = contentLower.substring(cpTagStart, psshStart);

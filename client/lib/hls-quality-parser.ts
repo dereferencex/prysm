@@ -1,4 +1,5 @@
 import { VideoQuality } from "@/components/AdvancedVideoPlayer";
+import { fetchManifestText } from "@/lib/manifest-fetch-cache";
 
 interface HLSVariant {
   bandwidth: number;
@@ -12,19 +13,7 @@ export async function parseHLSQualities(
   customHeaders?: Record<string, string>,
 ): Promise<VideoQuality[]> {
   try {
-    const response = await fetch(masterPlaylistUrl, {
-      headers: {
-        Accept: "*/*",
-        ...(customHeaders || {}),
-      },
-    });
-
-    if (!response.ok) {
-      console.warn("Failed to fetch HLS manifest:", response.status);
-      return [];
-    }
-
-    const content = await response.text();
+    const content = await fetchManifestText(masterPlaylistUrl, customHeaders);
     return parseHLSManifest(content, masterPlaylistUrl);
   } catch (error) {
     console.warn("Error parsing HLS qualities:", error);

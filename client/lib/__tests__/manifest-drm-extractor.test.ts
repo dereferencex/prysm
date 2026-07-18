@@ -1,4 +1,5 @@
 import { extractDRMFromManifest } from "../manifest-drm-extractor";
+import { clearManifestCache } from "../manifest-fetch-cache";
 
 const originalFetch = global.fetch;
 
@@ -8,6 +9,13 @@ function setManifest(body: string): void {
     text: async () => body,
   })) as unknown as typeof global.fetch;
 }
+
+// The extractor now uses a shared manifest fetch cache so the HLS quality
+// parser and DRM extractor don't both fetch the same manifest. Tests reuse
+// the same URL with different bodies, so clear the cache between tests.
+beforeEach(() => {
+  clearManifestCache();
+});
 
 afterEach(() => {
   global.fetch = originalFetch;

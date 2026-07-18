@@ -21,6 +21,7 @@ import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.drm.DefaultDrmSessionManager
@@ -43,8 +44,10 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 private val sharedOkHttpClient: OkHttpClient = OkHttpClient.Builder()
-    .connectTimeout(15, TimeUnit.SECONDS)
-    .readTimeout(15, TimeUnit.SECONDS)
+    .connectTimeout(8, TimeUnit.SECONDS)
+    .readTimeout(8, TimeUnit.SECONDS)
+    .callTimeout(8, TimeUnit.SECONDS)
+    .retryOnConnectionFailure(true)
     .build()
 
 private const val DEFAULT_USER_AGENT =
@@ -707,12 +710,29 @@ class ExoPlayerController(
             )
         }
 
+        // Tuned for live IPTV: fast start, quick recovery from rebuffer, modest
+        // upper bound so we don't burn heap on low-end TV boxes. ExoPlayer's
+        // defaults (minBuffer=50s) cause very long initial-fill and post-rebuffer
+        // waits on typical IPTV bitrates.
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                /* minBufferMs       = */ 15_000,
+                /* maxBufferMs       = */ 30_000,
+                /* bufferForPlaybackMs                 = */ 1_000,
+                /* bufferForPlaybackAfterRebufferMs     = */ 2_000,
+            )
+            .setTargetBufferBytes(DefaultLoadControl.DEFAULT_TARGET_BUFFER_BYTES)
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+
         val player = ExoPlayer.Builder(context)
             .setRenderersFactory(renderersFactory)
             .setTrackSelector(trackSelector)
             .setMediaSourceFactory(mediaSourceFactory)
             .setAudioAttributes(audioAttrs, false)
             .setHandleAudioBecomingNoisy(true)
+            .setLoadControl(loadControl)
+            .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
 
         surfaceView?.let { player.setVideoSurfaceView(it) }

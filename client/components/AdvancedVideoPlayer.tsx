@@ -556,24 +556,18 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
         setChannelPlayerEngine(channelId, engine);
       }
       if (tvPlayerRef.current) {
+        // PlayerManager.switchEngine() already reloads the current source from
+        // lastLoadParams and resumes playback (see PlayerManager.kt). Calling
+        // loadSource() here as well would cause a SECOND full ExoPlayer
+        // teardown+rebuild on every engine switch — visible as a long
+        // buffering spike. Just trigger the engine switch.
         TvPlayerCommands.setPlayerEngine(tvPlayerRef, engine);
         setError(null);
         setIsLoading(true);
         consecutiveErrorCountRef.current = 0;
-        TvPlayerCommands.loadSource(tvPlayerRef, {
-          url: currentSource,
-          headers:
-            headers && Object.keys(headers).length > 0 ? headers : undefined,
-          drmType: drm?.type,
-          drmLicenseUrl: drm?.licenseServer,
-          drmLicenseKey: drm?.licenseKey,
-          drmHeaders: drm?.headers,
-          drmPssh: drm?.pssh,
-          autoPlay: true,
-        });
       }
     },
-    [channelId, currentSource, headers, drm],
+    [channelId],
   );
 
   // ── Native player load ────────────────────────────────────────────────────
@@ -595,14 +589,29 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
     });
   }, [currentSource, headers, drm, autoPlay, activePlayerEngine]);
 
+  // Reduce the `drm` object to a primitive signature so the loadSource effect
+  // doesn't re-fire on every render due to a new object identity for the same
+  // DRM config. This is the root cause of the "double load on channel change":
+  // PlayerScreen mounts with drm=undefined, fires loadSource, then async
+  // manifest DRM detection resolves to a new object → re-fires loadSource →
+  // ExoPlayer is torn down and rebuilt mid-first-buffer.
+  const drmSignature = useMemo(
+    () =>
+      drm
+        ? `${drm.type || ""}|${drm.licenseServer || ""}|${drm.licenseKey || ""}|${drm.certificateUrl || ""}|${drm.pssh || ""}`
+        : "",
+    [drm],
+  );
+
   // Run loadSource whenever these values change, but guard on native readiness.
   useEffect(() => {
     if (nativeReadyRef.current) {
       loadSource();
     }
     // nativeReadyRef is not reactive — intentionally omitted from deps.
+    // drmSignature replaces drm (object) so we compare by value, not identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSource, headers, drm, autoPlay, activePlayerEngine]);
+  }, [currentSource, headers, drmSignature, autoPlay, activePlayerEngine]);
 
   // Keep a ref to the latest loadSource so the callback ref always calls the current version
   const loadSourceRef = useRef(loadSource);

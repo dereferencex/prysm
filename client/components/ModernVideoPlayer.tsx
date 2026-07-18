@@ -308,6 +308,20 @@ export const ModernVideoPlayer = React.memo(function ModernVideoPlayer({
     };
   }, [currentSource]);
 
+  // Reduce the `drm` object to a primitive signature so the loadSource effect
+  // doesn't re-fire on every render due to a new object identity for the same
+  // DRM config. This is the root cause of the "double load on channel change":
+  // PlayerScreen mounts with drm=undefined, fires loadSource, then async
+  // manifest DRM detection resolves to a new object → re-fires loadSource →
+  // ExoPlayer is torn down and rebuilt mid-first-buffer.
+  const drmSignature = useMemo(
+    () =>
+      drm
+        ? `${drm.type || ""}|${drm.licenseServer || ""}|${drm.licenseKey || ""}|${drm.certificateUrl || ""}|${drm.pssh || ""}`
+        : "",
+    [drm],
+  );
+
   // ── Native player load ───────────────────────────────────────────────────
   const loadSource = useCallback(() => {
     if (!tvPlayerRef.current) return;
@@ -325,12 +339,16 @@ export const ModernVideoPlayer = React.memo(function ModernVideoPlayer({
       drmPssh: drm?.pssh,
       autoPlay,
     });
-  }, [currentSource, headers, drm, autoPlay, activePlayerEngine]);
+    // drmSignature replaces drm (object) so the callback identity is stable
+    // across renders with the same DRM config.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSource, headers, drmSignature, autoPlay, activePlayerEngine]);
 
   useEffect(() => {
     if (nativeReadyRef.current) loadSource();
+    // nativeReadyRef is not reactive — intentionally omitted from deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSource, headers, drm, autoPlay, activePlayerEngine]);
+  }, [currentSource, headers, drmSignature, autoPlay, activePlayerEngine]);
 
   const loadSourceRef = useRef(loadSource);
   loadSourceRef.current = loadSource;
@@ -447,26 +465,18 @@ export const ModernVideoPlayer = React.memo(function ModernVideoPlayer({
       setActivePlayerEngine(engine);
       if (channelId) setChannelPlayerEngine(channelId, engine);
       if (tvPlayerRef.current) {
+        // PlayerManager.switchEngine() already reloads the current source
+        // from lastLoadParams and resumes playback. Calling loadSource() here
+        // too would cause a SECOND full ExoPlayer rebuild.
         TvPlayerCommands.setPlayerEngine(tvPlayerRef, engine);
         setError(null);
         setIsLoading(true);
         consecutiveErrorCountRef.current = 0;
-        TvPlayerCommands.loadSource(tvPlayerRef, {
-          url: currentSource,
-          headers:
-            headers && Object.keys(headers).length > 0 ? headers : undefined,
-          drmType: drm?.type,
-          drmLicenseUrl: drm?.licenseServer,
-          drmLicenseKey: drm?.licenseKey,
-          drmHeaders: drm?.headers,
-          drmPssh: drm?.pssh,
-          autoPlay: true,
-        });
       }
       setShowEngineModal(false);
       scheduleHide();
     },
-    [channelId, currentSource, headers, drm, scheduleHide],
+    [channelId, scheduleHide],
   );
 
   const handleSelectAudio = useCallback(

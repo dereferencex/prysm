@@ -1,4 +1,5 @@
 import { VideoQuality } from "@/components/AdvancedVideoPlayer";
+import { fetchManifestText } from "@/lib/manifest-fetch-cache";
 
 /**
  * DASH manifest quality parser.
@@ -21,19 +22,7 @@ export async function parseDASHQualities(
   customHeaders?: Record<string, string>,
 ): Promise<VideoQuality[]> {
   try {
-    const response = await fetch(manifestUrl, {
-      headers: {
-        Accept: "*/*",
-        ...(customHeaders || {}),
-      },
-    });
-
-    if (!response.ok) {
-      console.warn("Failed to fetch DASH manifest:", response.status);
-      return [];
-    }
-
-    const content = await response.text();
+    const content = await fetchManifestText(manifestUrl, customHeaders);
     return parseDASHManifest(content);
   } catch (error) {
     console.warn("Error parsing DASH qualities:", error);
@@ -121,7 +110,8 @@ function extractRepresentations(content: string): DASHRepresentation[] {
 
   // Split on AdaptationSet opening tags — captures everything up to the next one
   // or to the end of the manifest.
-  const adaptationSetRegex = /<AdaptationSet([^>]*)>([\s\S]*?)<\/AdaptationSet>/gi;
+  const adaptationSetRegex =
+    /<AdaptationSet([^>]*)>([\s\S]*?)<\/AdaptationSet>/gi;
   let asMatch: RegExpExecArray | null;
 
   while ((asMatch = adaptationSetRegex.exec(content)) !== null) {
@@ -129,8 +119,10 @@ function extractRepresentations(content: string): DASHRepresentation[] {
     const asBody = asMatch[2];
 
     // Determine if this is a video AdaptationSet
-    const mimeType = getAttr(asAttrs, "mimeType") ?? getAttr(asAttrs, "mimetype") ?? "";
-    const contentType = getAttr(asAttrs, "contentType") ?? getAttr(asAttrs, "contenttype") ?? "";
+    const mimeType =
+      getAttr(asAttrs, "mimeType") ?? getAttr(asAttrs, "mimetype") ?? "";
+    const contentType =
+      getAttr(asAttrs, "contentType") ?? getAttr(asAttrs, "contenttype") ?? "";
 
     const isVideo =
       mimeType.startsWith("video/") ||
@@ -144,7 +136,8 @@ function extractRepresentations(content: string): DASHRepresentation[] {
     // Extract each Representation within this AdaptationSet
     // Inherit width/height/codecs from AdaptationSet if not on the Representation itself
     const asWidth = parseInt(getAttr(asAttrs, "width") ?? "0", 10) || undefined;
-    const asHeight = parseInt(getAttr(asAttrs, "height") ?? "0", 10) || undefined;
+    const asHeight =
+      parseInt(getAttr(asAttrs, "height") ?? "0", 10) || undefined;
 
     const repRegex = /<Representation([^>]*)\/?>/gi;
     let repMatch: RegExpExecArray | null;
@@ -154,7 +147,8 @@ function extractRepresentations(content: string): DASHRepresentation[] {
       const id = getAttr(repAttrs, "id") ?? "";
       const bandwidth = parseInt(getAttr(repAttrs, "bandwidth") ?? "0", 10);
       const width = parseInt(getAttr(repAttrs, "width") ?? "0", 10) || asWidth;
-      const height = parseInt(getAttr(repAttrs, "height") ?? "0", 10) || asHeight;
+      const height =
+        parseInt(getAttr(repAttrs, "height") ?? "0", 10) || asHeight;
 
       if (bandwidth > 0) {
         representations.push({
