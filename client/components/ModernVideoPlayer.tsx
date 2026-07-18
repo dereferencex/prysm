@@ -35,7 +35,14 @@ import {
 import * as Haptics from "expo-haptics";
 import { useKeepAwake } from "expo-keep-awake";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Defs, Rect, Stop, Svg } from "react-native-svg";
+import {
+  Defs,
+  LinearGradient,
+  RadialGradient,
+  Rect,
+  Stop,
+  Svg,
+} from "react-native-svg";
 
 import { ThemedText } from "@/components/ThemedText";
 import { Colors, Spacing, BorderRadius } from "@/constants/theme";
@@ -801,16 +808,16 @@ export const ModernVideoPlayer = React.memo(function ModernVideoPlayer({
         <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
           <Svg width={width} height={height} style={StyleSheet.absoluteFill}>
             <Defs>
-              <linearGradient id="bottomGrad" x1="0" y1="1" x2="0" y2="0">
+              <LinearGradient id="bottomGrad" x1="0" y1="1" x2="0" y2="0">
                 <Stop offset="0%" stopColor="#000000" stopOpacity={0.92} />
                 <Stop offset="38%" stopColor="#000000" stopOpacity={0.55} />
                 <Stop offset="60%" stopColor="#000000" stopOpacity={0.18} />
                 <Stop offset="100%" stopColor="#000000" stopOpacity={0} />
-              </linearGradient>
-              <radialGradient id="vignette" cx="50%" cy="50%" r="75%">
+              </LinearGradient>
+              <RadialGradient id="vignette" cx="50%" cy="50%" r="75%">
                 <Stop offset="55%" stopColor="#000000" stopOpacity={0} />
                 <Stop offset="100%" stopColor="#000000" stopOpacity={0.55} />
-              </radialGradient>
+              </RadialGradient>
             </Defs>
             <Rect
               x="0"
