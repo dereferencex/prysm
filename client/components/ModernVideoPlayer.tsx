@@ -142,6 +142,14 @@ export const ModernVideoPlayer = React.memo(function ModernVideoPlayer({
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
 
+  // Portrait phones don't have room for the wide three-section info bar, so
+  // the bottom overlay collapses to a stacked layout: logo + metadata on top,
+  // EPG below. The existing classic player has no horizontal info strip so it
+  // already fits portrait; this keeps the modern one usable on phones too.
+  const isPortrait = height > width;
+  const narrow = width < 700;
+  const compact = isPortrait || narrow;
+
   // ── Refs ─────────────────────────────────────────────────────────────────
   const tvPlayerRef = useRef<any>(null);
   const nativeReadyRef = useRef(false);
@@ -935,17 +943,21 @@ export const ModernVideoPlayer = React.memo(function ModernVideoPlayer({
             style={[
               styles.bottomBar,
               {
-                paddingBottom: Math.max(insets.bottom, 40),
-                paddingLeft: Math.max(insets.left, 48),
-                paddingRight: Math.max(insets.right, 48),
+                paddingBottom: Math.max(insets.bottom, compact ? 24 : 40),
+                paddingLeft: Math.max(insets.left, compact ? 20 : 48),
+                paddingRight: Math.max(insets.right, compact ? 20 : 48),
               },
               infoAnim,
             ]}
           >
-            <View style={styles.bottomBarRow}>
+            <View
+              style={compact ? styles.bottomBarRowCompact : styles.bottomBarRow}
+            >
               {/* ── Left: logo card ───────────────────────────────────────── */}
               <View style={styles.logoSection}>
-                <View style={styles.logoCard}>
+                <View
+                  style={compact ? styles.logoCardCompact : styles.logoCard}
+                >
                   {poster ? (
                     <Image
                       source={{ uri: poster }}
@@ -955,7 +967,12 @@ export const ModernVideoPlayer = React.memo(function ModernVideoPlayer({
                     />
                   ) : (
                     <ThemedText
-                      style={[styles.logoFallback, { color: "#1A1A1A" }]}
+                      style={[
+                        compact
+                          ? styles.logoFallbackCompact
+                          : styles.logoFallback,
+                        { color: "#1A1A1A" },
+                      ]}
                     >
                       {(title || "TV").slice(0, 1).toUpperCase()}
                     </ThemedText>
@@ -968,7 +985,9 @@ export const ModernVideoPlayer = React.memo(function ModernVideoPlayer({
                 {channelNumberStr && (
                   <ThemedText
                     style={[
-                      styles.channelNumber,
+                      compact
+                        ? styles.channelNumberCompact
+                        : styles.channelNumber,
                       { color: ACCENT.textPrimary },
                     ]}
                   >
@@ -976,13 +995,20 @@ export const ModernVideoPlayer = React.memo(function ModernVideoPlayer({
                   </ThemedText>
                 )}
                 <ThemedText
-                  style={[styles.channelName, { color: ACCENT.textPrimary }]}
-                  numberOfLines={2}
+                  style={[
+                    compact ? styles.channelNameCompact : styles.channelName,
+                    { color: ACCENT.textPrimary },
+                  ]}
+                  numberOfLines={compact ? 1 : 2}
                 >
                   {title || "Untitled Channel"}
                 </ThemedText>
                 <ThemedText
-                  style={[styles.streamMeta, { color: ACCENT.textMuted }]}
+                  style={[
+                    compact ? styles.streamMetaCompact : styles.streamMeta,
+                    { color: ACCENT.textMuted },
+                  ]}
+                  numberOfLines={compact ? 1 : undefined}
                 >
                   {resolutionLabel}
                   {` · ${engineLabel}`}
@@ -990,18 +1016,20 @@ export const ModernVideoPlayer = React.memo(function ModernVideoPlayer({
                 </ThemedText>
 
                 {/* Playback stats */}
-                <View style={styles.statsRow}>
-                  <StatBar
-                    label="Signal"
-                    value={signalPct}
-                    color={ACCENT.signal}
-                  />
-                  <StatBar
-                    label="Quality"
-                    value={qualityPct}
-                    color={ACCENT.quality}
-                  />
-                </View>
+                {!compact && (
+                  <View style={styles.statsRow}>
+                    <StatBar
+                      label="Signal"
+                      value={signalPct}
+                      color={ACCENT.signal}
+                    />
+                    <StatBar
+                      label="Quality"
+                      value={qualityPct}
+                      color={ACCENT.quality}
+                    />
+                  </View>
+                )}
                 {isLive && (
                   <View style={styles.livePill}>
                     <View style={styles.liveDot} />
@@ -1018,66 +1046,76 @@ export const ModernVideoPlayer = React.memo(function ModernVideoPlayer({
               </View>
 
               {/* ── Right: now/next EPG-style strip ───────────────────────── */}
-              <View style={styles.epgSection}>
-                <View style={styles.glassCard}>
-                  <View style={styles.epgNow}>
-                    <View style={styles.liveBadge}>
+              {/* On portrait/narrow phones the three-section row can't fit the
+                  320px EPG card; hide it and rely on the metadata section's
+                  LIVE badge + program title which already conveys the same
+                  information. Landscape TVs and large screens get the full
+                  now/next strip. */}
+              {!compact && (
+                <View style={styles.epgSection}>
+                  <View style={[styles.glassCard, { width: "100%" }]}>
+                    <View style={styles.epgNow}>
+                      <View style={styles.liveBadge}>
+                        <ThemedText
+                          style={[
+                            styles.liveBadgeText,
+                            { color: ACCENT.textPrimary },
+                          ]}
+                        >
+                          LIVE
+                        </ThemedText>
+                      </View>
                       <ThemedText
                         style={[
-                          styles.liveBadgeText,
-                          { color: ACCENT.textPrimary },
+                          styles.epgTime,
+                          { color: ACCENT.textSecondary },
                         ]}
                       >
-                        LIVE
+                        Now
                       </ThemedText>
                     </View>
                     <ThemedText
-                      style={[styles.epgTime, { color: ACCENT.textSecondary }]}
-                    >
-                      Now
-                    </ThemedText>
-                  </View>
-                  <ThemedText
-                    style={[
-                      styles.epgProgramTitle,
-                      { color: ACCENT.textPrimary },
-                    ]}
-                    numberOfLines={2}
-                  >
-                    {title || "Now Playing"}
-                  </ThemedText>
-                  {subtitle ? (
-                    <ThemedText
                       style={[
-                        styles.epgProgramSub,
-                        { color: ACCENT.textMuted },
+                        styles.epgProgramTitle,
+                        { color: ACCENT.textPrimary },
                       ]}
-                      numberOfLines={1}
+                      numberOfLines={2}
                     >
-                      {subtitle}
+                      {title || "Now Playing"}
                     </ThemedText>
-                  ) : null}
-
-                  {nextChannel ? (
-                    <View style={styles.epgNext}>
-                      <ThemedText
-                        style={[styles.epgTime, { color: ACCENT.textMuted }]}
-                      >
-                        {nextStartTime} · Next
-                      </ThemedText>
+                    {subtitle ? (
                       <ThemedText
                         style={[
-                          styles.epgNextTitle,
-                          { color: ACCENT.textSecondary },
+                          styles.epgProgramSub,
+                          { color: ACCENT.textMuted },
                         ]}
                         numberOfLines={1}
                       >
-                        {nextChannel.name}
+                        {subtitle}
                       </ThemedText>
-                    </View>
-                  ) : null}
+                    ) : null}
+
+                    {nextChannel ? (
+                      <View style={styles.epgNext}>
+                        <ThemedText
+                          style={[styles.epgTime, { color: ACCENT.textMuted }]}
+                        >
+                          {nextStartTime} · Next
+                        </ThemedText>
+                        <ThemedText
+                          style={[
+                            styles.epgNextTitle,
+                            { color: ACCENT.textSecondary },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {nextChannel.name}
+                        </ThemedText>
+                      </View>
+                    ) : null}
+                  </View>
                 </View>
-              </View>
+              )}
             </View>
 
             {/* Transport row + feature indicators */}
@@ -1563,6 +1601,11 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     gap: Spacing["2xl"],
   },
+  bottomBarRowCompact: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
   logoSection: {
     alignItems: "flex-start",
   },
@@ -1580,12 +1623,30 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 6,
   },
+  logoCardCompact: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 3,
+  },
   logoImage: {
     width: "92%",
     height: "92%",
   },
   logoFallback: {
     fontSize: 40,
+    fontWeight: "700",
+  },
+  logoFallbackCompact: {
+    fontSize: 24,
     fontWeight: "700",
   },
   metaSection: {
@@ -1600,17 +1661,35 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     lineHeight: 44,
   },
+  channelNumberCompact: {
+    fontSize: 22,
+    fontWeight: "800",
+    letterSpacing: 1,
+    lineHeight: 26,
+  },
   channelName: {
     fontSize: 26,
     fontWeight: "700",
     letterSpacing: 0.4,
     lineHeight: 32,
   },
+  channelNameCompact: {
+    fontSize: 17,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+    lineHeight: 22,
+  },
   streamMeta: {
     fontSize: 13,
     fontWeight: "500",
     letterSpacing: 0.4,
     marginTop: 4,
+  },
+  streamMetaCompact: {
+    fontSize: 11,
+    fontWeight: "500",
+    letterSpacing: 0.2,
+    marginTop: 2,
   },
   statsRow: {
     flexDirection: "row",
