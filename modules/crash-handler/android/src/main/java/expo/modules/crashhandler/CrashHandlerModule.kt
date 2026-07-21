@@ -50,7 +50,7 @@ class CrashHandlerModule : Module() {
 
     AsyncFunction("getAndConsumePendingCrashes") { promise: Promise ->
       try {
-        val crashes = readAndConsumeCrashFiles()
+        val crashes = readAndConsumeCrashFile()
         promise.resolve(crashes)
       } catch (e: Exception) {
         // Never let log retrieval propagate as a crash.
