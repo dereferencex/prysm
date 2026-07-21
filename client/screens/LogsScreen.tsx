@@ -25,6 +25,7 @@ import {
   LEVEL_ORDER,
   type LogEntry,
   type LogLevel,
+  type LogSource,
 } from "@/lib/logStore";
 
 const isTV = Platform.isTV;
@@ -43,6 +44,12 @@ const LEVEL_LABELS: Record<LogLevel, string> = {
   warn: "Warn",
   error: "Error",
   fatal: "Fatal",
+};
+
+const SOURCE_COLORS: Record<LogSource, string> = {
+  js: "rgba(156,163,175,0.55)",
+  native: "#38BDF8",
+  crash: "#FF3B30",
 };
 
 const LEVEL_FILL: Record<LogLevel, string> = {
@@ -313,7 +320,12 @@ export default function LogsScreen() {
                   {LEVEL_LABELS[item.level].toUpperCase()}
                 </ThemedText>
                 <ThemedText
-                  style={[styles.sourceChip, { color: theme.textSecondary }]}
+                  style={[
+                    styles.sourceChip,
+                    {
+                      color: SOURCE_COLORS[item.source] ?? theme.textSecondary,
+                    },
+                  ]}
                 >
                   {item.source}
                   {item.tag ? ` · ${item.tag}` : ""}

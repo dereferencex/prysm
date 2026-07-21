@@ -2,6 +2,11 @@ import { useEffect, useRef } from "react";
 
 import { appendLog, type LogLevel, type LogSource } from "@/lib/logStore";
 import { getPendingCrashes } from "../../modules/crash-handler/src";
+import {
+  startLogcatCapture,
+  stopLogcatCapture,
+  addLogcatLineListener,
+} from "../../modules/logcat-reader/src";
 
 /**
  * Invisible component mounted high in the tree (see App.tsx) to attach all
@@ -9,17 +14,17 @@ import { getPendingCrashes } from "../../modules/crash-handler/src";
  * safe; the second install is a no-op.
  *
  * Captured sources:
- *   - console.log / info / warn / error / debug / trace
+ *   - console.log / info / warn / error / debug / trace (JS)
  *   - ErrorUtils global handler (uncaught JS exceptions, including fatal
  *     red-screen exceptions on debug builds)
  *   - native (JVM) uncaught-exception stack traces written by
  *     modules/crash-handler (Kotlin) on a previous run, surfaced here as
- *     level="fatal" source="crash" via getPendingCrashes().
- *
- * Not captured:
- *   - real-time Android `logcat` — requires Runtime.exec, no RN API.
- *     File-based breadcrumb above is the practical alternative, since the
- *     thing callers actually need is the crash stacktrace, not all stdout.
+ *     level="fatal" source="crash" via getPendingCrashes()
+ *   - live native logcat lines via modules/logcat-reader (Kotlin) emitted
+ *     as source="native" with the severity parsed from the threadtime
+ *     logcat letter (V/D/I/W/E/F). Captures ExoPlayerController/Log.d/i/w/e,
+ *     TvPlayerModule events, MediaPeriod / LoadControl / Buffering state
+ *     changes, and anything else that hits Android logcat from our PID.
  */
 
 let installed = false;
@@ -123,6 +128,58 @@ function attachGlobalExceptionHandler(): () => void {
   };
 }
 
+/**
+ * Parse one `logcat -v threadtime` line into the LogEntry shape.
+ *
+ * threadtime format:
+ *   MM-DD HH:MM:SS.ms  PID  TID  LEVEL  TAG: MSG
+ * Example:
+ *   07-21 14:23:05.123  1234  5678 I ExoPlayerController: built and prepared
+ *
+ * Defensive: malformed lines (e.g. logcat's "--------- beginning of main"
+ * divider, or empty lines from buffer races) get level=info with the raw
+ * line as the message so the user still sees them in the viewer.
+ */
+function parseLogcatLine(raw: string): {
+  level: LogLevel;
+  tag?: string;
+  message: string;
+} {
+  // Skip the "--------- beginning of ..." banner that logcat emits on start.
+  if (raw.startsWith("---------")) {
+    return { level: "debug", message: raw };
+  }
+
+  // Split: [date+time] [pid] [tid] [level] [tag: msg]
+  // threadtime separates fields with whitespace, but the tag follows the
+  // single-letter level directly with no space — e.g. "I ExoPlayerCtrl: msg"
+  const m = raw.match(
+    /^\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3}\s+\d+\s+\d+\s+([VDIWEF])\s+([^:]+):\s?(.*)$/,
+  );
+  if (!m) {
+    return { level: "info", message: raw };
+  }
+
+  const levelLetter = m[1];
+  const tag = m[2].trim();
+  const message = m[3];
+
+  const levelMap: Record<string, LogLevel> = {
+    V: "debug",
+    D: "debug",
+    I: "info",
+    W: "warn",
+    E: "error",
+    F: "fatal",
+  };
+
+  return {
+    level: levelMap[levelLetter] ?? "info",
+    tag,
+    message,
+  };
+}
+
 export function LogCapture(): null {
   const installedRef = useRef(false);
 
@@ -164,9 +221,31 @@ export function LogCapture(): null {
         // module unavailable (non-Android, pre-prebuild) — silently skip
       });
 
+    // Start streaming native logcat lines (Android 13+ only; on older
+    // versions startLogcatCapture returns false and we no-op). Each line
+    // is parsed from threadtime format and forwarded to the ring buffer
+    // with source="native".
+    let logcatActive = false;
+    startLogcatCapture().then((ok) => {
+      logcatActive = ok;
+    });
+
+    const removeLogcatListener = addLogcatLineListener((event) => {
+      const parsed = parseLogcatLine(event.raw);
+      appendLog({
+        ts: Date.now(),
+        level: parsed.level,
+        source: "native",
+        tag: parsed.tag,
+        message: parsed.message,
+      });
+    });
+
     return () => {
       restoreConsole();
       restoreHandler();
+      removeLogcatListener();
+      if (logcatActive) stopLogcatCapture();
       installed = false;
     };
   }, []);

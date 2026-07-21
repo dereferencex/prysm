@@ -54,6 +54,9 @@
         "./modules/crash-handler/plugin"
       ],
       [
+        "./modules/logcat-reader/plugin"
+      ],
+      [
         "./plugins/withAbiSplits",
         {}
       ],

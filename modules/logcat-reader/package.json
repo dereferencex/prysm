@@ -1,0 +1,9 @@
+{
+  "name": "logcat-reader",
+  "version": "1.0.0",
+  "description": "Streams the app's own Android logcat lines into the in-app log viewer via a module-level event emitter.",
+  "main": "src/index.ts",
+  "expo": {
+    "name": "LogcatReader"
+  }
+}
