@@ -29,3 +29,14 @@ dependencies {
   implementation project(':expo-modules-core')
   implementation "org.jetbrains.kotlin:kotlin-stdlib:${getKotlinVersion()}"
 }
+
+def safeExtGet(prop, fallback) {
+  rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
+}
+
+def getKotlinVersion() {
+  if (rootProject.ext.has('kotlinVersion')) {
+    return rootProject.ext.get('kotlinVersion')
+  }
+  return '1.9.24'
+}
