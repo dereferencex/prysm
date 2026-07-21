@@ -1,0 +1,9 @@
+{
+  "name": "crash-handler",
+  "version": "1.0.0",
+  "description": "Captures native JVM uncaught-exception stack traces so the in-app log viewer can surface them on the next launch.",
+  "main": "src/index.ts",
+  "expo": {
+    "name": "CrashHandler"
+  }
+}
