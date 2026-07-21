@@ -6,6 +6,7 @@ import SetupScreen from "@/screens/SetupScreen";
 import PlayerScreen from "@/screens/PlayerScreen";
 import NetworkStreamScreen from "@/screens/NetworkStreamScreen";
 import NetworkPlayerScreen from "@/screens/NetworkPlayerScreen";
+import LogsScreen from "@/screens/LogsScreen";
 import { usePlaylist } from "@/context/PlaylistContext";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
 import { NetworkStreamConfig } from "@/lib/storage";
@@ -16,6 +17,7 @@ export type RootStackParamList = {
   Player: { channelId: string };
   NetworkStream: undefined;
   NetworkPlayer: { config: NetworkStreamConfig };
+  Logs: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -72,6 +74,13 @@ export default function RootStackNavigator() {
           animation: "fade",
           autoHideHomeIndicator: true,
           navigationBarHidden: true,
+        }}
+      />
+      <Stack.Screen
+        name="Logs"
+        component={LogsScreen}
+        options={{
+          headerTitle: "Logs",
         }}
       />
     </Stack.Navigator>
