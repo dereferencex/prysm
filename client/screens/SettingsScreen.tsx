@@ -702,6 +702,13 @@ export default function SettingsScreen() {
                 onPress={() => navigation.navigate("NetworkStream")}
                 showChevron
               />
+              <SettingsRow
+                icon="document-text-outline"
+                title="View Logs"
+                subtitle="In-app log viewer for bug reporting"
+                onPress={() => navigation.navigate("Logs")}
+                showChevron
+              />
             </View>
 
             <ThemedText

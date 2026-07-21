@@ -28,6 +28,7 @@ import RootStackNavigator from "@/navigation/RootStackNavigator";
 import { PlaylistProvider } from "@/context/PlaylistContext";
 import { ThemeProvider, useThemeContext } from "@/context/ThemeContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { LogCapture } from "@/components/LogCapture";
 import { Colors } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -144,6 +145,7 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <SafeAreaProvider>
           <ThemeProvider>
+            <LogCapture />
             <AppContent />
           </ThemeProvider>
         </SafeAreaProvider>
