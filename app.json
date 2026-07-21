@@ -51,6 +51,9 @@
         "./modules/tv-player/plugin"
       ],
       [
+        "./modules/crash-handler/plugin"
+      ],
+      [
         "./plugins/withAbiSplits",
         {}
       ],

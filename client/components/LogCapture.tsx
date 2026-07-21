@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 
 import { appendLog, type LogLevel, type LogSource } from "@/lib/logStore";
+import { getPendingCrashes } from "../../modules/crash-handler/src";
 
 /**
  * Invisible component mounted high in the tree (see App.tsx) to attach all
@@ -9,19 +10,16 @@ import { appendLog, type LogLevel, type LogSource } from "@/lib/logStore";
  *
  * Captured sources:
  *   - console.log / info / warn / error / debug / trace
- *   - ErrorUtils global handler (unhandled JS exceptions, including
- *     fatal red-screen exceptions on debug builds)
+ *   - ErrorUtils global handler (uncaught JS exceptions, including fatal
+ *     red-screen exceptions on debug builds)
+ *   - native (JVM) uncaught-exception stack traces written by
+ *     modules/crash-handler (Kotlin) on a previous run, surfaced here as
+ *     level="fatal" source="crash" via getPendingCrashes().
  *
- * Not captured (would need a native module):
- *   - real-time Android `logcat` (requires Runtime.exec, no RN API)
- *   - native (JVM) fatal crashes — the JVM process dies before JS can run;
- *     capturing those needs `Thread.setDefaultUncaughtExceptionHandler`
- *     wired in from a Kotlin module under modules/.
- *
- * When a native crash module is added later, it can write to the same
- * `logStore` directly, or write a file to cache/prysm-crashes/ that a
- * future version of this component reads on next launch — the `crash`
- * LogSource in the store is already reserved for that path.
+ * Not captured:
+ *   - real-time Android `logcat` — requires Runtime.exec, no RN API.
+ *     File-based breadcrumb above is the practical alternative, since the
+ *     thing callers actually need is the crash stacktrace, not all stdout.
  */
 
 let installed = false;
@@ -146,6 +144,25 @@ export function LogCapture(): null {
 
     const restoreConsole = patchConsole();
     const restoreHandler = attachGlobalExceptionHandler();
+
+    // Pull native crash traces written by modules/crash-handler on a prior
+    // run, then push them into the ring buffer so they appear at the top
+    // of the in-app log viewer as fatal/crash entries.
+    getPendingCrashes()
+      .then((crashes) => {
+        for (const c of crashes) {
+          appendLog({
+            ts: Date.now(),
+            level: "fatal",
+            source: "crash",
+            tag: "NativeCrashHandler",
+            message: `${c.filename}\n${c.content}`,
+          });
+        }
+      })
+      .catch(() => {
+        // module unavailable (non-Android, pre-prebuild) — silently skip
+      });
 
     return () => {
       restoreConsole();
