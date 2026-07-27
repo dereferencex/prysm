@@ -72,6 +72,7 @@ export function PlaylistProvider({ children }: { children: ReactNode }) {
     videoQuality: "auto",
     showCategoryFilter: true,
     autoRefreshInterval: "off",
+    customRefreshMinutes: 15,
     rememberLastCategory: false,
     lastCategory: "All",
     textSize: "medium",
@@ -112,7 +113,7 @@ export function PlaylistProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const getRefreshIntervalMs = useCallback(
-    (interval: storage.AutoRefreshInterval): number | null => {
+    (interval: storage.AutoRefreshInterval, customMinutes?: number): number | null => {
       switch (interval) {
         case "5min":
           return 5 * 60 * 1000;
@@ -120,6 +121,10 @@ export function PlaylistProvider({ children }: { children: ReactNode }) {
           return 15 * 60 * 1000;
         case "1day":
           return 24 * 60 * 60 * 1000;
+        case "custom": {
+          const mins = Math.max(1, customMinutes ?? 15);
+          return mins * 60 * 1000;
+        }
         default:
           return null;
       }
@@ -159,7 +164,7 @@ export function PlaylistProvider({ children }: { children: ReactNode }) {
       autoRefreshTimerRef.current = null;
     }
 
-    const intervalMs = getRefreshIntervalMs(settings.autoRefreshInterval);
+    const intervalMs = getRefreshIntervalMs(settings.autoRefreshInterval, settings.customRefreshMinutes);
     if (intervalMs && activePlaylistId) {
       autoRefreshTimerRef.current = setInterval(() => {
         performAutoRefresh();
@@ -173,6 +178,7 @@ export function PlaylistProvider({ children }: { children: ReactNode }) {
     };
   }, [
     settings.autoRefreshInterval,
+    settings.customRefreshMinutes,
     activePlaylistId,
     getRefreshIntervalMs,
     performAutoRefresh,
@@ -181,7 +187,7 @@ export function PlaylistProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (nextAppState === "active" && settings.autoRefreshInterval !== "off") {
-        const intervalMs = getRefreshIntervalMs(settings.autoRefreshInterval);
+        const intervalMs = getRefreshIntervalMs(settings.autoRefreshInterval, settings.customRefreshMinutes);
         if (intervalMs) {
           const timeSinceLastRefresh = Date.now() - lastRefreshTimeRef.current;
           if (timeSinceLastRefresh >= intervalMs) {
@@ -196,7 +202,7 @@ export function PlaylistProvider({ children }: { children: ReactNode }) {
       handleAppStateChange,
     );
     return () => subscription?.remove();
-  }, [settings.autoRefreshInterval, getRefreshIntervalMs, performAutoRefresh]);
+  }, [settings.autoRefreshInterval, settings.customRefreshMinutes, getRefreshIntervalMs, performAutoRefresh]);
 
   const loadInitialData = async () => {
     try {
@@ -422,6 +428,7 @@ export function PlaylistProvider({ children }: { children: ReactNode }) {
       videoQuality: "auto",
       showCategoryFilter: true,
       autoRefreshInterval: "off",
+      customRefreshMinutes: 15,
       rememberLastCategory: false,
       lastCategory: "All",
       textSize: "medium",

@@ -592,8 +592,16 @@ class ExoPlayerController(
         val okHttpClient = sharedOkHttpClient.newBuilder()
             .addInterceptor { chain ->
                 val req = chain.request().newBuilder()
-                    .addHeader("User-Agent", DEFAULT_USER_AGENT)
-                currentHeaders.forEach { (k, v) -> req.addHeader(k, v) }
+                // Use the custom User-Agent from EXTVLCOPT/stream_headers if
+                // provided; otherwise fall back to the default browser UA.
+                // Using addHeader for both resulted in duplicate User-Agent
+                // headers — servers that inspect the first UA (the default
+                // Chrome string) would reject streams that require a specific
+                // client UA (e.g. Jio TV's "oxoo" user-agent).
+                val effectiveUA = currentHeaders["User-Agent"] ?: DEFAULT_USER_AGENT
+                req.header("User-Agent", effectiveUA)
+                currentHeaders.filterKeys { it != "User-Agent" }
+                    .forEach { (k, v) -> req.addHeader(k, v) }
                 chain.proceed(req.build())
             }
             .build()

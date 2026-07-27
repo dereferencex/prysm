@@ -143,6 +143,7 @@ const AUTO_REFRESH_OPTIONS = [
   { label: "Every 5 minutes", value: "5min" as const },
   { label: "Every 15 minutes", value: "15min" as const },
   { label: "Every day", value: "1day" as const },
+  { label: "Custom", value: "custom" as const },
 ];
 
 const TEXT_SIZE_OPTIONS = [
@@ -200,6 +201,15 @@ export default function SettingsScreen() {
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showToast, setShowToast] = useState(false);
+  const [customMinutesText, setCustomMinutesText] = useState(
+    String(settings.customRefreshMinutes),
+  );
+
+  useEffect(() => {
+    if (showAutoRefreshModal) {
+      setCustomMinutesText(String(settings.customRefreshMinutes));
+    }
+  }, [showAutoRefreshModal, settings.customRefreshMinutes]);
 
   const isTV = Platform.isTV;
   const isFdroid = Constants.expoConfig?.extra?.isFdroid === true;
@@ -277,8 +287,20 @@ export default function SettingsScreen() {
     value: typeof settings.autoRefreshInterval,
   ) => {
     if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    updateSettings({ autoRefreshInterval: value });
-    setShowAutoRefreshModal(false);
+    if (value === "custom") {
+      updateSettings({ autoRefreshInterval: "custom" });
+    } else {
+      updateSettings({ autoRefreshInterval: value });
+      setShowAutoRefreshModal(false);
+    }
+  };
+
+  const handleCustomMinutesConfirm = () => {
+    const mins = parseInt(customMinutesText, 10);
+    if (!isNaN(mins) && mins >= 1 && mins <= 10080) {
+      updateSettings({ customRefreshMinutes: mins });
+      setShowAutoRefreshModal(false);
+    }
   };
 
   const handleTextSizeSelect = (value: typeof settings.textSize) => {
@@ -460,6 +482,12 @@ export default function SettingsScreen() {
   };
 
   const getAutoRefreshLabel = () => {
+    if (settings.autoRefreshInterval === "custom") {
+      const mins = settings.customRefreshMinutes;
+      if (mins >= 1440 && mins % 1440 === 0) return `Every ${mins / 1440} day${mins / 1440 > 1 ? "s" : ""}`;
+      if (mins >= 60 && mins % 60 === 0) return `Every ${mins / 60} hour${mins / 60 > 1 ? "s" : ""}`;
+      return `Every ${mins} minute${mins > 1 ? "s" : ""}`;
+    }
     const option = AUTO_REFRESH_OPTIONS.find(
       (o) => o.value === settings.autoRefreshInterval,
     );
@@ -800,6 +828,31 @@ export default function SettingsScreen() {
                 ) : null}
               </FocusableOption>
             ))}
+            {settings.autoRefreshInterval === "custom" && (
+              <View style={[styles.customInputRow, { borderColor: theme.border }]}>
+                <TextInput
+                  style={[styles.customInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.backgroundSecondary }]}
+                  keyboardType="numeric"
+                  placeholder="Minutes"
+                  placeholderTextColor={theme.textSecondary}
+                  value={customMinutesText}
+                  onChangeText={setCustomMinutesText}
+                  onBlur={handleCustomMinutesConfirm}
+                  autoFocus
+                  selectTextOnFocus
+                />
+                <ThemedText type="body" style={{ color: theme.textSecondary, marginLeft: 8 }}>
+                  min
+                </ThemedText>
+                <Pressable
+                  onPress={handleCustomMinutesConfirm}
+                  style={[styles.customSetButton, { backgroundColor: theme.primary }]}
+                  focusable={!isTV}
+                >
+                  <ThemedText type="body" style={{ color: "#fff", fontWeight: "600" }}>Set</ThemedText>
+                </Pressable>
+              </View>
+            )}
           </View>
         </Pressable>
       </Modal>
@@ -1663,5 +1716,28 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 12,
+  },
+  customInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    borderWidth: 1,
+    borderRadius: BorderRadius.sm,
+  },
+  customInput: {
+    flex: 1,
+    height: 44,
+    borderWidth: 1,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.md,
+    fontSize: 16,
+    textAlign: "center",
+  },
+  customSetButton: {
+    marginLeft: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+    borderRadius: BorderRadius.sm,
   },
 });

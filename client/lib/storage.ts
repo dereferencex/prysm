@@ -33,7 +33,7 @@ export interface PlaylistInfo {
   lastUpdated: number;
 }
 
-export type AutoRefreshInterval = "off" | "5min" | "15min" | "1day";
+export type AutoRefreshInterval = "off" | "5min" | "15min" | "1day" | "custom";
 export type TextSizeOption = "small" | "medium" | "large";
 export type DrmScheme = "widevine" | "playready" | "clearkey" | "fairplay";
 export type UserAgent =
@@ -92,6 +92,8 @@ export interface AppSettings {
   videoQuality: "auto" | "high" | "medium" | "low";
   showCategoryFilter: boolean;
   autoRefreshInterval: AutoRefreshInterval;
+  /** Custom refresh interval in minutes (used when autoRefreshInterval === "custom"). */
+  customRefreshMinutes: number;
   rememberLastCategory: boolean;
   lastCategory: string;
   textSize: TextSizeOption;
@@ -104,6 +106,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   videoQuality: "auto",
   showCategoryFilter: true,
   autoRefreshInterval: "off",
+  customRefreshMinutes: 15,
   rememberLastCategory: true,
   lastCategory: "All",
   textSize: "medium",
