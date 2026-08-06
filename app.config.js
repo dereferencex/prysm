@@ -1,9 +1,5 @@
-const baseConfig = require("./app.json");
-
-module.exports = () => {
+module.exports = ({ config }) => {
   const isFdroid = process.env.PRYSM_FDROID === "1";
-
-  const config = baseConfig.expo;
 
   const android = { ...(config.android || {}) };
 
