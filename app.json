@@ -57,6 +57,9 @@
         "./modules/logcat-reader/plugin"
       ],
       [
+        "./modules/dynamic-color/plugin"
+      ],
+      [
         "./plugins/withAbiSplits",
         {}
       ],

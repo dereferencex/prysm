@@ -1,0 +1,9 @@
+{
+  "name": "dynamic-color",
+  "version": "1.0.0",
+  "description": "Reads the Android 12+ Material You (wallpaper-derived) color palette and exposes it to JS so the app theme can follow the system accent.",
+  "main": "src/index.ts",
+  "expo": {
+    "name": "DynamicColor"
+  }
+}

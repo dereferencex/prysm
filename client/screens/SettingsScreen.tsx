@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import {
   StyleSheet,
   View,
@@ -34,6 +34,7 @@ import { useResponsive } from "@/hooks/useResponsive";
 import { Colors, Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { Toast } from "@/components/Toast";
+import { isDynamicColorSupported } from "../../modules/dynamic-color/src";
 import {
   checkForUpdate,
   downloadApk,
@@ -160,9 +161,18 @@ const PLAYER_ENGINE_OPTIONS = [
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<SettingsNavigationProp>();
-  const { theme, isDark, themeMode, setThemeMode } = useTheme();
+  const {
+    theme,
+    isDark,
+    themeMode,
+    dynamicColors,
+    setThemeMode,
+    setDynamicColors,
+  } = useTheme();
   const { width } = useWindowDimensions();
   const { isUltraWide } = useResponsive();
+
+  const dynamicSupported = useMemo(() => isDynamicColorSupported(), []);
 
   const {
     playlist,
@@ -329,6 +339,11 @@ export default function SettingsScreen() {
     if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await setThemeMode(value);
     setShowThemeModal(false);
+  };
+
+  const handleToggleDynamicColors = (value: boolean) => {
+    if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void setDynamicColors(value);
   };
 
   const handlePlaylistSelect = async (playlistId: string) => {
@@ -642,6 +657,16 @@ export default function SettingsScreen() {
                 onPress={() => setShowThemeModal(true)}
                 showChevron
               />
+              {dynamicSupported && (
+                <SettingsRow
+                  icon="color-palette-outline"
+                  title="Material You"
+                  subtitle="Match colors to your wallpaper (Android 12+)"
+                  isToggle
+                  toggleValue={dynamicColors}
+                  onToggle={handleToggleDynamicColors}
+                />
+              )}
               <SettingsRow
                 icon="grid"
                 title="Show Categories"
