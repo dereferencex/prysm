@@ -5,12 +5,13 @@ import { requireOptionalNativeModule, Platform } from "expo-modules-core";
  * PID>` on Android, reads lines on a background thread, and emits them via
  * the LogcatReader's EventEmitter as events named "logcatLine".
  *
- * On Android 13+ an app can read its own PID's logcat lines without
- * READ_LOGS (per-process isolation in logd). On Android 12 and below
- * reading logcat at all requires READ_LOGS, which is a sensitive Google
- * Play permission; we therefore no-op on <13 unless the user grants it
- * via adb. The crash-handler module still catches native fatal crashes
- * on those versions via Thread.setDefaultUncaughtExceptionHandler.
+ * An app can read its own process's logcat lines without any permission
+ * since Android 4.1; READ_LOGS (needed for other apps'/system logs) is
+ * privileged-only, so the reader is scoped to our PID on every supported
+ * Android version. Some OEM ROMs restrict logcat further, in which case
+ * the stream stays empty and the app degrades gracefully. The
+ * crash-handler module still catches native fatal crashes via
+ * Thread.setDefaultUncaughtExceptionHandler.
  *
  * The emitted line shape is:
  *   { raw: "07-21 14:23:05.123  1234  5678 I ExoPlayerController: ..." }

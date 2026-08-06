@@ -21,11 +21,10 @@ import java.io.InputStreamReader
  * Spawns: `logcat -v threadtime --pid=<this pid> --dividers`
  *
  * The `--pid` filter restricts output to lines originating from this
- * process (and child threads). On Android 13+ this works without any
- * permission because logd enforces per-UID/per-PID visibility. On
- * Android 12 and below, logcat from a non-system app requires the
- * READ_LOGS permission, which is gated as sensitive by Google Play —
- * so we no-op there rather than request it.
+ * process (and child threads). An app can read its own process's logcat
+ * lines without any permission on every Android version since 4.1;
+ * READ_LOGS (needed for other apps'/system logs) is privileged-only and
+ * not grantable to ordinary apps, so the reader is scoped to our PID.
  *
  * Each line is delivered to JS verbatim as `{ raw: "<threadtime> ..." }`
  * — JS parses the severity letter (V/D/I/W/E/F) and forwards it into
@@ -88,14 +87,16 @@ class LogcatReaderModule : Module() {
   private fun startReader() {
     if (readerJob != null) return
 
-    // Android 12 (API 31) and below block logcat from non-system apps
-    // without READ_LOGS. We don't request that permission (Google Play
-    // flags it as sensitive), so we no-op cleanly on those versions —
-    // the crash-handler module still catches native fatal crashes.
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+    // Any app can read its own process's logcat lines without permission
+    // since Android 4.1 (API 16); READ_LOGS is only for other apps'/system
+    // logs and isn't grantable to ordinary apps anyway. So `--pid` works on
+    // every supported Android version. Some OEM ROMs (notably MIUI) further
+    // restrict logcat, in which case the stream just stays empty — the JS
+    // side degrades gracefully.
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
       android.util.Log.i(
         TAG,
-        "logcat reading needs Android 13+; skipping on API ${Build.VERSION.SDK_INT}",
+        "logcat reading needs Android 7+; skipping on API ${Build.VERSION.SDK_INT}",
       )
       return
     }
