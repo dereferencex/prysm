@@ -11,7 +11,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
-import { Colors, Spacing, BorderRadius } from "@/constants/theme";
+import { Spacing, BorderRadius } from "@/constants/theme";
 
 const isTV = Platform.isTV;
 
@@ -56,15 +56,15 @@ export function SettingsRow({
           styles.iconContainer,
           {
             backgroundColor: destructive
-              ? Colors.dark.error + "20"
-              : Colors.dark.primary + "20",
+              ? theme.error + "20"
+              : theme.primary + "20",
           },
         ]}
       >
         <Ionicons
           name={icon}
           size={20}
-          color={destructive ? Colors.dark.error : Colors.dark.primary}
+          color={destructive ? theme.error : theme.primary}
         />
       </View>
       <View style={styles.content}>
@@ -74,7 +74,7 @@ export function SettingsRow({
             styles.title,
             {
               color: destructive
-                ? Colors.dark.error
+                ? theme.error
                 : isFocused
                   ? "#FFFFFF"
                   : theme.text,
@@ -89,7 +89,7 @@ export function SettingsRow({
             type="small"
             style={[
               styles.subtitle,
-              { color: isFocused ? Colors.dark.primary : theme.textSecondary },
+              { color: isFocused ? theme.primary : theme.textSecondary },
             ]}
             numberOfLines={2}
           >
@@ -103,7 +103,7 @@ export function SettingsRow({
           onValueChange={onToggle}
           trackColor={{
             false: theme.backgroundTertiary,
-            true: Colors.dark.primary,
+            true: theme.primary,
           }}
           thumbColor="#FFFFFF"
           testID={`toggle-${title.toLowerCase().replace(/\s/g, "-")}`}
@@ -126,7 +126,7 @@ export function SettingsRow({
         <Ionicons
           name="chevron-forward"
           size={20}
-          color={isFocused ? Colors.dark.primary : theme.textSecondary}
+          color={isFocused ? theme.primary : theme.textSecondary}
           style={styles.chevron}
         />
       ) : null}
@@ -154,7 +154,10 @@ export function SettingsRow({
               backgroundColor: theme.backgroundDefault,
               opacity: disabled ? 0.5 : 1,
             },
-            isFocused && styles.pressableFocused,
+            isFocused && [
+              styles.pressableFocused,
+              { backgroundColor: theme.primary + "25" },
+            ],
           ] as ViewStyle[]
         }
         testID={`settings-row-${title.toLowerCase().replace(/\s/g, "-")}`}
@@ -179,7 +182,6 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   pressableFocused: {
-    backgroundColor: Colors.dark.primary + "25",
     transform: [{ scale: 1.02 }],
   },
   container: {

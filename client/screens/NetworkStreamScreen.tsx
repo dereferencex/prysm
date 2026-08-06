@@ -20,7 +20,7 @@ import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
 import { Button } from "@/components/Button";
 import { useTheme } from "@/hooks/useTheme";
-import { Colors, Spacing, BorderRadius } from "@/constants/theme";
+import { Spacing, BorderRadius } from "@/constants/theme";
 import {
   NetworkStreamConfig,
   DrmScheme,
@@ -51,6 +51,7 @@ function FocusablePressable({
   hasTVPreferredFocus?: boolean;
 }) {
   const [isFocused, setIsFocused] = useState(false);
+  const { theme } = useTheme();
   const tvProps: any = {};
   if (hasTVPreferredFocus) tvProps.hasTVPreferredFocus = true;
   return (
@@ -65,7 +66,11 @@ function FocusablePressable({
       style={
         [
           ...(Array.isArray(style) ? style : [style]),
-          isFocused && (focusedStyle ?? styles.focusedBorder),
+          isFocused &&
+            (focusedStyle ?? [
+              styles.focusedBorder,
+              { backgroundColor: theme.primary + "20" },
+            ]),
         ] as ViewStyle[]
       }
     >
@@ -188,7 +193,7 @@ function PickerRow({
           styles.pickerRow,
           {
             backgroundColor: theme.backgroundSecondary,
-            borderColor: isFocused ? Colors.dark.primary : "transparent",
+            borderColor: isFocused ? theme.primary : "transparent",
           },
         ]}
       >
@@ -198,7 +203,7 @@ function PickerRow({
         <Ionicons
           name="chevron-down"
           size={16}
-          color={isFocused ? Colors.dark.primary : theme.textSecondary}
+          color={isFocused ? theme.primary : theme.textSecondary}
         />
       </Pressable>
     </View>
@@ -372,15 +377,12 @@ export default function NetworkStreamScreen() {
             keyboardType="url"
           />
           <View
-            style={[
-              styles.drmHint,
-              { backgroundColor: Colors.dark.primary + "10" },
-            ]}
+            style={[styles.drmHint, { backgroundColor: theme.primary + "10" }]}
           >
             <Ionicons
               name="information-circle-outline"
               size={14}
-              color={Colors.dark.primary}
+              color={theme.primary}
               style={{ marginTop: 1 }}
             />
             <ThemedText
@@ -388,7 +390,7 @@ export default function NetworkStreamScreen() {
               style={[styles.drmHintText, { color: theme.textSecondary }]}
             >
               For ClearKey, enter the key directly as{" "}
-              <ThemedText type="caption" style={{ color: Colors.dark.primary }}>
+              <ThemedText type="caption" style={{ color: theme.primary }}>
                 keyId:key
               </ThemedText>{" "}
               (hex or base64). For Widevine/PlayReady, enter the license server
@@ -453,21 +455,20 @@ export default function NetworkStreamScreen() {
                   [
                     styles.modalOption,
                     config.userAgent === opt.value
-                      ? { backgroundColor: Colors.dark.primary + "20" }
+                      ? { backgroundColor: theme.primary + "20" }
                       : {},
                   ] as ViewStyle[]
                 }
-                focusedStyle={styles.modalOptionFocused}
+                focusedStyle={{
+                  ...styles.modalOptionFocused,
+                  backgroundColor: theme.primary + "30",
+                }}
                 accessibilityLabel={opt.label}
                 hasTVPreferredFocus={isTV && idx === 0}
               >
                 <ThemedText type="body">{opt.label}</ThemedText>
                 {config.userAgent === opt.value ? (
-                  <Ionicons
-                    name="checkmark"
-                    size={20}
-                    color={Colors.dark.primary}
-                  />
+                  <Ionicons name="checkmark" size={20} color={theme.primary} />
                 ) : null}
               </FocusablePressable>
             ))}
@@ -509,11 +510,14 @@ export default function NetworkStreamScreen() {
                   [
                     styles.modalOption,
                     config.drmScheme === opt.value
-                      ? { backgroundColor: Colors.dark.primary + "20" }
+                      ? { backgroundColor: theme.primary + "20" }
                       : {},
                   ] as ViewStyle[]
                 }
-                focusedStyle={styles.modalOptionFocused}
+                focusedStyle={{
+                  ...styles.modalOptionFocused,
+                  backgroundColor: theme.primary + "30",
+                }}
                 accessibilityLabel={opt.label}
                 hasTVPreferredFocus={isTV && idx === 0}
               >
@@ -527,11 +531,7 @@ export default function NetworkStreamScreen() {
                   </ThemedText>
                 </View>
                 {config.drmScheme === opt.value ? (
-                  <Ionicons
-                    name="checkmark"
-                    size={20}
-                    color={Colors.dark.primary}
-                  />
+                  <Ionicons name="checkmark" size={20} color={theme.primary} />
                 ) : null}
               </FocusablePressable>
             ))}
@@ -664,13 +664,10 @@ const styles = StyleSheet.create({
     borderColor: "transparent",
   },
   modalOptionFocused: {
-    backgroundColor: Colors.dark.primary + "30",
     transform: [{ scale: 1.02 }],
   },
   drmOptionText: { gap: 2 },
 
   // Generic focus border for FocusablePressable default
-  focusedBorder: {
-    backgroundColor: Colors.dark.primary + "20",
-  },
+  focusedBorder: {},
 });

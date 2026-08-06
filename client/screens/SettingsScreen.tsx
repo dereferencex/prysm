@@ -31,7 +31,7 @@ import { Button } from "@/components/Button";
 import { useTheme } from "@/hooks/useTheme";
 import { usePlaylist } from "@/context/PlaylistContext";
 import { useResponsive } from "@/hooks/useResponsive";
-import { Colors, Spacing, BorderRadius } from "@/constants/theme";
+import { Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { Toast } from "@/components/Toast";
 import { isDynamicColorSupported } from "../../modules/dynamic-color/src";
@@ -63,6 +63,7 @@ function FocusableOption({
   hasTVPreferredFocus?: boolean;
 }) {
   const [isFocused, setIsFocused] = useState(false);
+  const { theme } = useTheme();
   const tvProps: any = {};
   if (hasTVPreferredFocus) tvProps.hasTVPreferredFocus = true;
   return (
@@ -78,10 +79,13 @@ function FocusableOption({
         [
           styles.modalOption,
           isSelected
-            ? { backgroundColor: Colors.dark.primary + "20" }
+            ? { backgroundColor: theme.primary + "20" }
             : { backgroundColor: "transparent" },
           style,
-          isFocused && styles.modalOptionFocused,
+          isFocused && [
+            styles.modalOptionFocused,
+            { backgroundColor: theme.primary + "30" },
+          ],
         ] as ViewStyle[]
       }
     >
@@ -101,7 +105,7 @@ function FocusablePressable({
 }: {
   onPress: () => void;
   baseStyle: ViewStyle | ViewStyle[];
-  focusedStyle: ViewStyle;
+  focusedStyle: ViewStyle | ViewStyle[];
   children: React.ReactNode;
   hitSlop?: number;
   accessibilityLabel?: string;
@@ -1066,7 +1070,10 @@ export default function SettingsScreen() {
                               : "transparent",
                         },
                       ]}
-                      focusedStyle={styles.modalOptionFocused}
+                      focusedStyle={[
+                        styles.modalOptionFocused,
+                        { backgroundColor: theme.primary + "30" },
+                      ]}
                     >
                       <View style={styles.playlistInfo}>
                         <Ionicons
@@ -1106,7 +1113,10 @@ export default function SettingsScreen() {
                           hitSlop={8}
                           accessibilityLabel={`Edit playlist ${p.name}`}
                           baseStyle={styles.editButton}
-                          focusedStyle={styles.editButtonFocused}
+                          focusedStyle={[
+                            styles.editButtonFocused,
+                            { backgroundColor: theme.primary + "20" },
+                          ]}
                         >
                           <Ionicons
                             name="create-outline"
@@ -1123,12 +1133,15 @@ export default function SettingsScreen() {
                           hitSlop={8}
                           accessibilityLabel={`Delete playlist ${p.name}`}
                           baseStyle={styles.deleteButton}
-                          focusedStyle={styles.deleteButtonFocused}
+                          focusedStyle={[
+                            styles.deleteButtonFocused,
+                            { backgroundColor: theme.error + "20" },
+                          ]}
                         >
                           <Ionicons
                             name="trash-outline"
                             size={18}
-                            color={Colors.dark.error}
+                            color={theme.error}
                           />
                         </FocusablePressable>
                       </>
@@ -1141,7 +1154,10 @@ export default function SettingsScreen() {
                         onPress={() => handleEditPlaylist(p.id)}
                         accessibilityLabel={`Edit playlist ${p.name}`}
                         baseStyle={styles.tvActionButton}
-                        focusedStyle={styles.tvActionButtonFocused}
+                        focusedStyle={[
+                          styles.tvActionButtonFocused,
+                          { backgroundColor: theme.primary + "20" },
+                        ]}
                       >
                         <Ionicons
                           name="create-outline"
@@ -1166,17 +1182,20 @@ export default function SettingsScreen() {
                         }}
                         accessibilityLabel={`Delete playlist ${p.name}`}
                         baseStyle={styles.tvActionButton}
-                        focusedStyle={styles.tvActionButtonDestructiveFocused}
+                        focusedStyle={[
+                          styles.tvActionButtonDestructiveFocused,
+                          { backgroundColor: theme.error + "20" },
+                        ]}
                       >
                         <Ionicons
                           name="trash-outline"
                           size={16}
-                          color={Colors.dark.error}
+                          color={theme.error}
                         />
                         <ThemedText
                           type="small"
                           style={{
-                            color: Colors.dark.error,
+                            color: theme.error,
                             marginLeft: Spacing.xs,
                           }}
                         >
@@ -1210,7 +1229,7 @@ export default function SettingsScreen() {
             ]}
           >
             <View style={styles.confirmIcon}>
-              <Ionicons name="warning" size={32} color={Colors.dark.error} />
+              <Ionicons name="warning" size={32} color={theme.error} />
             </View>
             <ThemedText type="h4" style={styles.modalTitle}>
               Delete Playlist?
@@ -1237,7 +1256,7 @@ export default function SettingsScreen() {
                 onPress={handleDeletePlaylist}
                 style={[
                   styles.confirmButton,
-                  { backgroundColor: Colors.dark.error },
+                  { backgroundColor: theme.error },
                 ]}
               >
                 Delete
@@ -1265,7 +1284,7 @@ export default function SettingsScreen() {
             ]}
           >
             <View style={styles.confirmIcon}>
-              <Ionicons name="warning" size={32} color={Colors.dark.error} />
+              <Ionicons name="warning" size={32} color={theme.error} />
             </View>
             <ThemedText type="h4" style={styles.modalTitle}>
               Clear All Data?
@@ -1293,7 +1312,7 @@ export default function SettingsScreen() {
                 onPress={handleClearAllData}
                 style={[
                   styles.confirmButton,
-                  { backgroundColor: Colors.dark.error },
+                  { backgroundColor: theme.error },
                 ]}
               >
                 Clear All
@@ -1446,7 +1465,7 @@ export default function SettingsScreen() {
             {updateError && (
               <ThemedText
                 type="small"
-                style={[styles.errorText, { color: Colors.dark.error }]}
+                style={[styles.errorText, { color: theme.error }]}
               >
                 {updateError}
               </ThemedText>
@@ -1602,7 +1621,6 @@ const styles = StyleSheet.create({
     borderColor: "transparent",
   },
   modalOptionFocused: {
-    backgroundColor: Colors.dark.primary + "30",
     transform: [{ scale: 1.03 }],
   },
   themeOption: {
@@ -1635,11 +1653,9 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.06)",
   },
   tvActionButtonFocused: {
-    backgroundColor: Colors.dark.primary + "20",
     transform: [{ scale: 1.03 }],
   },
   tvActionButtonDestructiveFocused: {
-    backgroundColor: Colors.dark.error + "20",
     transform: [{ scale: 1.03 }],
   },
   playlistItem: {
@@ -1667,7 +1683,6 @@ const styles = StyleSheet.create({
     borderColor: "transparent",
   },
   deleteButtonFocused: {
-    backgroundColor: Colors.dark.error + "20",
   },
   editButton: {
     padding: Spacing.md,
@@ -1676,7 +1691,6 @@ const styles = StyleSheet.create({
     borderColor: "transparent",
   },
   editButtonFocused: {
-    backgroundColor: Colors.dark.primary + "20",
   },
   editInputContainer: {
     marginBottom: Spacing.md,

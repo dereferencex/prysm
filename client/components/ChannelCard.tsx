@@ -5,7 +5,8 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 
 import { ThemedText } from "@/components/ThemedText";
-import { Colors, Spacing, BorderRadius } from "@/constants/theme";
+import { useTheme } from "@/hooks/useTheme";
+import { Spacing, BorderRadius } from "@/constants/theme";
 import { Channel } from "@/types/playlist";
 
 interface ChannelCardProps {
@@ -29,6 +30,7 @@ function ChannelCardInner({
   themeBackground,
   themeTextSecondary,
 }: ChannelCardProps) {
+  const { theme } = useTheme();
   const [isFocused, setIsFocused] = useState(false);
   const [logoError, setLogoError] = useState(false);
   const [isFavFocused, setIsFavFocused] = useState(false);
@@ -56,9 +58,7 @@ function ChannelCardInner({
       style={[
         styles.card,
         {
-          backgroundColor: isFocused
-            ? Colors.dark.primary + "25"
-            : themeBackground,
+          backgroundColor: isFocused ? theme.primary + "25" : themeBackground,
           transform: isFocused ? [{ scale: 1.03 }] : undefined,
         },
       ]}
@@ -99,7 +99,10 @@ function ChannelCardInner({
         style={
           [
             styles.favoriteButton,
-            isFavFocused && styles.favoriteButtonFocused,
+            isFavFocused && [
+              styles.favoriteButtonFocused,
+              { backgroundColor: theme.primary + "20" },
+            ],
           ] as ViewStyle[]
         }
         hitSlop={8}
@@ -113,7 +116,7 @@ function ChannelCardInner({
         <Ionicons
           name={isFavorite ? "star" : "star-outline"}
           size={18}
-          color={isFavorite ? Colors.dark.primary : themeTextSecondary}
+          color={isFavorite ? theme.primary : themeTextSecondary}
           style={{ opacity: isFavorite ? 1 : 0.5 }}
         />
       </Pressable>
@@ -171,7 +174,5 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "transparent",
   },
-  favoriteButtonFocused: {
-    backgroundColor: Colors.dark.primary + "20",
-  },
+  favoriteButtonFocused: {},
 });

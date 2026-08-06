@@ -9,7 +9,7 @@ import Animated, {
 
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing, BorderRadius, Colors } from "@/constants/theme";
+import { Spacing, BorderRadius } from "@/constants/theme";
 
 interface CardProps {
   elevation?: number;
@@ -87,7 +87,10 @@ export function Card({
           {
             backgroundColor: cardBackgroundColor,
           },
-          isFocused && styles.cardFocused,
+          isFocused && [
+            styles.cardFocused,
+            { backgroundColor: theme.primary + "30" },
+          ],
           animatedStyle,
           style,
         ] as ViewStyle[]
@@ -116,7 +119,6 @@ const styles = StyleSheet.create({
     borderColor: "transparent",
   },
   cardFocused: {
-    backgroundColor: Colors.dark.primary + "30",
     transform: [{ scale: 1.03 }],
   },
   cardTitle: {

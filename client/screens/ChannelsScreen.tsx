@@ -38,7 +38,7 @@ import { usePlaylist } from "@/context/PlaylistContext";
 import { useThemeContext } from "@/context/ThemeContext";
 import { useResponsive } from "@/hooks/useResponsive";
 import { useOrientation } from "@/hooks/useOrientation";
-import { Colors, Spacing, BorderRadius } from "@/constants/theme";
+import { Spacing, BorderRadius } from "@/constants/theme";
 import { Channel } from "@/types/playlist";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -83,11 +83,11 @@ function FocusableCategoryItem({
           styles.categoryItem,
           {
             backgroundColor: isSelected
-              ? Colors.dark.primary + "20"
+              ? theme.primary + "20"
               : "transparent",
           },
           isFocused && {
-            backgroundColor: Colors.dark.primary + "30",
+            backgroundColor: theme.primary + "30",
           },
         ] as ViewStyle[]
       }
@@ -98,7 +98,7 @@ function FocusableCategoryItem({
           <Ionicons
             name="star"
             size={16}
-            color={Colors.dark.primary}
+            color={theme.primary}
             style={styles.categoryStarIcon}
           />
         ) : null}
@@ -107,7 +107,7 @@ function FocusableCategoryItem({
           numberOfLines={1}
           style={[
             styles.categoryItemText,
-            isSelected && { color: Colors.dark.primary, fontWeight: "600" },
+            isSelected && { color: theme.primary, fontWeight: "600" },
             isFocused && { color: "#FFFFFF" },
           ]}
         >
@@ -118,7 +118,7 @@ function FocusableCategoryItem({
         <ThemedText
           type="small"
           style={{
-            color: isFocused ? Colors.dark.primary : theme.textSecondary,
+            color: isFocused ? theme.primary : theme.textSecondary,
           }}
         >
           {count}
@@ -131,7 +131,10 @@ function FocusableCategoryItem({
             style={
               [
                 styles.categoryFavButton,
-                isFavFocused && styles.categoryFavButtonFocused,
+                isFavFocused && [
+                  styles.categoryFavButtonFocused,
+                  { backgroundColor: theme.primary + "20" },
+                ],
               ] as ViewStyle[]
             }
             hitSlop={8}
@@ -145,7 +148,7 @@ function FocusableCategoryItem({
             <Ionicons
               name={isFav ? "star" : "star-outline"}
               size={18}
-              color={isFav ? Colors.dark.primary : theme.textSecondary}
+              color={isFav ? theme.primary : theme.textSecondary}
             />
           </Pressable>
         ) : null}
@@ -173,7 +176,7 @@ function FocusableMenuButton({
           styles.menuButton,
           { backgroundColor: theme.backgroundSecondary },
           isFocused && {
-            backgroundColor: Colors.dark.primary + "30",
+            backgroundColor: theme.primary + "30",
           },
         ] as ViewStyle[]
       }
@@ -212,7 +215,10 @@ function FocusableCloseButton({
       style={
         [
           styles.closeButton,
-          isFocused && styles.closeButtonFocused,
+          isFocused && [
+            styles.closeButtonFocused,
+            { backgroundColor: theme.primary + "20" },
+          ],
         ] as ViewStyle[]
       }
     >
@@ -505,7 +511,7 @@ export default function ChannelsScreen() {
               <View style={styles.favoriteCategoryIcon}>
                 <ThemedText
                   type="caption"
-                  style={{ color: Colors.dark.primary }}
+                  style={{ color: theme.primary }}
                 >
                   ★
                 </ThemedText>
@@ -562,7 +568,7 @@ export default function ChannelsScreen() {
     return (
       <ThemedView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.dark.primary} />
+          <ActivityIndicator size="large" color={theme.primary} />
         </View>
       </ThemedView>
     );
@@ -824,7 +830,6 @@ const styles = StyleSheet.create({
     borderColor: "transparent",
   },
   closeButtonFocused: {
-    backgroundColor: Colors.dark.primary + "20",
   },
 
   categoryItem: {
@@ -862,6 +867,5 @@ const styles = StyleSheet.create({
     borderColor: "transparent",
   },
   categoryFavButtonFocused: {
-    backgroundColor: Colors.dark.primary + "20",
   },
 });

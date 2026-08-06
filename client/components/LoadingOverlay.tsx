@@ -2,7 +2,8 @@ import React from "react";
 import { StyleSheet, View, ActivityIndicator } from "react-native";
 
 import { ThemedText } from "@/components/ThemedText";
-import { Colors, Spacing } from "@/constants/theme";
+import { useTheme } from "@/hooks/useTheme";
+import { Spacing } from "@/constants/theme";
 
 interface LoadingOverlayProps {
   message?: string;
@@ -13,12 +14,13 @@ export function LoadingOverlay({
   message = "Loading...",
   visible,
 }: LoadingOverlayProps) {
+  const { theme } = useTheme();
   if (!visible) return null;
 
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        <ActivityIndicator size="large" color={Colors.dark.primary} />
+        <ActivityIndicator size="large" color={theme.primary} />
         <ThemedText type="body" style={styles.message}>
           {message}
         </ThemedText>

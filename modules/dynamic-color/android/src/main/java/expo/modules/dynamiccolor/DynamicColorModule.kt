@@ -32,22 +32,32 @@ class DynamicColorModule : Module() {
     }
   }
 
-  /** Semantic theme keys → closest Android 12 system tonal palette tone. */
+  /**
+   * Semantic theme keys → Android 12 system tonal palette tones.
+   *
+   * Tonal scale: low index (0) = lightest, high index (1000) = darkest.
+   * The role mapping below follows the Material You role table from
+   * AOSP (source.android.com/docs/core/display/dynamic-color):
+   *   light  primary = accent1_600, background = neutral1_10,
+   *          onBackground = neutral1_900
+   *   dark   primary = accent1_200, background = neutral1_900,
+   *          onBackground = neutral1_100
+   */
   private fun toneMap(isDark: Boolean): Map<String, String> =
     if (isDark) {
       mapOf(
         "primary" to "system_accent1_200",
         "primaryLight" to "system_accent1_100",
         "text" to "system_neutral1_100",
-        "textSecondary" to "system_neutral1_500",
-        "buttonText" to "system_neutral1_0",
-        "tabIconDefault" to "system_neutral1_400",
+        "textSecondary" to "system_neutral2_200",
+        "buttonText" to "system_accent1_800",
+        "tabIconDefault" to "system_neutral2_300",
         "tabIconSelected" to "system_accent1_200",
         "link" to "system_accent1_200",
-        "backgroundRoot" to "system_neutral1_0",
-        "backgroundDefault" to "system_neutral1_10",
-        "backgroundSecondary" to "system_neutral1_50",
-        "backgroundTertiary" to "system_neutral1_100",
+        "backgroundRoot" to "system_neutral1_1000",
+        "backgroundDefault" to "system_neutral1_900",
+        "backgroundSecondary" to "system_neutral1_800",
+        "backgroundTertiary" to "system_neutral1_700",
       )
     } else {
       mapOf(

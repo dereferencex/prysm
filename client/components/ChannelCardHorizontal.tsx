@@ -5,7 +5,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRecyclingState } from "@shopify/flash-list";
 
 import { ThemedText } from "@/components/ThemedText";
-import { Colors, Spacing, BorderRadius } from "@/constants/theme";
+import { useTheme } from "@/hooks/useTheme";
+import { Spacing, BorderRadius } from "@/constants/theme";
 import { Channel } from "@/types/playlist";
 import { TextSizeOption } from "@/lib/storage";
 
@@ -49,6 +50,7 @@ function ChannelCardHorizontalInner({
   themeBackground,
   themeTextSecondary,
 }: ChannelCardHorizontalProps) {
+  const { theme } = useTheme();
   const textStyles = getTextStyles(textSize);
   const [isFocused, setIsFocused] = useState(false);
   // useRecyclingState resets logoError automatically when this cell is recycled
@@ -92,9 +94,7 @@ function ChannelCardHorizontalInner({
       style={[
         styles.card,
         {
-          backgroundColor: isFocused
-            ? Colors.dark.primary + "25"
-            : themeBackground,
+          backgroundColor: isFocused ? theme.primary + "25" : themeBackground,
           width: cardWidth - 4,
           margin: 2,
           transform: isFocused ? [{ scale: 1.03 }] : undefined,
@@ -124,7 +124,10 @@ function ChannelCardHorizontalInner({
           style={
             [
               styles.favoriteButton,
-              isFavFocused && styles.favoriteButtonFocused,
+              isFavFocused && [
+                styles.favoriteButtonFocused,
+                { backgroundColor: theme.primary + "40" },
+              ],
             ] as ViewStyle[]
           }
           hitSlop={8}
@@ -138,7 +141,7 @@ function ChannelCardHorizontalInner({
           <Ionicons
             name={isFavorite ? "star" : "star-outline"}
             size={isUltraWide ? 14 : 16}
-            color={isFavorite ? Colors.dark.primary : "rgba(255,255,255,0.5)"}
+            color={isFavorite ? theme.primary : "rgba(255,255,255,0.5)"}
           />
         </Pressable>
       </View>
@@ -157,7 +160,13 @@ function ChannelCardHorizontalInner({
           {channel.name}
         </ThemedText>
         <View style={styles.liveIndicator}>
-          <View style={[styles.liveDot, isCompact && styles.liveDotCompact]} />
+          <View
+            style={[
+              styles.liveDot,
+              isCompact && styles.liveDotCompact,
+              { backgroundColor: theme.success },
+            ]}
+          />
           <ThemedText
             type="caption"
             style={[
@@ -217,7 +226,6 @@ const styles = StyleSheet.create({
     borderColor: "transparent",
   },
   favoriteButtonFocused: {
-    backgroundColor: Colors.dark.primary + "40",
     transform: [{ scale: 1.2 }],
   },
   info: {
@@ -238,7 +246,6 @@ const styles = StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: 2.5,
-    backgroundColor: Colors.dark.success,
     marginRight: Spacing.xs,
   },
   liveDotCompact: {

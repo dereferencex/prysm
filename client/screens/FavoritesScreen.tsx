@@ -21,7 +21,8 @@ import { ChannelCardHorizontal } from "@/components/ChannelCardHorizontal";
 import { EmptyState } from "@/components/EmptyState";
 import { usePlaylist } from "@/context/PlaylistContext";
 import { useResponsive } from "@/hooks/useResponsive";
-import { Colors, Spacing, BorderRadius } from "@/constants/theme";
+import { useTheme } from "@/hooks/useTheme";
+import { Spacing, BorderRadius } from "@/constants/theme";
 import { Channel } from "@/types/playlist";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -47,6 +48,7 @@ function FocusableTab({
   hasTVPreferredFocus?: boolean;
 }) {
   const [isFocused, setIsFocused] = useState(false);
+  const { theme } = useTheme();
   const tvProps: any = {};
   if (hasTVPreferredFocus) tvProps.hasTVPreferredFocus = true;
   return (
@@ -61,8 +63,18 @@ function FocusableTab({
       style={
         [
           styles.tab,
-          isActive && styles.tabActive,
-          isFocused && styles.tabFocused,
+          { backgroundColor: theme.backgroundSecondary },
+          isActive && [
+            styles.tabActive,
+            {
+              backgroundColor: theme.primary + "20",
+              borderColor: theme.primary + "40",
+            },
+          ],
+          isFocused && [
+            styles.tabFocused,
+            { backgroundColor: theme.primary + "30" },
+          ],
         ] as ViewStyle[]
       }
     >
@@ -70,11 +82,7 @@ function FocusableTab({
         name={icon as any}
         size={16}
         color={
-          isFocused
-            ? "#FFFFFF"
-            : isActive
-              ? Colors.dark.primary
-              : Colors.dark.textSecondary
+          isFocused ? "#FFFFFF" : isActive ? theme.primary : theme.textSecondary
         }
       />
       <ThemedText
@@ -85,8 +93,8 @@ function FocusableTab({
             color: isFocused
               ? "#FFFFFF"
               : isActive
-                ? Colors.dark.primary
-                : Colors.dark.textSecondary,
+                ? theme.primary
+                : theme.textSecondary,
           },
         ]}
       >
@@ -239,7 +247,7 @@ export default function FavoritesScreen() {
         <ThemedText type="h4" style={styles.sectionTitle}>
           {title}
         </ThemedText>
-        <ThemedText type="small" style={{ color: Colors.dark.textSecondary }}>
+        <ThemedText type="small" style={{ color: theme.textSecondary }}>
           {filteredChannels.length} channels
         </ThemedText>
       </View>
@@ -294,7 +302,7 @@ export default function FavoritesScreen() {
     return (
       <ThemedView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.dark.primary} />
+          <ActivityIndicator size="large" color={theme.primary} />
         </View>
       </ThemedView>
     );
@@ -313,6 +321,7 @@ export default function FavoritesScreen() {
             paddingTop: insets.top + Spacing.sm,
             paddingLeft: insets.left + Spacing.md,
             paddingRight: insets.right + Spacing.md,
+            borderBottomColor: theme.backgroundSecondary,
           },
         ]}
       >
@@ -381,7 +390,6 @@ const styles = StyleSheet.create({
   header: {
     paddingBottom: Spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.dark.backgroundSecondary,
   },
   headerRow: {
     flexDirection: "row",
@@ -405,16 +413,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.dark.backgroundSecondary,
     gap: Spacing.xs,
   },
   tabActive: {
-    backgroundColor: Colors.dark.primary + "20",
     borderWidth: 1,
-    borderColor: Colors.dark.primary + "40",
   },
   tabFocused: {
-    backgroundColor: Colors.dark.primary + "30",
     transform: [{ scale: 1.08 }],
   },
   tabText: {

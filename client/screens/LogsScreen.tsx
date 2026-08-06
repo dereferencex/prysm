@@ -13,7 +13,7 @@ import * as FileSystemLegacy from "expo-file-system/legacy";
 
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
-import { Colors, Spacing, BorderRadius } from "@/constants/theme";
+import { Spacing, BorderRadius } from "@/constants/theme";
 import { TVFocusablePressable } from "@/components/TVFocusablePressable";
 import {
   appendLog,
@@ -398,7 +398,7 @@ function HeaderButton({
   tvOnly?: boolean;
 }) {
   if (tvOnly && !isTV) return null;
-  const color = destructive ? Colors.dark.error : theme.primary;
+  const color = destructive ? theme.error : theme.primary;
   return (
     <TVFocusablePressable
       onPress={onPress}

@@ -21,7 +21,8 @@ import {
   DRMConfig,
 } from "@/components/AdvancedVideoPlayer";
 import { usePlaylist } from "@/context/PlaylistContext";
-import { Colors, Spacing, BorderRadius } from "@/constants/theme";
+import { useTheme } from "@/hooks/useTheme";
+import { Spacing, BorderRadius } from "@/constants/theme";
 import { extractDRMFromManifest } from "@/lib/manifest-drm-extractor";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -75,6 +76,7 @@ export default function PlayerScreen() {
   const { width, height } = useWindowDimensions();
   const navigation = useNavigation<PlayerNavigationProp>();
   const route = useRoute<PlayerRouteProp>();
+  const { theme } = useTheme();
   const { channelId } = route.params;
 
   const {
@@ -231,19 +233,19 @@ export default function PlayerScreen() {
     return (
       <View style={[styles.container, styles.errorContainer]}>
         <StatusBar hidden />
-        <Ionicons name="alert-circle" size={40} color={Colors.dark.error} />
+        <Ionicons name="alert-circle" size={40} color={theme.error} />
         <ThemedText type="h4" style={styles.errorTitle}>
           Channel Not Found
         </ThemedText>
         <Pressable
           onPress={handleBack}
-          style={styles.errorButton}
+          style={[styles.errorButton, { backgroundColor: theme.primary + "30" }]}
           focusable={true}
           hasTVPreferredFocus={true}
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
-          <ThemedText type="body" style={{ color: Colors.dark.primary }}>
+          <ThemedText type="body" style={{ color: theme.primary }}>
             Go Back
           </ThemedText>
         </Pressable>
@@ -295,7 +297,6 @@ const styles = StyleSheet.create({
   errorButton: {
     marginTop: Spacing.xl,
     padding: Spacing.md,
-    backgroundColor: Colors.dark.primary + "30",
     borderRadius: BorderRadius.sm,
   },
 });

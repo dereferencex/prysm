@@ -24,7 +24,7 @@ import { Button } from "@/components/Button";
 import { useTheme } from "@/hooks/useTheme";
 import { usePlaylist } from "@/context/PlaylistContext";
 import { useOrientation } from "@/hooks/useOrientation";
-import { Colors, Spacing, BorderRadius } from "@/constants/theme";
+import { Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type SetupRouteProp = RouteProp<RootStackParamList, "Setup">;
@@ -187,7 +187,10 @@ export default function SetupScreen() {
             style={
               [
                 styles.closeButton,
-                isCloseFocused && styles.closeButtonFocused,
+                isCloseFocused && [
+                  styles.closeButtonFocused,
+                  { backgroundColor: theme.primary + "20" },
+                ],
               ] as ViewStyle[]
             }
             hitSlop={16}
@@ -403,7 +406,10 @@ export default function SetupScreen() {
                       borderColor: theme.primary + "40",
                     },
                     isCompact && styles.fileButtonCompact,
-                    isFileFocused && styles.fileButtonFocused,
+                    isFileFocused && [
+                      styles.fileButtonFocused,
+                      { backgroundColor: theme.primary + "15" },
+                    ],
                   ] as ViewStyle[]
                 }
                 testID="file-picker-btn"
@@ -431,13 +437,13 @@ export default function SetupScreen() {
           <View
             style={[
               styles.errorContainer,
-              { backgroundColor: Colors.dark.error + "20" },
+              { backgroundColor: theme.error + "20" },
             ]}
           >
-            <Ionicons name="alert-circle" size={14} color={Colors.dark.error} />
+            <Ionicons name="alert-circle" size={14} color={theme.error} />
             <ThemedText
               type="small"
-              style={[styles.errorText, { color: Colors.dark.error }]}
+              style={[styles.errorText, { color: theme.error }]}
             >
               {error}
             </ThemedText>
@@ -471,7 +477,10 @@ export default function SetupScreen() {
                 [
                   styles.cancelButton,
                   { borderColor: theme.textSecondary + "40" },
-                  isCancelFocused && styles.cancelButtonFocused,
+                  isCancelFocused && [
+                    styles.cancelButtonFocused,
+                    { backgroundColor: theme.primary + "20" },
+                  ],
                 ] as ViewStyle[]
               }
             >
@@ -615,7 +624,6 @@ const styles = StyleSheet.create({
   },
   fileButtonFocused: {
     borderStyle: "solid",
-    backgroundColor: Colors.dark.primary + "15",
     transform: [{ scale: 1.02 }],
   },
   fileButtonCompact: {
@@ -663,9 +671,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
     borderWidth: 1,
   },
-  cancelButtonFocused: {
-    backgroundColor: Colors.dark.primary + "20",
-  },
+  cancelButtonFocused: {},
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -685,7 +691,5 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "transparent",
   },
-  closeButtonFocused: {
-    backgroundColor: Colors.dark.primary + "20",
-  },
+  closeButtonFocused: {},
 });

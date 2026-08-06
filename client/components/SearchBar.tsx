@@ -10,7 +10,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 
 import { useTheme } from "@/hooks/useTheme";
-import { Colors, Spacing, BorderRadius } from "@/constants/theme";
+import { Spacing, BorderRadius } from "@/constants/theme";
 
 const isTV = Platform.isTV;
 
@@ -41,13 +41,13 @@ export function SearchBar({
       style={[
         styles.container,
         { backgroundColor: theme.backgroundSecondary },
-        isFocused && styles.containerFocused,
+        isFocused && { backgroundColor: theme.primary + "15" },
       ]}
     >
       <Ionicons
         name="search"
         size={20}
-        color={isFocused ? Colors.dark.primary : theme.textSecondary}
+        color={isFocused ? theme.primary : theme.textSecondary}
         style={styles.icon}
       />
       <TextInput
@@ -77,7 +77,7 @@ export function SearchBar({
           style={
             [
               styles.clearButton,
-              isClearFocused && styles.clearButtonFocused,
+              isClearFocused && { backgroundColor: theme.primary + "20" },
             ] as ViewStyle[]
           }
           testID="search-clear"
@@ -99,9 +99,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "transparent",
   },
-  containerFocused: {
-    backgroundColor: Colors.dark.primary + "15",
-  },
   icon: {
     marginRight: Spacing.sm,
   },
@@ -113,8 +110,5 @@ const styles = StyleSheet.create({
   clearButton: {
     padding: 4,
     borderRadius: BorderRadius.xs,
-  },
-  clearButtonFocused: {
-    backgroundColor: Colors.dark.primary + "20",
   },
 });

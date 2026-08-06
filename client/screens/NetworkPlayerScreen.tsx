@@ -10,7 +10,8 @@ import {
   AdvancedVideoPlayer,
   DRMConfig,
 } from "@/components/AdvancedVideoPlayer";
-import { Colors, Spacing, BorderRadius } from "@/constants/theme";
+import { useTheme } from "@/hooks/useTheme";
+import { Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { USER_AGENT_STRINGS, UserAgent } from "@/lib/storage";
 import { usePlaylist } from "@/context/PlaylistContext";
@@ -69,6 +70,7 @@ export default function NetworkPlayerScreen() {
   const route = useRoute<NetworkPlayerRouteProp>();
   const { config } = route.params;
   const { settings } = usePlaylist();
+  const { theme } = useTheme();
 
   useEffect(() => {
     loadNavBar().then(() => hideNavBar());
@@ -143,7 +145,7 @@ export default function NetworkPlayerScreen() {
     return (
       <View style={[styles.container, styles.center]}>
         <StatusBar hidden />
-        <Ionicons name="alert-circle" size={40} color={Colors.dark.error} />
+        <Ionicons name="alert-circle" size={40} color={theme.error} />
         <ThemedText type="h4" style={styles.errorTitle}>
           No Stream URL
         </ThemedText>
@@ -152,13 +154,13 @@ export default function NetworkPlayerScreen() {
         </ThemedText>
         <Pressable
           onPress={handleBack}
-          style={styles.errorButton}
+          style={[styles.errorButton, { backgroundColor: theme.primary + "30" }]}
           focusable={true}
           hasTVPreferredFocus={true}
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
-          <ThemedText type="body" style={{ color: Colors.dark.primary }}>
+          <ThemedText type="body" style={{ color: theme.primary }}>
             Go Back
           </ThemedText>
         </Pressable>
@@ -214,7 +216,6 @@ const styles = StyleSheet.create({
   errorButton: {
     marginTop: Spacing.xl,
     padding: Spacing.md,
-    backgroundColor: Colors.dark.primary + "30",
     borderRadius: BorderRadius.sm,
   },
 });

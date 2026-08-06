@@ -42,8 +42,9 @@ import { useKeepAwake } from "expo-keep-awake";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ThemedText } from "@/components/ThemedText";
+import { useTheme } from "@/hooks/useTheme";
 import { useResponsive } from "@/hooks/useResponsive";
-import { Colors, Spacing, BorderRadius } from "@/constants/theme";
+import { Spacing, BorderRadius } from "@/constants/theme";
 import { parseHLSQualities, isHLSStream } from "@/lib/hls-quality-parser";
 import { parseDASHQualities, isDASHStream } from "@/lib/dash-quality-parser";
 import { parseMSSQualities, isMSSStream } from "@/lib/mss-quality-parser";
@@ -176,6 +177,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   onFavoritePress,
   isLive = true,
 }: AdvancedVideoPlayerProps) {
+  const { theme } = useTheme();
   useKeepAwake();
 
   const insets = useSafeAreaInsets();
@@ -1269,7 +1271,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
           {/* Loading / buffering spinner */}
           {(isLoading || isBuffering) && !error ? (
             <View style={st.centerOverlay} pointerEvents="none">
-              <ActivityIndicator size="large" color={Colors.dark.primary} />
+              <ActivityIndicator size="large" color={theme.primary} />
               <ThemedText type="small" style={st.loadingText}>
                 {isLoading ? "Loading stream…" : "Buffering…"}
               </ThemedText>
@@ -1280,12 +1282,11 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
           {error ? (
             <View style={st.centerOverlay}>
               <View style={st.errorBox}>
-                <Ionicons
-                  name="cloud-offline"
-                  size={52}
-                  color={Colors.dark.error}
-                />
-                <ThemedText type="body" style={st.errorText}>
+                <Ionicons name="cloud-offline" size={52} color={theme.error} />
+                <ThemedText
+                  type="body"
+                  style={[st.errorText, { color: theme.error }]}
+                >
                   {error}
                 </ThemedText>
                 <TVFocusablePressable
@@ -1294,19 +1295,24 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                     setIsLoading(true);
                     loadSource();
                   }}
-                  baseStyle={st.retryBtn}
-                  focusedStyle={st.retryBtnFocused}
+                  baseStyle={[
+                    st.retryBtn,
+                    {
+                      borderColor: theme.primary,
+                      backgroundColor: theme.primary + "20",
+                    },
+                  ]}
+                  focusedStyle={{
+                    ...st.retryBtnFocused,
+                    backgroundColor: theme.primary + "50",
+                  }}
                   hasTVPreferredFocus={isTV}
                   accessibilityLabel="Retry"
                 >
-                  <Ionicons
-                    name="refresh"
-                    size={18}
-                    color={Colors.dark.primary}
-                  />
+                  <Ionicons name="refresh" size={18} color={theme.primary} />
                   <ThemedText
                     type="small"
-                    style={{ color: Colors.dark.primary, marginLeft: 6 }}
+                    style={{ color: theme.primary, marginLeft: 6 }}
                   >
                     Retry
                   </ThemedText>
@@ -1350,13 +1356,10 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 </ThemedText>
                 <Pressable
                   onPress={() => setIsLocked(false)}
-                  style={st.unlockBtn}
+                  style={[st.unlockBtn, { borderColor: theme.primary }]}
                   hitSlop={16}
                 >
-                  <ThemedText
-                    type="small"
-                    style={{ color: Colors.dark.primary }}
-                  >
+                  <ThemedText type="small" style={{ color: theme.primary }}>
                     Tap to unlock
                   </ThemedText>
                 </Pressable>
@@ -1396,7 +1399,11 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                     onBack();
                   }}
                   baseStyle={st.iconBtn}
-                  focusedStyle={st.iconBtnFocused}
+                  focusedStyle={{
+                    ...st.iconBtnFocused,
+                    backgroundColor: theme.primary + "40",
+                    borderColor: theme.primary,
+                  }}
                   focusable={showControls}
                   hitSlop={16}
                   accessibilityLabel="Back"
@@ -1427,7 +1434,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
               {subtitle ? (
                 <ThemedText
                   type="small"
-                  style={st.subtitleText}
+                  style={[st.subtitleText, { color: theme.textSecondary }]}
                   numberOfLines={1}
                 >
                   {subtitle}
@@ -1442,7 +1449,11 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 <TVFocusablePressable
                   onPress={() => setShowRecentPanel((p) => !p)}
                   baseStyle={st.iconBtn}
-                  focusedStyle={st.iconBtnFocused}
+                  focusedStyle={{
+                    ...st.iconBtnFocused,
+                    backgroundColor: theme.primary + "40",
+                    borderColor: theme.primary,
+                  }}
                   focusable={showControls}
                   accessibilityLabel="Recent channels"
                   viewRef={recentBtnRef}
@@ -1462,8 +1473,21 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
               {onFavoritePress ? (
                 <TVFocusablePressable
                   onPress={onFavoritePress}
-                  baseStyle={[st.iconBtn, isFavorite && st.iconBtnActive]}
-                  focusedStyle={st.iconBtnFocused}
+                  baseStyle={[
+                    st.iconBtn,
+                    isFavorite && [
+                      st.iconBtnActive,
+                      {
+                        borderColor: theme.primary,
+                        backgroundColor: theme.primary + "20",
+                      },
+                    ],
+                  ]}
+                  focusedStyle={{
+                    ...st.iconBtnFocused,
+                    backgroundColor: theme.primary + "40",
+                    borderColor: theme.primary,
+                  }}
                   focusable={showControls}
                   accessibilityLabel={
                     isFavorite ? "Remove favourite" : "Add favourite"
@@ -1475,7 +1499,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                   <Ionicons
                     name={isFavorite ? "heart" : "heart-outline"}
                     size={playerControls.icon}
-                    color={isFavorite ? Colors.dark.primary : "#fff"}
+                    color={isFavorite ? theme.primary : "#fff"}
                   />
                 </TVFocusablePressable>
               ) : null}
@@ -1496,7 +1520,10 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                     borderRadius: playerControls.nav / 2,
                   },
                 ]}
-                focusedStyle={st.navBtnFocused}
+                focusedStyle={{
+                  ...st.navBtnFocused,
+                  borderColor: theme.primary,
+                }}
                 focusable={showControls}
                 hitSlop={12}
                 accessibilityLabel="Previous"
@@ -1522,7 +1549,10 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                     borderRadius: playerControls.nav / 2,
                   },
                 ]}
-                focusedStyle={st.navBtnFocused}
+                focusedStyle={{
+                  ...st.navBtnFocused,
+                  borderColor: theme.primary,
+                }}
                 focusable={showControls}
                 hitSlop={12}
                 accessibilityLabel="Seek back 10s"
@@ -1549,6 +1579,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                   height: playerControls.play,
                   borderRadius: playerControls.play / 2,
                 },
+                { backgroundColor: theme.primary },
               ]}
               focusedStyle={st.playBtnFocused}
               focusable={showControls}
@@ -1579,7 +1610,10 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                     borderRadius: playerControls.nav / 2,
                   },
                 ]}
-                focusedStyle={st.navBtnFocused}
+                focusedStyle={{
+                  ...st.navBtnFocused,
+                  borderColor: theme.primary,
+                }}
                 focusable={showControls}
                 hitSlop={12}
                 accessibilityLabel="Next"
@@ -1605,7 +1639,10 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                     borderRadius: playerControls.nav / 2,
                   },
                 ]}
-                focusedStyle={st.navBtnFocused}
+                focusedStyle={{
+                  ...st.navBtnFocused,
+                  borderColor: theme.primary,
+                }}
                 focusable={showControls}
                 hitSlop={12}
                 accessibilityLabel="Seek forward 10s"
@@ -1640,7 +1677,13 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
             <View style={st.progressRow}>
               <ThemedText
                 type="caption"
-                style={[st.timeText, seekDrag.active && st.timeTextScrubbing]}
+                style={[
+                  st.timeText,
+                  seekDrag.active && [
+                    st.timeTextScrubbing,
+                    { color: theme.primary },
+                  ],
+                ]}
               >
                 {formatTime(seekDrag.active ? seekDragPreviewMs! : positionMs)}
               </ThemedText>
@@ -1648,7 +1691,13 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 /* Unknown duration: non-interactive progress indicator */
                 <View style={st.seekBar} pointerEvents="none">
                   <View style={st.seekBarTrack}>
-                    <View style={[st.seekBarFill, { width: "100%" }]} />
+                    <View
+                      style={[
+                        st.seekBarFill,
+                        { width: "100%" },
+                        { backgroundColor: theme.primary },
+                      ]}
+                    />
                   </View>
                 </View>
               ) : (
@@ -1662,7 +1711,13 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                   {isTV ? (
                     <Pressable
                       ref={seekBarRef}
-                      style={[st.seekBar, seekBarFocused && st.seekBarFocused]}
+                      style={[
+                        st.seekBar,
+                        seekBarFocused && [
+                          st.seekBarFocused,
+                          { borderColor: theme.primary },
+                        ],
+                      ]}
                       focusable={showControls}
                       accessible
                       accessibilityRole="adjustable"
@@ -1699,6 +1754,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                             {
                               width: `${(seekDrag.active ? seekDrag.progress : progress) * 100}%`,
                             },
+                            { backgroundColor: theme.primary },
                           ]}
                         />
                         {/* Thumb — animates size on drag */}
@@ -1708,6 +1764,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                             {
                               left: `${(seekDrag.active ? seekDrag.progress : progress) * 100}%`,
                             },
+                            { backgroundColor: theme.primary },
                             seekBarFocused && st.seekThumbFocused,
                             animSeekThumb,
                           ]}
@@ -1801,7 +1858,9 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
               {/* Left badges */}
               <View style={st.badgeRow}>
                 {effectiveIsLive ? (
-                  <View style={st.liveBadge}>
+                  <View
+                    style={[st.liveBadge, { backgroundColor: theme.error }]}
+                  >
                     <View style={st.liveDot} />
                     <ThemedText type="small" style={st.liveText}>
                       LIVE
@@ -1813,7 +1872,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                     <Ionicons
                       name="shield-checkmark"
                       size={12}
-                      color={Colors.dark.success}
+                      color={theme.success}
                     />
                     <ThemedText
                       type="caption"
@@ -1831,7 +1890,10 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 <TVFocusablePressable
                   onPress={() => setShowSettingsModal(true)}
                   baseStyle={st.toolBtn}
-                  focusedStyle={st.toolBtnFocused}
+                  focusedStyle={{
+                    ...st.toolBtnFocused,
+                    borderColor: theme.primary,
+                  }}
                   focusable={showControls}
                   accessibilityLabel="Settings"
                   viewRef={settingsBtnRef}
@@ -1850,9 +1912,18 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                   onPress={handleBackgroundToggle}
                   baseStyle={[
                     st.toolBtn,
-                    isBackgroundPlaying && st.toolBtnActive,
+                    isBackgroundPlaying && [
+                      st.toolBtnActive,
+                      {
+                        backgroundColor: theme.primary + "25",
+                        borderColor: theme.primary,
+                      },
+                    ],
                   ]}
-                  focusedStyle={st.toolBtnFocused}
+                  focusedStyle={{
+                    ...st.toolBtnFocused,
+                    borderColor: theme.primary,
+                  }}
                   focusable={showControls}
                   accessibilityLabel={
                     isBackgroundPlaying
@@ -1871,7 +1942,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                         : "musical-notes-outline"
                     }
                     size={20}
-                    color={isBackgroundPlaying ? Colors.dark.primary : "#fff"}
+                    color={isBackgroundPlaying ? theme.primary : "#fff"}
                   />
                 </TVFocusablePressable>
 
@@ -1882,7 +1953,10 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                   <TVFocusablePressable
                     onPress={handleEnterPip}
                     baseStyle={st.toolBtn}
-                    focusedStyle={st.toolBtnFocused}
+                    focusedStyle={{
+                      ...st.toolBtnFocused,
+                      borderColor: theme.primary,
+                    }}
                     focusable={showControls}
                     accessibilityLabel="Picture in picture"
                   >
@@ -1903,7 +1977,10 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                     TvPlayerCommands.setResizeMode(tvPlayerRef, next.value);
                   }}
                   baseStyle={st.toolBtn}
-                  focusedStyle={st.toolBtnFocused}
+                  focusedStyle={{
+                    ...st.toolBtnFocused,
+                    borderColor: theme.primary,
+                  }}
                   focusable={showControls}
                   accessibilityLabel="Aspect ratio"
                   viewRef={aspectBtnRef}
@@ -1965,7 +2042,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                   <Ionicons
                     name="tv-outline"
                     size={20}
-                    color={Colors.dark.textSecondary}
+                    color={theme.textSecondary}
                   />
                 </View>
               )}
@@ -1979,7 +2056,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 </ThemedText>
                 <ThemedText
                   type="caption"
-                  style={{ color: Colors.dark.textSecondary }}
+                  style={{ color: theme.textSecondary }}
                   numberOfLines={1}
                 >
                   {ch.group}
@@ -1998,11 +2075,17 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
         onRequestClose={() => setShowStopAudioModal(false)}
       >
         <View style={st.modalScrim}>
-          <View style={[st.modalSheet, { maxWidth: 360 }]}>
+          <View
+            style={[
+              st.modalSheet,
+              { maxWidth: 360 },
+              { backgroundColor: theme.backgroundDefault },
+            ]}
+          >
             <Ionicons
               name="musical-notes"
               size={36}
-              color={Colors.dark.primary}
+              color={theme.primary}
               style={{ alignSelf: "center", marginBottom: Spacing.md }}
             />
             <ThemedText type="h4" style={st.modalTitle}>
@@ -2011,7 +2094,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
             <ThemedText
               type="body"
               style={{
-                color: Colors.dark.textSecondary,
+                color: theme.textSecondary,
                 textAlign: "center",
                 marginBottom: Spacing.xl,
               }}
@@ -2025,14 +2108,17 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 onBack?.();
               }}
               baseStyle={st.optionRow}
-              focusedStyle={st.optionRowFocused}
+              focusedStyle={{
+                ...st.optionRowFocused,
+                backgroundColor: theme.primary + "30",
+              }}
               hasTVPreferredFocus={isTV}
               accessibilityLabel="Keep playing and go back"
             >
               <Ionicons
                 name="musical-notes-outline"
                 size={22}
-                color={Colors.dark.primary}
+                color={theme.primary}
                 style={{ marginRight: Spacing.md }}
               />
               <ThemedText type="body" style={{ color: "#fff", flex: 1 }}>
@@ -2050,19 +2136,19 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 onBack?.();
               }}
               baseStyle={st.optionRow}
-              focusedStyle={st.optionRowFocused}
+              focusedStyle={{
+                ...st.optionRowFocused,
+                backgroundColor: theme.primary + "30",
+              }}
               accessibilityLabel="Stop audio and go back"
             >
               <Ionicons
                 name="stop-circle-outline"
                 size={22}
-                color={Colors.dark.error}
+                color={theme.error}
                 style={{ marginRight: Spacing.md }}
               />
-              <ThemedText
-                type="body"
-                style={{ color: Colors.dark.error, flex: 1 }}
-              >
+              <ThemedText type="body" style={{ color: theme.error, flex: 1 }}>
                 Stop audio
               </ThemedText>
             </TVFocusablePressable>
@@ -2078,11 +2164,17 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
         onRequestClose={() => setShowFallbackDialog(false)}
       >
         <View style={st.modalScrim}>
-          <View style={[st.modalSheet, { maxWidth: 360 }]}>
+          <View
+            style={[
+              st.modalSheet,
+              { maxWidth: 360 },
+              { backgroundColor: theme.backgroundDefault },
+            ]}
+          >
             <Ionicons
               name="warning"
               size={36}
-              color={Colors.dark.error}
+              color={theme.error}
               style={{ alignSelf: "center", marginBottom: Spacing.md }}
             />
             <ThemedText type="h4" style={st.modalTitle}>
@@ -2091,7 +2183,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
             <ThemedText
               type="body"
               style={{
-                color: Colors.dark.textSecondary,
+                color: theme.textSecondary,
                 textAlign: "center",
                 marginBottom: Spacing.xl,
               }}
@@ -2107,14 +2199,17 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 );
               }}
               baseStyle={st.optionRow}
-              focusedStyle={st.optionRowFocused}
+              focusedStyle={{
+                ...st.optionRowFocused,
+                backgroundColor: theme.primary + "30",
+              }}
               hasTVPreferredFocus={isTV}
               accessibilityLabel="Switch player engine and retry"
             >
               <Ionicons
                 name="play-circle-outline"
                 size={22}
-                color={Colors.dark.primary}
+                color={theme.primary}
                 style={{ marginRight: Spacing.md }}
               />
               <ThemedText type="body" style={{ color: "#fff", flex: 1 }}>
@@ -2126,18 +2221,21 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 setShowFallbackDialog(false);
               }}
               baseStyle={st.optionRow}
-              focusedStyle={st.optionRowFocused}
+              focusedStyle={{
+                ...st.optionRowFocused,
+                backgroundColor: theme.primary + "30",
+              }}
               accessibilityLabel="Stay with ExoPlayer"
             >
               <Ionicons
                 name="close-circle-outline"
                 size={22}
-                color={Colors.dark.textSecondary}
+                color={theme.textSecondary}
                 style={{ marginRight: Spacing.md }}
               />
               <ThemedText
                 type="body"
-                style={{ color: Colors.dark.textSecondary, flex: 1 }}
+                style={{ color: theme.textSecondary, flex: 1 }}
               >
                 Stay with ExoPlayer
               </ThemedText>
@@ -2158,7 +2256,12 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
           onPress={() => setShowSettingsModal(false)}
           focusable={!isTV}
         >
-          <View style={st.modalSheet}>
+          <View
+            style={[
+              st.modalSheet,
+              { backgroundColor: theme.backgroundDefault },
+            ]}
+          >
             <ThemedText type="h4" style={st.modalTitle}>
               Settings
             </ThemedText>
@@ -2218,13 +2321,16 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                   key={item.label}
                   onPress={item.onPress}
                   baseStyle={st.settingsRow}
-                  focusedStyle={st.settingsRowFocused}
+                  focusedStyle={{
+                    ...st.settingsRowFocused,
+                    backgroundColor: theme.primary + "20",
+                  }}
                   hasTVPreferredFocus={isTV && idx === 0}
                 >
                   <Ionicons
                     name={item.icon}
                     size={22}
-                    color={Colors.dark.textSecondary}
+                    color={theme.textSecondary}
                     style={{ marginRight: Spacing.md }}
                   />
                   <ThemedText type="body" style={{ color: "#fff", flex: 1 }}>
@@ -2232,14 +2338,14 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                   </ThemedText>
                   <ThemedText
                     type="small"
-                    style={{ color: Colors.dark.textSecondary }}
+                    style={{ color: theme.textSecondary }}
                   >
                     {item.value}
                   </ThemedText>
                   <Ionicons
                     name="chevron-forward"
                     size={16}
-                    color={Colors.dark.textSecondary}
+                    color={theme.textSecondary}
                     style={{ marginLeft: 4 }}
                   />
                 </TVFocusablePressable>
@@ -2260,7 +2366,12 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
           onPress={() => setShowQualityModal(false)}
           focusable={!isTV}
         >
-          <View style={st.modalSheet}>
+          <View
+            style={[
+              st.modalSheet,
+              { backgroundColor: theme.backgroundDefault },
+            ]}
+          >
             <ThemedText type="h4" style={st.modalTitle}>
               Quality
             </ThemedText>
@@ -2273,20 +2384,22 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 onPress={() => handleQualitySelect("auto")}
                 baseStyle={[
                   st.optionRow,
-                  selectedQuality === "auto" && st.optionRowActive,
+                  selectedQuality === "auto" && [
+                    st.optionRowActive,
+                    { backgroundColor: theme.primary + "18" },
+                  ],
                 ]}
-                focusedStyle={st.optionRowFocused}
+                focusedStyle={{
+                  ...st.optionRowFocused,
+                  backgroundColor: theme.primary + "30",
+                }}
                 hasTVPreferredFocus={isTV && selectedQuality === "auto"}
               >
                 <ThemedText type="body" style={{ color: "#fff", flex: 1 }}>
                   Auto
                 </ThemedText>
                 {selectedQuality === "auto" ? (
-                  <Ionicons
-                    name="checkmark"
-                    size={20}
-                    color={Colors.dark.primary}
-                  />
+                  <Ionicons name="checkmark" size={20} color={theme.primary} />
                 ) : null}
               </TVFocusablePressable>
               {qualities.map((q, idx) => (
@@ -2295,9 +2408,15 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                   onPress={() => handleQualitySelect(q)}
                   baseStyle={[
                     st.optionRow,
-                    selectedQuality === q.label && st.optionRowActive,
+                    selectedQuality === q.label && [
+                      st.optionRowActive,
+                      { backgroundColor: theme.primary + "18" },
+                    ],
                   ]}
-                  focusedStyle={st.optionRowFocused}
+                  focusedStyle={{
+                    ...st.optionRowFocused,
+                    backgroundColor: theme.primary + "30",
+                  }}
                   hasTVPreferredFocus={
                     isTV &&
                     selectedQuality === q.label &&
@@ -2312,7 +2431,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                     {q.bitrate ? (
                       <ThemedText
                         type="caption"
-                        style={{ color: Colors.dark.textSecondary }}
+                        style={{ color: theme.textSecondary }}
                       >
                         {q.bitrate >= 1_000_000
                           ? `${(q.bitrate / 1_000_000).toFixed(1)} Mbps`
@@ -2324,7 +2443,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                     <Ionicons
                       name="checkmark"
                       size={20}
-                      color={Colors.dark.primary}
+                      color={theme.primary}
                     />
                   ) : null}
                 </TVFocusablePressable>
@@ -2346,7 +2465,12 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
           onPress={() => setShowAudioModal(false)}
           focusable={!isTV}
         >
-          <View style={st.modalSheet}>
+          <View
+            style={[
+              st.modalSheet,
+              { backgroundColor: theme.backgroundDefault },
+            ]}
+          >
             <ThemedText type="h4" style={st.modalTitle}>
               Audio Track
             </ThemedText>
@@ -2355,12 +2479,12 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 <Ionicons
                   name="volume-mute-outline"
                   size={32}
-                  color={Colors.dark.textSecondary}
+                  color={theme.textSecondary}
                 />
                 <ThemedText
                   type="small"
                   style={{
-                    color: Colors.dark.textSecondary,
+                    color: theme.textSecondary,
                     marginTop: Spacing.sm,
                   }}
                 >
@@ -2387,10 +2511,15 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                     }}
                     baseStyle={[
                       st.optionRow,
-                      (selectedAudioTrack === track.id || track.isSelected) &&
+                      (selectedAudioTrack === track.id || track.isSelected) && [
                         st.optionRowActive,
+                        { backgroundColor: theme.primary + "18" },
+                      ],
                     ]}
-                    focusedStyle={st.optionRowFocused}
+                    focusedStyle={{
+                      ...st.optionRowFocused,
+                      backgroundColor: theme.primary + "30",
+                    }}
                     hasTVPreferredFocus={
                       isTV &&
                       (selectedAudioTrack === track.id ||
@@ -2404,7 +2533,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                       {track.language ? (
                         <ThemedText
                           type="caption"
-                          style={{ color: Colors.dark.textSecondary }}
+                          style={{ color: theme.textSecondary }}
                         >
                           {track.language}
                         </ThemedText>
@@ -2415,7 +2544,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                       <Ionicons
                         name="checkmark"
                         size={20}
-                        color={Colors.dark.primary}
+                        color={theme.primary}
                       />
                     ) : null}
                   </TVFocusablePressable>
@@ -2438,7 +2567,12 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
           onPress={() => setShowSubtitleModal(false)}
           focusable={!isTV}
         >
-          <View style={st.modalSheet}>
+          <View
+            style={[
+              st.modalSheet,
+              { backgroundColor: theme.backgroundDefault },
+            ]}
+          >
             <ThemedText type="h4" style={st.modalTitle}>
               Subtitles
             </ThemedText>
@@ -2455,20 +2589,22 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 }}
                 baseStyle={[
                   st.optionRow,
-                  selectedSubtitleTrack === null && st.optionRowActive,
+                  selectedSubtitleTrack === null && [
+                    st.optionRowActive,
+                    { backgroundColor: theme.primary + "18" },
+                  ],
                 ]}
-                focusedStyle={st.optionRowFocused}
+                focusedStyle={{
+                  ...st.optionRowFocused,
+                  backgroundColor: theme.primary + "30",
+                }}
                 hasTVPreferredFocus={isTV && selectedSubtitleTrack === null}
               >
                 <ThemedText type="body" style={{ color: "#fff", flex: 1 }}>
                   Off
                 </ThemedText>
                 {selectedSubtitleTrack === null ? (
-                  <Ionicons
-                    name="checkmark"
-                    size={20}
-                    color={Colors.dark.primary}
-                  />
+                  <Ionicons name="checkmark" size={20} color={theme.primary} />
                 ) : null}
               </TVFocusablePressable>
               {subtitleTracks.map((track, idx) => (
@@ -2485,9 +2621,15 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                   }}
                   baseStyle={[
                     st.optionRow,
-                    selectedSubtitleTrack === track.id && st.optionRowActive,
+                    selectedSubtitleTrack === track.id && [
+                      st.optionRowActive,
+                      { backgroundColor: theme.primary + "18" },
+                    ],
                   ]}
-                  focusedStyle={st.optionRowFocused}
+                  focusedStyle={{
+                    ...st.optionRowFocused,
+                    backgroundColor: theme.primary + "30",
+                  }}
                   hasTVPreferredFocus={
                     isTV && selectedSubtitleTrack === track.id
                   }
@@ -2499,7 +2641,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                     {track.language ? (
                       <ThemedText
                         type="caption"
-                        style={{ color: Colors.dark.textSecondary }}
+                        style={{ color: theme.textSecondary }}
                       >
                         {track.language}
                       </ThemedText>
@@ -2509,7 +2651,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                     <Ionicons
                       name="checkmark"
                       size={20}
-                      color={Colors.dark.primary}
+                      color={theme.primary}
                     />
                   ) : null}
                 </TVFocusablePressable>
@@ -2531,14 +2673,19 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
           onPress={() => setShowPlayerEngineModal(false)}
           focusable={!isTV}
         >
-          <View style={st.modalSheet}>
+          <View
+            style={[
+              st.modalSheet,
+              { backgroundColor: theme.backgroundDefault },
+            ]}
+          >
             <ThemedText type="h4" style={st.modalTitle}>
               Player Engine
             </ThemedText>
             <ThemedText
               type="caption"
               style={{
-                color: Colors.dark.textSecondary,
+                color: theme.textSecondary,
                 textAlign: "center",
                 marginBottom: Spacing.md,
               }}
@@ -2552,9 +2699,15 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
               }}
               baseStyle={[
                 st.optionRow,
-                activePlayerEngine === "exoplayer" && st.optionRowActive,
+                activePlayerEngine === "exoplayer" && [
+                  st.optionRowActive,
+                  { backgroundColor: theme.primary + "18" },
+                ],
               ]}
-              focusedStyle={st.optionRowFocused}
+              focusedStyle={{
+                ...st.optionRowFocused,
+                backgroundColor: theme.primary + "30",
+              }}
               hasTVPreferredFocus={isTV}
               accessibilityLabel="Use ExoPlayer"
             >
@@ -2564,17 +2717,13 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 </ThemedText>
                 <ThemedText
                   type="caption"
-                  style={{ color: Colors.dark.textSecondary }}
+                  style={{ color: theme.textSecondary }}
                 >
                   Default — best for most streams
                 </ThemedText>
               </View>
               {activePlayerEngine === "exoplayer" ? (
-                <Ionicons
-                  name="checkmark"
-                  size={20}
-                  color={Colors.dark.primary}
-                />
+                <Ionicons name="checkmark" size={20} color={theme.primary} />
               ) : null}
             </TVFocusablePressable>
             <TVFocusablePressable
@@ -2584,9 +2733,15 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
               }}
               baseStyle={[
                 st.optionRow,
-                activePlayerEngine === "vlc" && st.optionRowActive,
+                activePlayerEngine === "vlc" && [
+                  st.optionRowActive,
+                  { backgroundColor: theme.primary + "18" },
+                ],
               ]}
-              focusedStyle={st.optionRowFocused}
+              focusedStyle={{
+                ...st.optionRowFocused,
+                backgroundColor: theme.primary + "30",
+              }}
               accessibilityLabel="Use VLC Player"
             >
               <View style={{ flex: 1 }}>
@@ -2595,17 +2750,13 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 </ThemedText>
                 <ThemedText
                   type="caption"
-                  style={{ color: Colors.dark.textSecondary }}
+                  style={{ color: theme.textSecondary }}
                 >
                   Fallback — wider codec support
                 </ThemedText>
               </View>
               {activePlayerEngine === "vlc" ? (
-                <Ionicons
-                  name="checkmark"
-                  size={20}
-                  color={Colors.dark.primary}
-                />
+                <Ionicons name="checkmark" size={20} color={theme.primary} />
               ) : null}
             </TVFocusablePressable>
           </View>
@@ -2650,7 +2801,6 @@ const st = StyleSheet.create({
     maxWidth: 320,
   },
   errorText: {
-    color: Colors.dark.error,
     textAlign: "center",
     marginTop: Spacing.md,
   },
@@ -2662,11 +2812,8 @@ const st = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     borderRadius: BorderRadius.sm,
     borderWidth: 2,
-    borderColor: Colors.dark.primary,
-    backgroundColor: Colors.dark.primary + "20",
   },
   retryBtnFocused: {
-    backgroundColor: Colors.dark.primary + "50",
     transform: [{ scale: 1.06 }],
   },
 
@@ -2705,7 +2852,6 @@ const st = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     borderRadius: BorderRadius.sm,
     borderWidth: 2,
-    borderColor: Colors.dark.primary,
   },
 
   // Controls overlay
@@ -2744,7 +2890,6 @@ const st = StyleSheet.create({
     textAlign: "center",
   },
   subtitleText: {
-    color: Colors.dark.textSecondary,
     marginTop: 2,
     textAlign: "center",
   },
@@ -2756,13 +2901,8 @@ const st = StyleSheet.create({
     borderWidth: 2,
     borderColor: "transparent",
   },
-  iconBtnActive: {
-    borderColor: Colors.dark.primary,
-    backgroundColor: Colors.dark.primary + "20",
-  },
+  iconBtnActive: {},
   iconBtnFocused: {
-    backgroundColor: Colors.dark.primary + "40",
-    borderColor: Colors.dark.primary,
     transform: [{ scale: 1.1 }],
   },
 
@@ -2774,7 +2914,6 @@ const st = StyleSheet.create({
     gap: Spacing["2xl"],
   },
   playBtn: {
-    backgroundColor: Colors.dark.primary,
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 3,
@@ -2793,7 +2932,6 @@ const st = StyleSheet.create({
   },
   navBtnFocused: {
     backgroundColor: "rgba(255,255,255,0.28)",
-    borderColor: Colors.dark.primary,
     transform: [{ scale: 1.08 }],
   },
 
@@ -2821,7 +2959,6 @@ const st = StyleSheet.create({
   },
   seekBarFocused: {
     backgroundColor: "rgba(255,255,255,0.12)",
-    borderColor: Colors.dark.primary,
   },
   seekBarTrack: {
     // Base height 4px; animated style overrides height when scrubbing
@@ -2836,7 +2973,6 @@ const st = StyleSheet.create({
   },
   seekBarFill: {
     height: "100%",
-    backgroundColor: Colors.dark.primary,
     borderRadius: 2,
   },
   seekThumb: {
@@ -2846,7 +2982,6 @@ const st = StyleSheet.create({
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: Colors.dark.primary,
     marginLeft: -7,
   },
   seekThumbFocused: {
@@ -2875,9 +3010,7 @@ const st = StyleSheet.create({
     fontWeight: "700",
     fontSize: 12,
   },
-  timeTextScrubbing: {
-    color: Colors.dark.primary,
-  },
+  timeTextScrubbing: {},
   bottomRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -2891,7 +3024,6 @@ const st = StyleSheet.create({
   liveBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.dark.error,
     paddingHorizontal: Spacing.sm,
     paddingVertical: 4,
     borderRadius: BorderRadius.xs,
@@ -2928,13 +3060,9 @@ const st = StyleSheet.create({
     borderWidth: 2,
     borderColor: "transparent",
   },
-  toolBtnActive: {
-    backgroundColor: Colors.dark.primary + "25",
-    borderColor: Colors.dark.primary,
-  },
+  toolBtnActive: {},
   toolBtnFocused: {
     backgroundColor: "rgba(255,255,255,0.28)",
-    borderColor: Colors.dark.primary,
     transform: [{ scale: 1.12 }],
   },
 
@@ -2994,7 +3122,6 @@ const st = StyleSheet.create({
     width: "85%",
     maxWidth: 400,
     maxHeight: "75%",
-    backgroundColor: Colors.dark.backgroundDefault,
     borderRadius: BorderRadius.md,
     padding: Spacing.lg,
   },
@@ -3012,9 +3139,7 @@ const st = StyleSheet.create({
     borderColor: "transparent",
     marginBottom: 2,
   },
-  settingsRowFocused: {
-    backgroundColor: Colors.dark.primary + "20",
-  },
+  settingsRowFocused: {},
   optionRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -3026,12 +3151,8 @@ const st = StyleSheet.create({
     borderColor: "transparent",
     marginBottom: 2,
   },
-  optionRowActive: {
-    backgroundColor: Colors.dark.primary + "18",
-  },
-  optionRowFocused: {
-    backgroundColor: Colors.dark.primary + "30",
-  },
+  optionRowActive: {},
+  optionRowFocused: {},
   emptyState: {
     alignItems: "center",
     paddingVertical: Spacing.xl,

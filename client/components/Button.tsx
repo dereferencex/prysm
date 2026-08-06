@@ -16,7 +16,8 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { ThemedText } from "@/components/ThemedText";
-import { Colors, BorderRadius, Spacing } from "@/constants/theme";
+import { useTheme } from "@/hooks/useTheme";
+import { BorderRadius, Spacing } from "@/constants/theme";
 
 const isTV = Platform.isTV;
 
@@ -51,6 +52,7 @@ export function Button({
   variant = "primary",
   hasTVPreferredFocus,
 }: ButtonProps) {
+  const { theme } = useTheme();
   const scale = useSharedValue(1);
   const [isFocused, setIsFocused] = useState(false);
 
@@ -93,12 +95,16 @@ export function Button({
           styles.button,
           {
             backgroundColor:
-              variant === "primary"
-                ? Colors.dark.primary
-                : Colors.dark.backgroundSecondary,
+              variant === "primary" ? theme.primary : theme.backgroundSecondary,
             opacity: isDisabled ? 0.5 : 1,
           },
-          isFocused && styles.buttonFocused,
+          isFocused && [
+            styles.buttonFocused,
+            {
+              backgroundColor: theme.primary + "20",
+              shadowColor: theme.primary,
+            },
+          ],
           style,
           animatedStyle,
         ] as ViewStyle[]
@@ -107,9 +113,7 @@ export function Button({
       {loading ? (
         <ActivityIndicator
           size="small"
-          color={
-            variant === "primary" ? Colors.dark.buttonText : Colors.dark.text
-          }
+          color={variant === "primary" ? theme.buttonText : theme.text}
         />
       ) : (
         <ThemedText
@@ -117,10 +121,7 @@ export function Button({
           style={[
             styles.buttonText,
             {
-              color:
-                variant === "primary"
-                  ? Colors.dark.buttonText
-                  : Colors.dark.text,
+              color: variant === "primary" ? theme.buttonText : theme.text,
             },
             textStyle,
           ]}
@@ -141,9 +142,7 @@ const styles = StyleSheet.create({
   },
   buttonFocused: {
     borderWidth: 2,
-    backgroundColor: Colors.dark.primary + "20",
     transform: [{ scale: 1.05 }],
-    shadowColor: Colors.dark.primary,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
     shadowRadius: 8,
