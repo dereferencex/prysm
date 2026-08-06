@@ -2,9 +2,9 @@ package expo.modules.logcatreader
 
 import android.os.Build
 import android.os.Process
+import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
-import expo.modules.kotlin.events.EventListener
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -41,23 +41,23 @@ class LogcatReaderModule : Module() {
 
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
   private var readerJob: Job? = null
-  private var logcatProcess: Process? = null
+  private var logcatProcess: java.lang.Process? = null
 
   override fun definition() = ModuleDefinition {
     Name("LogcatReader")
 
     Events("logcatLine")
 
-    AsyncFunction("start") { promise ->
+    AsyncFunction("start") { promise: Promise ->
       try {
         startReader()
         promise.resolve(true)
-      } catch (e: Exception) {
+      } catch (_: Exception) {
         promise.resolve(false)
       }
     }
 
-    AsyncFunction("stop") { promise ->
+    AsyncFunction("stop") { promise: Promise ->
       try {
         stopReader()
         promise.resolve(Unit)
@@ -66,7 +66,7 @@ class LogcatReaderModule : Module() {
       }
     }
 
-    OnObservingEvent {
+    OnStartObserving {
       // Trigger an initial reader start when the JS listener attaches,
       // so callers that only addListener don't need to remember start().
       if (readerJob == null) {
