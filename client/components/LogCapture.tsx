@@ -1,6 +1,14 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
+import { AppState } from "react-native";
 
-import { appendLog, type LogLevel, type LogSource } from "@/lib/logStore";
+import {
+  appendLog,
+  loadPersistedLogs,
+  flushLogs,
+  type LogLevel,
+  type LogSource,
+} from "@/lib/logStore";
+import { installNetworkLogging } from "@/lib/networkLog";
 import { getPendingCrashes } from "../../modules/crash-handler/src";
 import {
   startLogcatCapture,
@@ -25,6 +33,11 @@ import {
  *     logcat letter (V/D/I/W/E/F). Captures ExoPlayerController/Log.d/i/w/e,
  *     TvPlayerModule events, MediaPeriod / LoadControl / Buffering state
  *     changes, and anything else that hits Android logcat from our PID.
+ *   - fetch / XMLHttpRequest calls via client/lib/networkLog, logged as
+ *     source="network".
+ *
+ * The previous session's entries are also loaded from AsyncStorage (see
+ * logStore) and flushed whenever the app leaves the foreground.
  */
 
 let installed = false;
@@ -181,15 +194,14 @@ function parseLogcatLine(raw: string): {
 }
 
 export function LogCapture(): null {
-  const installedRef = useRef(false);
-
   useEffect(() => {
-    if (installedRef.current) return;
-    installedRef.current = true;
-
-    // Guard against double-mount in StrictMode by using the module flag too.
+    // Guard against double-mount in StrictMode with the module flag.
     if (installed) return;
     installed = true;
+
+    // Load the previous session's persisted entries first so the ring
+    // buffer reads oldest → newest (logStore re-sorts by timestamp).
+    void loadPersistedLogs();
 
     appendLog({
       ts: Date.now(),
@@ -201,6 +213,7 @@ export function LogCapture(): null {
 
     const restoreConsole = patchConsole();
     const restoreHandler = attachGlobalExceptionHandler();
+    const restoreNetwork = installNetworkLogging();
 
     // Pull native crash traces written by modules/crash-handler on a prior
     // run, then push them into the ring buffer so they appear at the top
@@ -221,10 +234,10 @@ export function LogCapture(): null {
         // module unavailable (non-Android, pre-prebuild) — silently skip
       });
 
-    // Start streaming native logcat lines (Android 13+ only; on older
-    // versions startLogcatCapture returns false and we no-op). Each line
-    // is parsed from threadtime format and forwarded to the ring buffer
-    // with source="native".
+    // Start streaming native logcat lines (own-PID logs are readable on
+    // every supported Android version). Each line is parsed from
+    // threadtime format and forwarded to the ring buffer with
+    // source="native".
     let logcatActive = false;
     startLogcatCapture().then((ok) => {
       logcatActive = ok;
@@ -241,10 +254,18 @@ export function LogCapture(): null {
       });
     });
 
+    // Flush the ring buffer to disk whenever the app leaves the
+    // foreground, so a crash/force-stop doesn't lose the last lines.
+    const appStateSub = AppState.addEventListener("change", (state) => {
+      if (state !== "active") flushLogs();
+    });
+
     return () => {
       restoreConsole();
       restoreHandler();
+      restoreNetwork();
       removeLogcatListener();
+      appStateSub.remove();
       if (logcatActive) stopLogcatCapture();
       installed = false;
     };

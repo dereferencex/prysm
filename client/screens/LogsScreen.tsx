@@ -50,6 +50,7 @@ const SOURCE_COLORS: Record<LogSource, string> = {
   js: "rgba(156,163,175,0.55)",
   native: "#38BDF8",
   crash: "#FF3B30",
+  network: "#34D399",
 };
 
 const LEVEL_FILL: Record<LogLevel, string> = {
