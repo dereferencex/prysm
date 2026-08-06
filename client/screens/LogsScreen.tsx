@@ -103,6 +103,11 @@ export default function LogsScreen() {
         : allEntries.filter((e) => levelAtLeast(e.level, minLevel)),
     [allEntries, minLevel],
   );
+  // Newest first so fresh entries appear at the top of the list.
+  const displayEntries = useMemo<LogEntry[]>(
+    () => filteredEntries.slice().reverse(),
+    [filteredEntries],
+  );
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -114,24 +119,24 @@ export default function LogsScreen() {
     // standard "send me this text" affordance on Android — opens the
     // system share sheet so the user can paste into Telegram/email etc.
     try {
-      const text = buildPlainText(filteredEntries);
+      const text = buildPlainText(displayEntries);
       if (typeof Share?.share === "function") {
         await Share.share({ message: text, title: "Prysm logs" });
-        showToast(`Share sheet for ${filteredEntries.length} entries`);
+        showToast(`Share sheet for ${displayEntries.length} entries`);
       } else {
         showToast("Share unavailable on this device");
       }
     } catch {
       showToast("Copy failed");
     }
-  }, [filteredEntries, showToast]);
+  }, [displayEntries, showToast]);
 
   const handleSaveFile = useCallback(async () => {
     if (Platform.OS !== "android" || !FileSystemLegacy.StorageAccessFramework) {
       // Fallback: Share as plain text.
       try {
         await Share.share({
-          message: buildPlainText(filteredEntries),
+          message: buildPlainText(displayEntries),
           title: "Prysm logs",
         });
       } catch {
@@ -148,22 +153,19 @@ export default function LogsScreen() {
       }
       const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
       const filename = `prysm-logs-${ts}.txt`;
-      const fileUri = `${perms.directoryUri}/${filename}`;
-      await SAF.writeAsStringAsync(fileUri, buildPlainText(filteredEntries), {
+      const fileUri = await SAF.createFileAsync(
+        perms.directoryUri,
+        filename,
+        "text/plain",
+      );
+      await SAF.writeAsStringAsync(fileUri, buildPlainText(displayEntries), {
         encoding: FileSystemLegacy.EncodingType.UTF8,
-      }).catch(async () => {
-        // Older SAF impls only support createFileAsync.
-        await (SAF as any).createFileAsync(perms.directoryUri, {
-          mimeType: "text/plain",
-          name: filename,
-          content: buildPlainText(filteredEntries),
-        });
       });
       showToast(`Saved ${filename}`);
     } catch (e: any) {
       showToast(`Save failed: ${e?.message ?? "unknown"}`);
     }
-  }, [filteredEntries, showToast]);
+  }, [displayEntries, showToast]);
 
   const handleOpenFolder = useCallback(async () => {
     // Best-effort: opens the system Files app so the user can locate the
@@ -287,7 +289,7 @@ export default function LogsScreen() {
       <FlatList
         style={styles.list}
         contentContainerStyle={{ paddingBottom: 24 }}
-        data={filteredEntries}
+        data={displayEntries}
         keyExtractor={(item, idx) => `${item.ts}-${idx}`}
         initialNumToRender={20}
         maxToRenderPerBatch={40}
