@@ -1,32 +1,37 @@
 package expo.modules.dynamiccolor
 
+import android.app.WallpaperManager
 import android.content.res.Configuration
 import android.content.res.Resources
 import android.os.Build
+import android.util.Log
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
 /**
- * Exposes the Android 12+ (API 31) Material You wallpaper palette as hex
- * strings so the app theme can follow the system accent.
+ * Exposes the wallpaper colors so JS can synthesize a Material You palette.
  *
- * On Android 12+, `Resources.getSystem()` resolves the
- * `@android:color/system_accent*` and `@android:color/system_neutral*`
- * resources to the user's wallpaper-derived tonal palette. On older
- * versions, Android TV (static default palette only), or stripped OEM
- * builds where the resources are missing, getPalette() returns null and
- * JS falls back to the static theme.
+ * Two sources, tried in this order by the JS side:
+ *  1. getWallpaperSeed() — WallpaperManager.getWallpaperColors() (API 27+).
+ *     Works on every OEM skin (Samsung, Xiaomi...) because it reads the
+ *     wallpaper directly instead of relying on framework overlays.
+ *  2. getPalette() — the @android:color/system_* resources, which only
+ *     carry wallpaper-derived values where the OEM actually applies
+ *     runtime overlays (Pixels and other true-Monet builds).
  *
- * JS side (modules/dynamic-color/src/index.ts) caches the result and
- * merges the returned keys over the base Colors object in ThemeContext.
- * No permissions are needed — this only reads system color resources.
+ * JS synthesizes tonal palettes from the seed via material-color-utilities.
+ * On Android TV there is no user wallpaper to follow, so support is false.
  */
 class DynamicColorModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("DynamicColor")
 
     Function("isSupported") {
-      Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !isTvDevice()
+      Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1 && !isTvDevice()
+    }
+
+    Function("getWallpaperSeed") {
+      readWallpaperSeed()
     }
 
     Function("getPalette") { isDark: Boolean ->
@@ -81,11 +86,46 @@ class DynamicColorModule : Module() {
       )
     }
 
-  /** Android TV builds ship these resources as static defaults — there is
-   *  no wallpaper palette to follow, so report the feature as missing. */
+  /** Android TV builds ship no user wallpaper palette — report unsupported. */
   private fun isTvDevice(): Boolean =
     (Resources.getSystem().configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) ==
       Configuration.UI_MODE_TYPE_TELEVISION
+
+  /** Seed colors from the current system wallpaper — {primary, secondary,
+   *  tertiary} as #RRGGBB hex. Null when unavailable (API < 27, live
+   *  wallpapers that don't publish colors, etc.). No permission needed. */
+  private fun readWallpaperSeed(): Map<String, String>? {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1) return null
+    val context = appContext.reactContext ?: return null
+    return try {
+      val wm = WallpaperManager.getInstance(context)
+      val colors = wm.getWallpaperColors(WallpaperManager.FLAG_SYSTEM)
+        ?: wm.getWallpaperColors(
+          WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK,
+        )
+        ?: return null
+      val out = mutableMapOf<String, String>()
+      // WallpaperColors accessors return android.graphics.Color on newer
+      // compileSdk versions and ColorStateList on older ones — accept both.
+      fun put(key: String, color: Any?) {
+        val argb = when (color) {
+          is android.graphics.Color -> color.toArgb()
+          is android.content.res.ColorStateList -> color.defaultColor
+          else -> return
+        }
+        if (argb ushr 24 != 0) {
+          out[key] = String.format("#%06X", argb and 0xFFFFFF)
+        }
+      }
+      put("primary", colors.primaryColor)
+      put("secondary", colors.secondaryColor)
+      put("tertiary", colors.tertiaryColor)
+      if (out.isEmpty()) null else out
+    } catch (e: Exception) {
+      Log.w("DynamicColor", "readWallpaperSeed failed: ${e.message}")
+      null
+    }
+  }
 
   private fun readPalette(isDark: Boolean): Map<String, String>? {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return null
