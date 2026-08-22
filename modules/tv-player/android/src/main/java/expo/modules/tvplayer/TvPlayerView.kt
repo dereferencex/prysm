@@ -104,11 +104,7 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         if (!isTV) {
             PipRegistry.onPipModeChanged = { isInPip ->
                 PipRegistry.isInPipMode = isInPip
-                if (isInPip) {
-                    aspectFrame.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                    aspectFrame.requestLayout()
-                    requestLayout()
-                } else {
+                if (!isInPip) {
                     val playing = playerManager.isPlaying()
                     if (!backgroundAudioEnabled) {
                         when {
@@ -193,10 +189,6 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val activity = appContext.currentActivity ?: return
 
-        aspectFrame.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-        aspectFrame.requestLayout()
-        requestLayout()
-
         try {
             PipRegistry.isEnteringPip = true
             val ratio = PipRegistry.aspectRatio
@@ -205,7 +197,10 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
                 .apply {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                         setAutoEnterEnabled(false)
-                        setSeamlessResizeEnabled(true)
+                        // Seamless resize scales the existing surface buffer
+                        // without a relayout, which renders as a wrongly
+                        // zoomed picture during the entry transition.
+                        setSeamlessResizeEnabled(false)
                     }
                 }
                 .build()
@@ -330,8 +325,27 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
             val ratio = (width * pixelWidthHeightRatio).toFloat() / height
             aspectFrame.setAspectRatio(ratio)
             requestLayout()
-            if (!isTV) {
-                PipRegistry.aspectRatio = Rational(width, height)
+            if (!isTV && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                // Track the DISPLAY ratio (anamorphic streams have a pixel
+                // aspect ≠ 1), not the raw encoded pixels — the PiP window
+                // should match what the viewer actually sees. Rational only
+                // takes integers, so scale both sides before reducing.
+                try {
+                    val scaledW = (width * pixelWidthHeightRatio * 1000).toInt()
+                    val scaledH = height * 1000
+                    if (scaledW > 0 && scaledH > 0) {
+                        PipRegistry.aspectRatio = Rational(scaledW, scaledH)
+                        if (PipRegistry.isInPipMode) {
+                            appContext.currentActivity?.setPictureInPictureParams(
+                                PictureInPictureParams.Builder()
+                                    .setAspectRatio(PipRegistry.aspectRatio)
+                                    .build(),
+                            )
+                        }
+                    }
+                } catch (_: Exception) {
+                    // Keep the previous/default ratio on malformed sizes.
+                }
             }
         }
     }

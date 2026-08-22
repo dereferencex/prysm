@@ -755,10 +755,9 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [backgroundPlay, isPlaying, nativeReady]);
 
-  // Keep a ref to the current contentFit so the PiP listener (which is
-  // registered once) always restores the correct mode on PiP exit.
-  const contentFitRef = useRef(contentFit);
-  contentFitRef.current = contentFit;
+  // PiP keeps the user's aspect-ratio mode untouched — forcing "cover" here
+  // center-crops whenever the tiny window's ratio differs from the stream's
+  // display ratio (anamorphic/4:3 sources), making the video look zoomed in.
 
   // Shared handler for PiP state changes — called from both the native
   // view event (primary) and the DeviceEventEmitter fallback.
@@ -776,12 +775,8 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
         cancelHideTimerRef.current();
         // Hide controls immediately — the PiP window is too small
         setShowControls(false);
-        // Fill the tiny PiP window — letterboxing wastes precious space
-        TvPlayerCommands.setResizeMode(tvPlayerRef, "cover");
       } else {
-        // Exiting PiP — restore the user's chosen aspect-ratio mode and
-        // ensure the video surface is reattached.
-        TvPlayerCommands.setResizeMode(tvPlayerRef, contentFitRef.current);
+        // Exiting PiP — make sure playback resumes.
         if (isPlayingRef.current) {
           TvPlayerCommands.play(tvPlayerRef);
         }
