@@ -53,17 +53,19 @@ export function isDynamicColorSupported(): boolean {
   }
 }
 
-/** Read the current Material You palette, cached per light/dark mode. */
+/** Read the current Material You palette, cached per light/dark mode.
+ *  A failed read is not cached so transient native errors are retried. */
 export function getDynamicPalette(isDark: boolean): DynamicPalette | null {
   const key = isDark ? "dark" : "light";
   if (cachedKey === key) return cachedPalette;
-  cachedKey = key;
   try {
-    cachedPalette = DynamicColorModule?.getPalette(isDark) ?? null;
+    const palette = DynamicColorModule?.getPalette(isDark) ?? null;
+    cachedKey = key;
+    cachedPalette = palette;
+    return palette;
   } catch {
-    cachedPalette = null;
+    return null;
   }
-  return cachedPalette;
 }
 
 /** Drop the cached palette so the next read re-queries the system (e.g.

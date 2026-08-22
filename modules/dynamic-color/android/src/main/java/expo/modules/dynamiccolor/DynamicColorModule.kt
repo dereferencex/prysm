@@ -1,5 +1,6 @@
 package expo.modules.dynamiccolor
 
+import android.content.res.Configuration
 import android.content.res.Resources
 import android.os.Build
 import expo.modules.kotlin.modules.Module
@@ -12,8 +13,9 @@ import expo.modules.kotlin.modules.ModuleDefinition
  * On Android 12+, `Resources.getSystem()` resolves the
  * `@android:color/system_accent*` and `@android:color/system_neutral*`
  * resources to the user's wallpaper-derived tonal palette. On older
- * versions (or stripped OEM builds where the resources are missing)
- * getPalette() returns null and JS falls back to the static theme.
+ * versions, Android TV (static default palette only), or stripped OEM
+ * builds where the resources are missing, getPalette() returns null and
+ * JS falls back to the static theme.
  *
  * JS side (modules/dynamic-color/src/index.ts) caches the result and
  * merges the returned keys over the base Colors object in ThemeContext.
@@ -24,7 +26,7 @@ class DynamicColorModule : Module() {
     Name("DynamicColor")
 
     Function("isSupported") {
-      Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+      Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !isTvDevice()
     }
 
     Function("getPalette") { isDark: Boolean ->
@@ -35,13 +37,16 @@ class DynamicColorModule : Module() {
   /**
    * Semantic theme keys → Android 12 system tonal palette tones.
    *
-   * Tonal scale: low index (0) = lightest, high index (1000) = darkest.
-   * The role mapping below follows the Material You role table from
-   * AOSP (source.android.com/docs/core/display/dynamic-color):
-   *   light  primary = accent1_600, background = neutral1_10,
-   *          onBackground = neutral1_900
-   *   dark   primary = accent1_200, background = neutral1_900,
-   *          onBackground = neutral1_100
+   * Tonal scale: index 0 = lightest, index 1000 = darkest (verified
+   * against AOSP core/res colors.xml: system_accent1_0 = #ffffff,
+   * system_accent1_1000 = #000000).
+   *
+   * Surfaces intentionally avoid the extremes: neutral1_1000 is pure
+   * black and neutral1_50 is near-white, which read as "unchanged but
+   * dirtier" next to the static theme. The _600.._900 / _0.._200 ranges
+   * below mirror the static dark (#0F/#1A/#2A/#3A) and light (#F9FAFB/
+   * #FFF/#F3F4F6/#E5E7EB) hierarchies while still carrying the
+   * wallpaper hue.
    */
   private fun toneMap(isDark: Boolean): Map<String, String> =
     if (isDark) {
@@ -54,10 +59,10 @@ class DynamicColorModule : Module() {
         "tabIconDefault" to "system_neutral2_300",
         "tabIconSelected" to "system_accent1_200",
         "link" to "system_accent1_200",
-        "backgroundRoot" to "system_neutral1_1000",
-        "backgroundDefault" to "system_neutral1_900",
-        "backgroundSecondary" to "system_neutral1_800",
-        "backgroundTertiary" to "system_neutral1_700",
+        "backgroundRoot" to "system_neutral1_900",
+        "backgroundDefault" to "system_neutral1_800",
+        "backgroundSecondary" to "system_neutral1_700",
+        "backgroundTertiary" to "system_neutral1_600",
       )
     } else {
       mapOf(
@@ -69,12 +74,18 @@ class DynamicColorModule : Module() {
         "tabIconDefault" to "system_neutral1_600",
         "tabIconSelected" to "system_accent1_600",
         "link" to "system_accent1_600",
-        "backgroundRoot" to "system_neutral1_100",
+        "backgroundRoot" to "system_neutral1_50",
         "backgroundDefault" to "system_neutral1_0",
-        "backgroundSecondary" to "system_neutral1_200",
-        "backgroundTertiary" to "system_neutral1_300",
+        "backgroundSecondary" to "system_neutral1_100",
+        "backgroundTertiary" to "system_neutral1_200",
       )
     }
+
+  /** Android TV builds ship these resources as static defaults — there is
+   *  no wallpaper palette to follow, so report the feature as missing. */
+  private fun isTvDevice(): Boolean =
+    (Resources.getSystem().configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) ==
+      Configuration.UI_MODE_TYPE_TELEVISION
 
   private fun readPalette(isDark: Boolean): Map<String, String>? {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return null
