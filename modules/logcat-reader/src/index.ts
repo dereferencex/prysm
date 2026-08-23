@@ -3,7 +3,9 @@ import { requireOptionalNativeModule, Platform } from "expo-modules-core";
 /**
  * Native logcat reader. Spawns `logcat -v threadtime --pid=<this process's
  * PID>` on Android, reads lines on a background thread, and emits them via
- * the LogcatReader's EventEmitter as events named "logcatLine".
+ * the LogcatReader's EventEmitter as batched events named "logcatLines"
+ * ({ lines: string[] }, flushed every ~200 ms or 50 lines) to keep bridge
+ * traffic flat during log storms.
  *
  * An app can read its own process's logcat lines without any permission
  * since Android 4.1; READ_LOGS (needed for other apps'/system logs) is
@@ -13,26 +15,27 @@ import { requireOptionalNativeModule, Platform } from "expo-modules-core";
  * crash-handler module still catches native fatal crashes via
  * Thread.setDefaultUncaughtExceptionHandler.
  *
- * The emitted line shape is:
- *   { raw: "07-21 14:23:05.123  1234  5678 I ExoPlayerController: ..." }
+ * Each raw line looks like:
+ *   "07-21 14:23:05.123  1234  5678 I ExoPlayerController: ..."
  * JS side (client/components/LogCapture.tsx) parses the level letter and
- * pushes the entry into the shared ring buffer with source="native".
+ * timestamp and pushes the entry into the shared ring buffer with
+ * source="native".
  */
 
-export interface LogcatLineEvent {
-  raw: string;
+export interface LogcatLinesEvent {
+  lines: string[];
 }
 
 interface LogcatReaderModuleType {
   start(): Promise<boolean>;
   stop(): Promise<void>;
   addListener(
-    eventName: "logcatLine",
-    listener: (event: LogcatLineEvent) => void,
+    eventName: "logcatLines",
+    listener: (event: LogcatLinesEvent) => void,
   ): void;
   removeListener(
-    eventName: "logcatLine",
-    listener: (event: LogcatLineEvent) => void,
+    eventName: "logcatLines",
+    listener: (event: LogcatLinesEvent) => void,
   ): void;
 }
 
@@ -52,11 +55,11 @@ export function stopLogcatCapture(): Promise<void> {
 }
 
 export function addLogcatLineListener(
-  listener: (event: LogcatLineEvent) => void,
+  listener: (event: LogcatLinesEvent) => void,
 ): () => void {
   if (!LogcatReaderModule) return () => {};
-  LogcatReaderModule.addListener("logcatLine", listener);
+  LogcatReaderModule.addListener("logcatLines", listener);
   return () => {
-    LogcatReaderModule.removeListener("logcatLine", listener);
+    LogcatReaderModule.removeListener("logcatLines", listener);
   };
 }

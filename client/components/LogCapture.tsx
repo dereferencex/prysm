@@ -28,11 +28,14 @@ import {
  *   - native (JVM) uncaught-exception stack traces written by
  *     modules/crash-handler (Kotlin) on a previous run, surfaced here as
  *     level="fatal" source="crash" via getPendingCrashes()
- *   - live native logcat lines via modules/logcat-reader (Kotlin) emitted
- *     as source="native" with the severity parsed from the threadtime
- *     logcat letter (V/D/I/W/E/F). Captures ExoPlayerController/Log.d/i/w/e,
- *     TvPlayerModule events, MediaPeriod / LoadControl / Buffering state
- *     changes, and anything else that hits Android logcat from our PID.
+ *   - live native logcat lines via modules/logcat-reader (Kotlin), delivered
+ *     in batches as source="native" with the severity parsed from the
+ *     threadtime letter (V/D/I/W/E/F) and the timestamp parsed from the line
+ *     itself. Lines mirrored from our own JS console (tag ReactNativeJS) are
+ *     dropped so console output isn't captured twice. Captures
+ *     ExoPlayerController/Log.d/i/w/e, TvPlayerModule events,
+ *     MediaPeriod / LoadControl / Buffering state changes, and anything else
+ *     that hits Android logcat from our PID.
  *   - fetch / XMLHttpRequest calls via client/lib/networkLog, logged as
  *     source="network".
  *
@@ -119,6 +122,7 @@ function attachGlobalExceptionHandler(): () => void {
           error?.stack ?? ""
         }`,
       });
+      if (isFatal) flushLogs();
     } catch {
       // ignore
     }
@@ -142,52 +146,96 @@ function attachGlobalExceptionHandler(): () => void {
 }
 
 /**
- * Parse one `logcat -v threadtime` line into the LogEntry shape.
+ * Convert a logcat threadtime stamp (MM-DD + wall-clock fields, no year) to
+ * epoch ms using the current year, with guards for the Dec → Jan rollover.
+ */
+function threadtimeToEpochMs(
+  monthDay: string,
+  hh: number,
+  mm: number,
+  ss: number,
+  ms3: number,
+): number {
+  const month = Number(monthDay.slice(0, 2)) - 1;
+  const day = Number(monthDay.slice(3, 5));
+  const now = new Date();
+  let ts = new Date(now.getFullYear(), month, day, hh, mm, ss, ms3).getTime();
+  const DAY_MS = 86_400_000;
+  if (ts - Date.now() > DAY_MS) {
+    // Stamp is in the future — it belongs to last December.
+    ts = new Date(now.getFullYear() - 1, month, day, hh, mm, ss, ms3).getTime();
+  } else if (Date.now() - ts > 300 * DAY_MS) {
+    // Stamp is ~a year old — it belongs to next January.
+    ts = new Date(now.getFullYear() + 1, month, day, hh, mm, ss, ms3).getTime();
+  }
+  return ts;
+}
+
+/**
+ * Parse one `logcat -v threadtime` line into LogEntry fields (without
+ * source). Returns null for lines that should be dropped entirely:
+ *   - logcat's "--------- beginning of ..." divider banners
+ *   - lines tagged ReactNativeJS — those are RN's own logcat mirror of our
+ *     console output, which patchConsole() already captures as source="js";
+ *     keeping them would double-log every console call.
  *
  * threadtime format:
  *   MM-DD HH:MM:SS.ms  PID  TID  LEVEL  TAG: MSG
  * Example:
  *   07-21 14:23:05.123  1234  5678 I ExoPlayerController: built and prepared
  *
- * Defensive: malformed lines (e.g. logcat's "--------- beginning of main"
- * divider, or empty lines from buffer races) get level=info with the raw
- * line as the message so the user still sees them in the viewer.
+ * Defensive: malformed lines (e.g. continuation lines of a multi-line stack
+ * trace, or empty lines from buffer races) get level=info with the raw line
+ * as the message so the user still sees them in the viewer.
  */
-function parseLogcatLine(raw: string): {
+interface ParsedLogcatLine {
+  ts: number;
   level: LogLevel;
   tag?: string;
   message: string;
-} {
+}
+
+const THREADTIME_RE =
+  /^(\d{2}-\d{2})\s+(\d{2}):(\d{2}):(\d{2})\.(\d{3})\s+\d+\s+\d+\s+([VDIWEF])\s+([^:]+):\s?(.*)$/;
+
+const LOGCAT_LEVEL_MAP: Record<string, LogLevel> = {
+  V: "debug",
+  D: "debug",
+  I: "info",
+  W: "warn",
+  E: "error",
+  F: "fatal",
+};
+
+// RN's logcat tag for mirrored JS console output (deduped against source=js).
+const RN_MIRROR_TAG = "ReactNativeJS";
+
+function parseLogcatLine(raw: string): ParsedLogcatLine | null {
   // Skip the "--------- beginning of ..." banner that logcat emits on start.
-  if (raw.startsWith("---------")) {
-    return { level: "debug", message: raw };
-  }
+  if (raw.startsWith("---------")) return null;
 
-  // Split: [date+time] [pid] [tid] [level] [tag: msg]
-  // threadtime separates fields with whitespace, but the tag follows the
-  // single-letter level directly with no space — e.g. "I ExoPlayerCtrl: msg"
-  const m = raw.match(
-    /^\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3}\s+\d+\s+\d+\s+([VDIWEF])\s+([^:]+):\s?(.*)$/,
-  );
+  const m = raw.match(THREADTIME_RE);
   if (!m) {
-    return { level: "info", message: raw };
+    // Not a threadtime line — keep it as a raw info entry (continuation
+    // lines of multi-line native stack traces land here).
+    return { ts: Date.now(), level: "info", message: raw };
   }
 
-  const levelLetter = m[1];
-  const tag = m[2].trim();
-  const message = m[3];
+  const [, monthDay, hh, mm, ss, ms3, levelLetter, rawTag, message] = m;
+  const tag = rawTag.trim();
 
-  const levelMap: Record<string, LogLevel> = {
-    V: "debug",
-    D: "debug",
-    I: "info",
-    W: "warn",
-    E: "error",
-    F: "fatal",
-  };
+  // Our own console output, already captured via patchConsole() — drop.
+  if (tag === RN_MIRROR_TAG) return null;
 
   return {
-    level: levelMap[levelLetter] ?? "info",
+    ts: threadtimeToEpochMs(
+      monthDay,
+      Number(hh),
+      Number(mm),
+      Number(ss),
+      Number(ms3),
+    ),
+    level: LOGCAT_LEVEL_MAP[levelLetter] ?? "info",
     tag,
     message,
   };
@@ -235,23 +283,25 @@ export function LogCapture(): null {
       });
 
     // Start streaming native logcat lines (own-PID logs are readable on
-    // every supported Android version). Each line is parsed from
-    // threadtime format and forwarded to the ring buffer with
-    // source="native".
-    let logcatActive = false;
-    startLogcatCapture().then((ok) => {
-      logcatActive = ok;
-    });
+    // every supported Android version). Lines arrive in batches; each is
+    // parsed from threadtime format and forwarded to the ring buffer with
+    // source="native". stopLogcatCapture() is idempotent, so the cleanup
+    // below always calls it — even if unmount happens before start()
+    // resolves (otherwise an orphaned `logcat` process would keep running).
+    void startLogcatCapture();
 
     const removeLogcatListener = addLogcatLineListener((event) => {
-      const parsed = parseLogcatLine(event.raw);
-      appendLog({
-        ts: Date.now(),
-        level: parsed.level,
-        source: "native",
-        tag: parsed.tag,
-        message: parsed.message,
-      });
+      for (const raw of event.lines) {
+        const parsed = parseLogcatLine(raw);
+        if (!parsed) continue;
+        appendLog({
+          ts: parsed.ts,
+          level: parsed.level,
+          source: "native",
+          tag: parsed.tag,
+          message: parsed.message,
+        });
+      }
     });
 
     // Flush the ring buffer to disk whenever the app leaves the
@@ -266,7 +316,7 @@ export function LogCapture(): null {
       restoreNetwork();
       removeLogcatListener();
       appStateSub.remove();
-      if (logcatActive) stopLogcatCapture();
+      void stopLogcatCapture();
       installed = false;
     };
   }, []);

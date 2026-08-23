@@ -9,13 +9,18 @@
  *   - "network" — fetch / XMLHttpRequest calls logged by the network wrapper.
  *
  * Bounded to {@link MAX_ENTRIES} so memory stays predictable on low-end
- * Android TV boxes. Entries are also persisted to AsyncStorage (debounced)
- * so the previous session survives app restarts; call {@link loadPersistedLogs}
- * once at startup and {@link flushLogs} when the app backgrounds.
+ * Android TV boxes. Entries are also persisted to AsyncStorage (debounced,
+ * newest {@link PERSIST_MAX_ENTRIES} only) so the previous session survives
+ * app restarts; call {@link loadPersistedLogs} once at startup and
+ * {@link flushLogs} when the app backgrounds.
  *
- * Callers subscribe via {@link subscribe} and re-render on every new entry.
- * Listeners are called synchronously and should be cheap; the LogsScreen
- * debounces its own renders.
+ * Every stored message is clamped to {@link MAX_MESSAGE_LENGTH} and has
+ * credential-looking URLs redacted before it enters the buffer — this also
+ * protects the Share/export path in LogsScreen for free.
+ *
+ * Callers subscribe via {@link subscribe}; notifications are coalesced to at
+ * most one per {@link NOTIFY_THROTTLE_MS}, so a logcat storm costs ~5
+ * consumer renders/second regardless of line rate.
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -43,10 +48,60 @@ const LEVEL_WEIGHT: Record<LogLevel, number> = {
   fatal: 4,
 };
 
-// AsyncStorage key + bounds for disk persistence.
+// AsyncStorage key + bounds for disk persistence. Only the newest slice of
+// the buffer is written back — keeps stringify + flash wear small.
 const STORAGE_KEY = "prysm_logs";
-const MAX_PERSISTED = MAX_ENTRIES;
+const PERSIST_MAX_ENTRIES = 500;
 const PERSIST_DEBOUNCE_MS = 1500;
+
+// A single huge log line (logged response body, playlist object, ...) must
+// not dominate memory or the persisted payload.
+export const MAX_MESSAGE_LENGTH = 2048;
+
+// Listener notifications are coalesced: during log storms consumers should
+// re-render at most ~5×/second instead of once per line.
+const NOTIFY_THROTTLE_MS = 200;
+
+const URL_RE = /\bhttps?:\/\/[^\s"'<>]+/g;
+const REDACT_KEY_RE =
+  /(token|api[_-]?key|passwd|password|secret|auth|authorization|signature|sig|credential)/i;
+
+/**
+ * Mask credential-looking query params and userinfo (`user:pass@host`) in a
+ * URL, then cap its length.
+ */
+export function redactUrl(raw: string, maxLen = 512): string {
+  try {
+    const parsed = new URL(raw);
+    if (parsed.username) parsed.username = "***";
+    if (parsed.password) parsed.password = "***";
+    const search = new URLSearchParams(parsed.search);
+    let touched = false;
+    for (const key of Array.from(search.keys())) {
+      if (REDACT_KEY_RE.test(key)) {
+        search.set(key, "***");
+        touched = true;
+      }
+    }
+    if (touched) parsed.search = search.toString();
+    const out = parsed.toString();
+    return out.length > maxLen ? `${out.slice(0, maxLen)}...` : out;
+  } catch {
+    return raw.length > maxLen ? `${raw.slice(0, maxLen)}...` : raw;
+  }
+}
+
+/** Redact URLs embedded in free-form text (native/player/network lines). */
+function redactEmbeddedUrls(message: string): string {
+  if (!message.includes("://")) return message;
+  return message.replace(URL_RE, (m) => redactUrl(m));
+}
+
+function clampMessage(message: string): string {
+  return message.length > MAX_MESSAGE_LENGTH
+    ? `${message.slice(0, MAX_MESSAGE_LENGTH)}…`
+    : message;
+}
 
 const entries: LogEntry[] = [];
 const listeners = new Set<() => void>();
@@ -54,6 +109,8 @@ const listeners = new Set<() => void>();
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 let persistPending = false;
 let persistedLoaded = false;
+
+let notifyTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Cap how many entries the buffer keeps; trades detail for memory.
 function trim(): void {
@@ -83,9 +140,21 @@ function schedulePersist(): void {
   }, PERSIST_DEBOUNCE_MS);
 }
 
+/**
+ * Coalesce listener notifications: at most one fire per throttle window no
+ * matter how many entries arrived, keeping storm-time render cost flat.
+ */
+function scheduleNotify(): void {
+  if (notifyTimer !== null) return;
+  notifyTimer = setTimeout(() => {
+    notifyTimer = null;
+    notifyListeners();
+  }, NOTIFY_THROTTLE_MS);
+}
+
 async function persistToStorage(): Promise<void> {
   try {
-    const snapshot = entries.slice(-MAX_PERSISTED);
+    const snapshot = entries.slice(-PERSIST_MAX_ENTRIES);
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
   } catch {
     // Persistence must never break the capture pipeline.
@@ -123,7 +192,7 @@ export async function loadPersistedLogs(): Promise<void> {
     });
     entries.sort((a, b) => a.ts - b.ts);
     trim();
-    notifyListeners();
+    scheduleNotify();
   } catch {
     // Unreadable/corrupt persisted logs — start fresh.
   }
@@ -139,11 +208,16 @@ export function flushLogs(): void {
   void persistToStorage();
 }
 
-/** Append a new entry. Trims to {@link MAX_ENTRIES} and notifies listeners. */
+/** Append a new entry. Trims to {@link MAX_ENTRIES} and notifies listeners.
+ *  The message is clamped and URL-redacted here so every source (console,
+ *  native logcat, network wrapper, crash files) gets the same guarantees. */
 export function appendLog(entry: LogEntry): void {
-  entries.push(entry);
+  entries.push({
+    ...entry,
+    message: clampMessage(redactEmbeddedUrls(entry.message)),
+  });
   trim();
-  notifyListeners();
+  scheduleNotify();
   schedulePersist();
 }
 
@@ -170,8 +244,13 @@ export function subscribe(listener: () => void): () => void {
  *  removed here. */
 export function clearLogs(): void {
   entries.length = 0;
+  if (persistTimer !== null) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+    persistPending = false;
+  }
   void AsyncStorage.removeItem(STORAGE_KEY);
-  notifyListeners();
+  scheduleNotify();
 }
 
 const ORDER: LogLevel[] = ["debug", "info", "warn", "error", "fatal"];

@@ -9,44 +9,19 @@
  * adds the JS side (and works on every Android version).
  *
  * Redaction: query params whose names look like credentials
- * (token/api_key/password/... ) are masked so secrets never hit the log.
+ * (token/api_key/password/... ) plus URL userinfo (`user:pass@host`) are
+ * masked so secrets never hit the log. The shared redactUrl() lives in
+ * logStore, which also redacts every entry at append time — covering
+ * native/logcat lines that this module never sees.
  * Only request metadata is logged — never bodies or headers.
  */
 
-import { appendLog, type LogLevel } from "@/lib/logStore";
-
-const REDACT_KEY_RE =
-  /(token|api[_-]?key|passwd|password|secret|auth|authorization|signature|sig|credential)/i;
-const MAX_URL_LENGTH = 512;
+import { appendLog, redactUrl, type LogLevel } from "@/lib/logStore";
 
 function statusLevel(status: number): LogLevel {
   if (status >= 500) return "error";
   if (status >= 400) return "warn";
   return "info";
-}
-
-function truncate(value: string): string {
-  return value.length > MAX_URL_LENGTH
-    ? `${value.slice(0, MAX_URL_LENGTH)}...`
-    : value;
-}
-
-function redactUrl(raw: string): string {
-  try {
-    const parsed = new URL(raw);
-    const search = new URLSearchParams(parsed.search);
-    let touched = false;
-    for (const key of Array.from(search.keys())) {
-      if (REDACT_KEY_RE.test(key)) {
-        search.set(key, "***");
-        touched = true;
-      }
-    }
-    if (touched) parsed.search = search.toString();
-    return truncate(parsed.toString());
-  } catch {
-    return truncate(raw);
-  }
 }
 
 let installed = false;

@@ -36,6 +36,12 @@ class CrashHandlerModule : Module() {
     private const val TAG = "PrysmCrashHandler"
     private const val DIR_NAME = "prysm-crashes"
     private const val CONSUMED_NAME = "consumed"
+
+    /** Keep at most this many consumed crash files. */
+    private const val KEEP_CONSUMED = 20
+
+    /** ...and none older than this (30 days). */
+    private const val PRUNE_AGE_MS = 30L * 24 * 60 * 60 * 1000
   }
 
   private var installed = false
@@ -50,6 +56,10 @@ class CrashHandlerModule : Module() {
 
     AsyncFunction("getAndConsumePendingCrashes") { promise: Promise ->
       try {
+        // Retry: OnCreate can run before reactContext exists, in which case
+        // the early install silently no-ops. This is the last reliable
+        // entry point, so make sure the handler ends up installed.
+        installHandler()
         val crashes = readAndConsumeCrashFile()
         promise.resolve(crashes)
       } catch (e: Exception) {
@@ -61,10 +71,11 @@ class CrashHandlerModule : Module() {
 
   private fun installHandler() {
     if (installed) return
-    installed = true
 
     val app = appContext.reactContext?.applicationContext
-      ?: return  // No app context yet — try again on next load if needed.
+      ?: return  // No app context yet — retried from getAndConsumePendingCrashes.
+
+    installed = true
 
     val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
     Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
@@ -162,6 +173,31 @@ class CrashHandlerModule : Module() {
         // Skip malformed files.
       }
     }
+
+    pruneConsumedCrashes(consumed)
     return results
+  }
+
+  /** Bound the consumed/ directory: keep the newest {@link KEEP_CONSUMED}
+   *  files and drop anything older than {@link PRUNE_AGE_MS}, so crash
+   *  artifacts can't grow without limit in cache storage. */
+  private fun pruneConsumedCrashes(consumed: File) {
+    try {
+      val files = consumed.listFiles { f -> f.isFile } ?: return
+      val cutoff = System.currentTimeMillis() - PRUNE_AGE_MS
+      files
+        .sortedByDescending { it.lastModified() }
+        .forEachIndexed { index, file ->
+          if (index >= KEEP_CONSUMED || file.lastModified() < cutoff) {
+            try {
+              file.delete()
+            } catch (_: Exception) {
+              // ignore
+            }
+          }
+        }
+    } catch (_: Exception) {
+      // Pruning is best-effort.
+    }
   }
 }

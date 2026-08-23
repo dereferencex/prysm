@@ -26,9 +26,12 @@ import java.io.InputStreamReader
  * READ_LOGS (needed for other apps'/system logs) is privileged-only and
  * not grantable to ordinary apps, so the reader is scoped to our PID.
  *
- * Each line is delivered to JS verbatim as `{ raw: "<threadtime> ..." }`
- * — JS parses the severity letter (V/D/I/W/E/F) and forwards it into
- * the shared ring buffer (client/lib/logStore.ts) with source="native".
+ * Lines are delivered to JS in batches as `{ lines: ["<threadtime> ...", ...] }`
+ * — flushed every FLUSH_INTERVAL_MS or BATCH_MAX lines, whichever comes
+ * first, so a logcat storm costs one bridge crossing per ~200 ms instead of
+ * one per line. JS parses the severity letter (V/D/I/W/E/F) and forwards
+ * the lines into the shared ring buffer (client/lib/logStore.ts) with
+ * source="native".
  *
  * The reader keeps running for the lifetime of the JS bundle. Calling
  * stop() kills the subprocess and joins the reader coroutine.
@@ -36,6 +39,14 @@ import java.io.InputStreamReader
 class LogcatReaderModule : Module() {
   companion object {
     private const val TAG = "LogcatReader"
+
+    private const val EVENT_NAME = "logcatLines"
+
+    /** Flush a pending batch once it grows to this many lines. */
+    private const val BATCH_MAX = 50
+
+    /** ...or once this many ms have passed since the last flush. */
+    private const val FLUSH_INTERVAL_MS = 200L
   }
 
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -45,7 +56,7 @@ class LogcatReaderModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("LogcatReader")
 
-    Events("logcatLine")
+    Events(EVENT_NAME)
 
     AsyncFunction("start") { promise: Promise ->
       try {
@@ -115,15 +126,31 @@ class LogcatReaderModule : Module() {
     readerJob = scope.launch {
       try {
         BufferedReader(InputStreamReader(proc.inputStream)).use { r ->
-          while (isActive && !Thread.currentThread().isInterrupted) {
-            val line = r.readLine() ?: break
+          val batch = ArrayList<String>(BATCH_MAX)
+          var lastFlushAt = System.currentTimeMillis()
+
+          fun flushBatch() {
+            if (batch.isEmpty()) return
             try {
-              sendEvent("logcatLine", mapOf("raw" to line))
+              sendEvent(EVENT_NAME, mapOf("lines" to batch.toList()))
             } catch (_: Exception) {
               // Event delivery may throw if no listeners / JS bridge
               // is tearing down — suppress to avoid killing the reader.
             }
+            batch.clear()
+            lastFlushAt = System.currentTimeMillis()
           }
+
+          while (isActive && !Thread.currentThread().isInterrupted) {
+            val line = r.readLine() ?: break
+            batch.add(line)
+            if (batch.size >= BATCH_MAX ||
+              System.currentTimeMillis() - lastFlushAt >= FLUSH_INTERVAL_MS
+            ) {
+              flushBatch()
+            }
+          }
+          flushBatch()
         }
       } catch (_: Exception) {
         // Stream closed — fall through to cleanup.
