@@ -3,6 +3,8 @@ package expo.modules.tvplayer
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.Rect
 import android.graphics.SurfaceTexture
 import android.net.Uri
 import android.os.Build
@@ -32,6 +34,15 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
 
     companion object {
         private const val TAG = "TvPlayerView"
+
+        /**
+         * Delay before the post-entry layout pass. The system PiP enter
+         * transition runs ~300 ms; laying out earlier uses the animating
+         * window frame and leaves TextureView compositing a fullscreen-size
+         * buffer into the small window (video renders zoomed until the next
+         * forced redraw — e.g. dragging the window).
+         */
+        private const val PIP_SETTLE_DELAY_MS = 350L
     }
 
     override val shouldUseAndroidLayout: Boolean = true
@@ -102,24 +113,7 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         ))
 
         if (!isTV) {
-            PipRegistry.onPipModeChanged = { isInPip ->
-                PipRegistry.isInPipMode = isInPip
-                if (!isInPip) {
-                    val playing = playerManager.isPlaying()
-                    if (!backgroundAudioEnabled) {
-                        when {
-                            surfaceView != null -> playerManager.setVideoSurfaceView(surfaceView)
-                            textureView != null -> playerManager.setTextureView(textureView)
-                        }
-                        mainHandler.post {
-                            playerManager.play()
-                        }
-                    }
-                }
-                mainHandler.post {
-                    onPipModeChange(mapOf("isInPiP" to isInPip))
-                }
-            }
+            PipRegistry.setPipListener(this)
         }
 
         playerManager.setCallbacks(this)
@@ -183,31 +177,87 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
     fun seekTo(positionMs: Long) { playerManager.seekTo(positionMs) }
     fun setVolume(volume: Float) { playerManager.setVolume(volume) }
 
-    fun enterPip() {
-        if (isTV) return
-        if (playerEngine == PlayerEngine.VLC) return
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val activity = appContext.currentActivity ?: return
+    /** True when this device/activity combination can enter PiP. */
+    fun isPiPSupported(): Boolean =
+        !isTV &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            context.packageManager.hasSystemFeature(
+                PackageManager.FEATURE_PICTURE_IN_PICTURE,
+            )
 
+    /** Returns true when PiP entry was initiated. */
+    fun enterPip(): Boolean {
+        if (!isPiPSupported()) return false
+        if (playerEngine == PlayerEngine.VLC) return false
+        val activity = appContext.currentActivity ?: return false
+
+        PipRegistry.isEnteringPip = true
         try {
-            PipRegistry.isEnteringPip = true
             val ratio = PipRegistry.aspectRatio
-            val params = PictureInPictureParams.Builder()
+            val builder = PictureInPictureParams.Builder()
                 .setAspectRatio(Rational(ratio.numerator, ratio.denominator))
-                .apply {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        setAutoEnterEnabled(false)
-                        // Seamless resize scales the existing surface buffer
-                        // without a relayout, which renders as a wrongly
-                        // zoomed picture during the entry transition.
-                        setSeamlessResizeEnabled(false)
-                    }
-                }
-                .build()
-            activity.enterPictureInPictureMode(params)
-        } catch (_: Exception) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                builder.setAutoEnterEnabled(false)
+                // Seamless resize scales the existing surface buffer
+                // without a relayout, which renders as a wrongly
+                // zoomed picture during the entry transition.
+                builder.setSeamlessResizeEnabled(false)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                val loc = IntArray(2)
+                aspectFrame.getLocationOnScreen(loc)
+                builder.setSourceRectHint(
+                    Rect(loc[0], loc[1], loc[0] + aspectFrame.width, loc[1] + aspectFrame.height),
+                )
+                builder.setTitle(context.applicationInfo.loadLabel(activity.packageManager))
+            }
+            activity.enterPictureInPictureMode(builder.build())
+            return true
+        } catch (e: Exception) {
             PipRegistry.isEnteringPip = false
+            Log.w(TAG, "enterPip failed: ${e.message}")
+            return false
         }
+    }
+
+    /**
+     * Single owner of PiP transition side effects. Invoked from MainActivity
+     * via PipRegistry while the view is alive and attached.
+     */
+    fun onPipModeChangedFromSystem(isInPip: Boolean) {
+        if (isInPip) {
+            stopPoller()
+            schedulePipSettleLayoutPasses()
+        } else {
+            if (!backgroundAudioEnabled) {
+                when {
+                    surfaceView != null -> playerManager.setVideoSurfaceView(surfaceView)
+                    textureView != null -> playerManager.setTextureView(textureView)
+                }
+                if (playerManager.isPlaying()) mainHandler.post { playerManager.play() }
+            }
+            if (playerManager.isPlaying()) startPoller()
+            textureView?.invalidate()
+        }
+        mainHandler.post {
+            onPipModeChange(mapOf("isInPiP" to isInPip))
+        }
+    }
+
+    /**
+     * After the enter transition settles, force one full layout pass and
+     * repaint. Without this the first composited frames reuse the pre-PiP
+     * measurements/surface buffer, which shows the video zoomed until some
+     * other event (e.g. dragging the window) triggers a redraw.
+     */
+    private fun schedulePipSettleLayoutPasses() {
+        mainHandler.post { textureView?.invalidate() }
+        mainHandler.postDelayed({
+            aspectFrame.forceLayout()
+            aspectFrame.requestLayout()
+            aspectFrame.invalidate()
+            textureView?.invalidate()
+        }, PIP_SETTLE_DELAY_MS)
     }
 
     fun getCurrentPosition(): Long = playerManager.getCurrentPosition()
@@ -274,6 +324,8 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         disableBackgroundAudio(silent = true)
         playerManager.release()
         currentUrl = null
+        // Don't carry the previous channel's ratio into the next PiP entry.
+        PipRegistry.aspectRatio = Rational(16, 9)
         // Note: activeView is NOT cleared here. It is only cleared when the
         // view is actually destroyed (onDetachedFromWindow). This ensures that
         // PlayerRegistry.registerPlayer() can still find the old view and call
@@ -377,9 +429,7 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         }
 
         super.onDetachedFromWindow()
-        // Don't null the callback while entering PiP — onPictureInPictureModeChanged
-        // still needs it to relay the state change to JS.
-        if (!isTV && !PipRegistry.isEnteringPip) PipRegistry.onPipModeChanged = null
+        if (!isTV) PipRegistry.clearPipListener(this)
 
         if (backgroundAudioEnabled || PipRegistry.isInPipMode) {
             stopPoller()
@@ -388,6 +438,7 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        if (!isTV) PipRegistry.setPipListener(this)
         if (backgroundAudioEnabled || PipRegistry.isInPipMode) {
             when {
                 isTV && surfaceView != null -> playerManager.setVideoSurfaceView(surfaceView)

@@ -1,13 +1,14 @@
 package expo.modules.tvplayer
 
 import android.util.Rational
+import java.lang.ref.WeakReference
 
 /**
  * Bridges TvPlayerView ↔ MainActivity for PiP.
  *
  * TvPlayerView sets [isPlayerActive] = true when a source is loaded and playing,
- * false when released. MainActivity reads this in onUserLeaveHint() to decide
- * whether to auto-enter PiP.
+ * false when released. MainActivity reads this in onPictureInPictureModeChanged()
+ * handling to coordinate state.
  *
  * [isInPipMode] is set by MainActivity.onPictureInPictureModeChanged() so that
  * TvPlayerView can force a re-layout when the window shrinks/grows.
@@ -31,9 +32,31 @@ object PipRegistry {
     @Volatile var isEnteringPip: Boolean = false
 
     /**
-     * Callback invoked by MainActivity.onPictureInPictureModeChanged().
-     * TvPlayerView registers here so it can fire the native view event
-     * (onPipModeChange) which reaches JS reliably even with New Architecture.
+     * The view that owns PiP handling, held weakly so an unmounted player
+     * screen can never pin the Activity through this singleton.
      */
-    @Volatile var onPipModeChanged: ((Boolean) -> Unit)? = null
+    private var listenerRef: WeakReference<TvPlayerView>? = null
+
+    fun setPipListener(view: TvPlayerView) {
+        listenerRef = WeakReference(view)
+    }
+
+    fun clearPipListener(view: TvPlayerView) {
+        if (listenerRef?.get() === view) listenerRef = null
+    }
+
+    /**
+     * Called by MainActivity.onPictureInPictureModeChanged(). Routes the event
+     * to the registered view if it is still alive and attached; a collected or
+     * detached listener is skipped rather than invoked against dead state.
+     */
+    fun dispatchPipModeChanged(isInPip: Boolean) {
+        val view = listenerRef?.get()
+        if (view == null) {
+            listenerRef = null
+            return
+        }
+        if (!view.isAttachedToWindow) return
+        view.onPipModeChangedFromSystem(isInPip)
+    }
 }

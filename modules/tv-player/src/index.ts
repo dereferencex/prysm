@@ -165,8 +165,13 @@ export const TvPlayerCommands = {
   ): Promise<void> | undefined =>
     viewRef.current?.selectSubtitleTrack(groupIndex, trackIndex),
 
-  /** Enter Picture-in-Picture mode (mobile only, no-op on TV). */
-  enterPip: (viewRef: React.RefObject<any>): Promise<void> | undefined =>
+  /** Whether Picture-in-Picture is available on this device (mobile, Android 8+). */
+  isPiPSupported: (
+    viewRef: React.RefObject<any>,
+  ): Promise<boolean> | undefined => viewRef.current?.isPiPSupported(),
+
+  /** Enter Picture-in-Picture mode. Resolves true when entry was initiated. */
+  enterPip: (viewRef: React.RefObject<any>): Promise<boolean> | undefined =>
     viewRef.current?.enterPip(),
 
   /** Set media metadata for the system notification and Now Playing controls. */

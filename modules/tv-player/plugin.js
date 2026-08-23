@@ -13,7 +13,7 @@ const path = require("path");
  * Wires the native ExoPlayer module into the Android build and injects:
  *  - FOREGROUND_SERVICE + FOREGROUND_SERVICE_MEDIA_PLAYBACK permissions
  *  - TvPlayerService declaration (needed for background audio on TV)
- *  - PiP handling in MainActivity (onUserLeaveHint, onPictureInPictureModeChanged)
+ *  - PiP state relaying in MainActivity (onPictureInPictureModeChanged)
  *  - settings.gradle / app/build.gradle entries
  */
 function withTvPlayer(config) {
@@ -41,9 +41,23 @@ function withTvPlayer(config) {
 
     // Picture-in-Picture support on the main activity
     const activities = manifest.application?.[0]?.activity ?? [];
-    const mainActivity = activities.find(
-      (a) => a.$?.["android:name"] === ".MainActivity",
-    );
+    const isLauncherActivity = (a) =>
+      (a["intent-filter"] ?? []).some(
+        (f) =>
+          (f.action ?? []).some(
+            (x) => x.$?.["android:name"] === "android.intent.action.MAIN",
+          ) &&
+          (f.category ?? []).some(
+            (c) =>
+              c.$?.["android:name"] === "android.intent.category.LAUNCHER",
+          ),
+      );
+    const mainActivity =
+      activities.find((a) => a.$?.["android:name"] === ".MainActivity") ??
+      activities.find((a) =>
+        a.$?.["android:name"]?.endsWith(".MainActivity"),
+      ) ??
+      activities.find(isLauncherActivity);
     if (mainActivity) {
       mainActivity.$["android:supportsPictureInPicture"] = "true";
       // Ensure configChanges includes smallestScreenSize so the activity
@@ -107,7 +121,7 @@ function withTvPlayer(config) {
     return cfg;
   });
 
-  // 4. MainActivity.kt — inject PiP handling (auto-enter on Home, relay state to JS)
+  // 4. MainActivity.kt — relay PiP state changes to the player view
   config = withDangerousMod(config, [
     "android",
     async (cfg) => {
@@ -131,11 +145,7 @@ function withTvPlayer(config) {
 
       // --- Add imports ---
       const pipImports = [
-        "import android.app.PictureInPictureParams",
         "import android.content.res.Configuration",
-        "import android.util.Rational",
-        "import com.facebook.react.bridge.Arguments",
-        "import com.facebook.react.modules.core.DeviceEventManagerModule",
         "import expo.modules.tvplayer.PipRegistry",
       ];
       for (const imp of pipImports) {
@@ -145,44 +155,22 @@ function withTvPlayer(config) {
         }
       }
 
-      // --- Replace onUserLeaveHint to NOT auto-enter PiP ---
-      // Only enter PiP when the user explicitly taps the PiP button.
       const pipMethods = `
-    /**
-     * Do NOT auto-enter PiP when the user presses Home.
-     * PiP should only be entered via the explicit PiP button in the player controls.
-     */
-    override fun onUserLeaveHint() {
-        super.onUserLeaveHint()
-        // Intentionally left empty — PiP is triggered only by user action via TvPlayerView.enterPip()
-    }
-
     override fun onPictureInPictureModeChanged(
         isInPictureInPictureMode: Boolean,
         newConfig: Configuration,
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         PipRegistry.isInPipMode = isInPictureInPictureMode
-        PipRegistry.isEnteringPip = false
 
-        // Notify TvPlayerView so it can fire the native view event
-        // (onPipModeChange). This is the primary path — it works with both
-        // old and new React Native architectures.
-        PipRegistry.onPipModeChanged?.invoke(isInPictureInPictureMode)
+        // Deliver to the player view while the transition is still in
+        // progress; the intent flag is cleared afterwards.
+        PipRegistry.dispatchPipModeChanged(isInPictureInPictureMode)
 
         // Force the entire view tree to re-measure after the PiP window resize.
         window.decorView.rootView.requestLayout()
 
-        // Also emit via DeviceEventEmitter as a fallback for non-view listeners.
-        try {
-            val reactContext = reactInstanceManager?.currentReactContext ?: return
-            val params = Arguments.createMap().apply {
-                putBoolean("isInPiP", isInPictureInPictureMode)
-            }
-            reactContext
-                .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-                .emit("onPipModeChanged", params)
-        } catch (_: Exception) {}
+        PipRegistry.isEnteringPip = false
     }
 `;
 

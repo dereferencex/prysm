@@ -18,7 +18,6 @@ import {
   type LayoutChangeEvent,
   PermissionsAndroid,
   findNodeHandle,
-  DeviceEventEmitter,
   useWindowDimensions,
   AppState,
   AppStateStatus,
@@ -151,6 +150,29 @@ const CONTENT_FIT_OPTIONS: {
   { label: "Stretch", icon: "resize-outline", value: "fill" },
 ];
 
+let notificationPermissionSessionResolved = false;
+
+const ensureNotificationPermission = async (): Promise<boolean> => {
+  if (
+    Platform.OS !== "android" ||
+    parseInt(String(Platform.Version), 10) < 33
+  ) {
+    return true;
+  }
+  if (notificationPermissionSessionResolved) return true;
+  try {
+    const granted = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+    );
+    notificationPermissionSessionResolved =
+      granted === PermissionsAndroid.RESULTS.GRANTED;
+    return granted === PermissionsAndroid.RESULTS.GRANTED;
+  } catch (error) {
+    console.error("Permission request failed:", error);
+    return false;
+  }
+};
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
@@ -268,8 +290,6 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   const nhReadyCount = useRef(0);
   const NH_READY_MIN = 3; // backBtn, playPause, seekBar
   const [isPlaying, setIsPlaying] = useState(autoPlay);
-  const isPlayingRef = useRef(autoPlay);
-  isPlayingRef.current = isPlaying;
   const [isLoading, setIsLoading] = useState(true);
   const [isBuffering, setIsBuffering] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -330,6 +350,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   // Bridges the gap between handleEnterPip() and the onPictureInPictureModeChanged
   // callback so the AppState handler doesn't pause during PiP entry.
   const isEnteringPipRef = useRef(false);
+  const [pipSupported, setPipSupported] = useState(true);
 
   // Track consecutive errors for automatic fallback
   const consecutiveErrorCountRef = useRef(0);
@@ -687,20 +708,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
           // Small delay to ensure everything is ready
           await new Promise((resolve) => setTimeout(resolve, 100));
 
-          if (
-            Platform.OS === "android" &&
-            parseInt(String(Platform.Version), 10) >= 33
-          ) {
-            try {
-              const granted = await PermissionsAndroid.request(
-                PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
-              );
-              if (granted !== PermissionsAndroid.RESULTS.GRANTED) return;
-            } catch (error) {
-              console.error("Permission request failed:", error);
-              return;
-            }
-          }
+          if (!(await ensureNotificationPermission())) return;
 
           TvPlayerCommands.enableBackgroundAudio(tvPlayerRef);
           TvPlayerCommands.setMediaMetadata(tvPlayerRef, {
@@ -727,21 +735,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
       // Small delay to ensure player is fully initialized
       await new Promise((resolve) => setTimeout(resolve, 100));
 
-      // Request notification permission on Android 13+
-      if (
-        Platform.OS === "android" &&
-        parseInt(String(Platform.Version), 10) >= 33
-      ) {
-        try {
-          const granted = await PermissionsAndroid.request(
-            PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
-          );
-          if (granted !== PermissionsAndroid.RESULTS.GRANTED) return;
-        } catch (error) {
-          console.error("Permission request failed:", error);
-          return;
-        }
-      }
+      if (!(await ensureNotificationPermission())) return;
 
       TvPlayerCommands.enableBackgroundAudio(tvPlayerRef);
       TvPlayerCommands.setMediaMetadata(tvPlayerRef, {
@@ -759,14 +753,11 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   // center-crops whenever the tiny window's ratio differs from the stream's
   // display ratio (anamorphic/4:3 sources), making the video look zoomed in.
 
-  // Shared handler for PiP state changes — called from both the native
-  // view event (primary) and the DeviceEventEmitter fallback.
+  // Shared handler for PiP state changes — driven by the native view event.
   const handlePipChange = useCallback(
     (isInPip: boolean) => {
       // Clear the intent flag — onPictureInPictureModeChanged has fired
       isEnteringPipRef.current = false;
-      // Ignore duplicate events (native view event + DeviceEventEmitter fallback)
-      if (isInPip === isInPiPRef.current) return;
       isInPiPRef.current = isInPip;
       setIsInPiP(isInPip);
       if (isInPip) {
@@ -775,27 +766,25 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
         cancelHideTimerRef.current();
         // Hide controls immediately — the PiP window is too small
         setShowControls(false);
-      } else {
-        // Exiting PiP — make sure playback resumes.
-        if (isPlayingRef.current) {
-          TvPlayerCommands.play(tvPlayerRef);
-        }
       }
+      // On exit, playback continuity (surface re-attach + conditional resume)
+      // is owned by the native side — no JS play() here to avoid double paths.
     },
     [setShowControls],
   );
 
-  // Fallback: listen for PiP mode changes via DeviceEventEmitter from
-  // MainActivity. The native view event (onPipModeChange) is preferred but
-  // this catches the case where the view hasn't mounted yet.
   useEffect(() => {
-    if (isTV) return;
-    const sub = DeviceEventEmitter.addListener(
-      "onPipModeChanged",
-      (e: { isInPiP: boolean }) => handlePipChange(e.isInPiP),
-    );
-    return () => sub.remove();
-  }, [handlePipChange]);
+    if (isTV || !nativeReady) return;
+    let cancelled = false;
+    const check = async () => {
+      const supported = await TvPlayerCommands.isPiPSupported(tvPlayerRef);
+      if (!cancelled) setPipSupported(supported === true);
+    };
+    void check();
+    return () => {
+      cancelled = true;
+    };
+  }, [nativeReady]);
 
   // ── TV D-pad handler ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -923,15 +912,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
     if (isBackgroundPlaying) {
       TvPlayerCommands.disableBackgroundAudio(tvPlayerRef);
     } else {
-      if (
-        Platform.OS === "android" &&
-        parseInt(String(Platform.Version), 10) >= 33
-      ) {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
-        );
-        if (granted !== PermissionsAndroid.RESULTS.GRANTED) return;
-      }
+      if (!(await ensureNotificationPermission())) return;
       TvPlayerCommands.enableBackgroundAudio(tvPlayerRef);
       TvPlayerCommands.setMediaMetadata(tvPlayerRef, {
         title: title || "",
@@ -952,7 +933,21 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
     // Set intent flag BEFORE calling native enterPip — the AppState handler
     // fires during the PiP transition and must not pause the player.
     isEnteringPipRef.current = true;
-    TvPlayerCommands.enterPip(tvPlayerRef);
+    void Promise.resolve(TvPlayerCommands.enterPip(tvPlayerRef))
+      .then((entered) => {
+        if (entered !== true) isEnteringPipRef.current = false;
+      })
+      .catch(() => {
+        isEnteringPipRef.current = false;
+      });
+    // Safety net — never leave the flag stuck if the transition event is lost
+    // (unsupported OEMs, process pressure, etc.), otherwise backgrounding the
+    // app would never pause playback.
+    setTimeout(() => {
+      if (isEnteringPipRef.current && !isInPiPRef.current) {
+        isEnteringPipRef.current = false;
+      }
+    }, 3000);
   }, [isPlaying]);
 
   // ── Channel navigation ────────────────────────────────────────────────────
@@ -1941,9 +1936,10 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                   />
                 </TVFocusablePressable>
 
-                {/* PiP — mobile only, ExoPlayer only */}
+                {/* PiP — mobile only, ExoPlayer only, supported devices */}
                 {!isTV &&
                 Platform.OS === "android" &&
+                pipSupported &&
                 activePlayerEngine === "exoplayer" ? (
                   <TVFocusablePressable
                     onPress={handleEnterPip}
