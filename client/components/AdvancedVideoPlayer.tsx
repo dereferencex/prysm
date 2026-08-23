@@ -1802,6 +1802,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                               {
                                 width: `${(seekDrag.active ? seekDrag.progress : progress) * 100}%`,
                               },
+                              { backgroundColor: theme.primary },
                             ]}
                           />
                           {/* Thumb — animates size on drag */}
@@ -1811,6 +1812,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                               {
                                 left: `${(seekDrag.active ? seekDrag.progress : progress) * 100}%`,
                               },
+                              { backgroundColor: theme.primary },
                               seekBarFocused && st.seekThumbFocused,
                               animSeekThumb,
                             ]}
