@@ -157,7 +157,7 @@ class TvPlayerModule : Module() {
                 view.selectSubtitleTrack(groupIndex, trackIndex)
             }
 
-            Function("isPiPSupported") { view: TvPlayerView ->
+            AsyncFunction("isPiPSupported") { view: TvPlayerView ->
                 view.isPiPSupported()
             }
 
