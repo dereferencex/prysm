@@ -66,18 +66,9 @@ export function PlaylistProvider({ children }: { children: ReactNode }) {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [favoriteCategories, setFavoriteCategories] = useState<string[]>([]);
   const [recentChannels, setRecentChannels] = useState<string[]>([]);
-  const [settings, setSettings] = useState<storage.AppSettings>({
-    autoPlay: true,
-    backgroundPlay: false,
-    videoQuality: "auto",
-    showCategoryFilter: true,
-    autoRefreshInterval: "off",
-    customRefreshMinutes: 15,
-    rememberLastCategory: false,
-    lastCategory: "All",
-    textSize: "medium",
-    playerEngine: "exoplayer",
-  });
+  const [settings, setSettings] = useState<storage.AppSettings>(
+    storage.DEFAULT_SETTINGS,
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingPlaylist, setIsLoadingPlaylist] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,7 +104,10 @@ export function PlaylistProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const getRefreshIntervalMs = useCallback(
-    (interval: storage.AutoRefreshInterval, customMinutes?: number): number | null => {
+    (
+      interval: storage.AutoRefreshInterval,
+      customMinutes?: number,
+    ): number | null => {
       switch (interval) {
         case "5min":
           return 5 * 60 * 1000;
@@ -164,7 +158,10 @@ export function PlaylistProvider({ children }: { children: ReactNode }) {
       autoRefreshTimerRef.current = null;
     }
 
-    const intervalMs = getRefreshIntervalMs(settings.autoRefreshInterval, settings.customRefreshMinutes);
+    const intervalMs = getRefreshIntervalMs(
+      settings.autoRefreshInterval,
+      settings.customRefreshMinutes,
+    );
     if (intervalMs && activePlaylistId) {
       autoRefreshTimerRef.current = setInterval(() => {
         performAutoRefresh();
@@ -187,7 +184,10 @@ export function PlaylistProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (nextAppState === "active" && settings.autoRefreshInterval !== "off") {
-        const intervalMs = getRefreshIntervalMs(settings.autoRefreshInterval, settings.customRefreshMinutes);
+        const intervalMs = getRefreshIntervalMs(
+          settings.autoRefreshInterval,
+          settings.customRefreshMinutes,
+        );
         if (intervalMs) {
           const timeSinceLastRefresh = Date.now() - lastRefreshTimeRef.current;
           if (timeSinceLastRefresh >= intervalMs) {
@@ -202,7 +202,12 @@ export function PlaylistProvider({ children }: { children: ReactNode }) {
       handleAppStateChange,
     );
     return () => subscription?.remove();
-  }, [settings.autoRefreshInterval, settings.customRefreshMinutes, getRefreshIntervalMs, performAutoRefresh]);
+  }, [
+    settings.autoRefreshInterval,
+    settings.customRefreshMinutes,
+    getRefreshIntervalMs,
+    performAutoRefresh,
+  ]);
 
   const loadInitialData = async () => {
     try {
@@ -422,18 +427,7 @@ export function PlaylistProvider({ children }: { children: ReactNode }) {
     setRecentChannels([]);
     // Clear the Android TV launcher home row so stale tiles don't linger
     syncFavourites([]);
-    setSettings({
-      autoPlay: true,
-      backgroundPlay: false,
-      videoQuality: "auto",
-      showCategoryFilter: true,
-      autoRefreshInterval: "off",
-      customRefreshMinutes: 15,
-      rememberLastCategory: false,
-      lastCategory: "All",
-      textSize: "medium",
-      playerEngine: "exoplayer",
-    });
+    setSettings({ ...storage.DEFAULT_SETTINGS });
   };
 
   const refreshPlaylist = async () => {

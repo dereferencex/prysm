@@ -95,12 +95,14 @@ export interface AppSettings {
   /** Custom refresh interval in minutes (used when autoRefreshInterval === "custom"). */
   customRefreshMinutes: number;
   rememberLastCategory: boolean;
-  lastCategory: string;
+  /** Last selected category keyed by playlist id, so one playlist's
+   *  selection is never restored for another playlist. */
+  lastCategoryByPlaylist: Record<string, string>;
   textSize: TextSizeOption;
   playerEngine: PlayerEngine;
 }
 
-const DEFAULT_SETTINGS: AppSettings = {
+export const DEFAULT_SETTINGS: AppSettings = {
   autoPlay: true,
   backgroundPlay: false,
   videoQuality: "auto",
@@ -108,7 +110,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   autoRefreshInterval: "off",
   customRefreshMinutes: 15,
   rememberLastCategory: true,
-  lastCategory: "All",
+  lastCategoryByPlaylist: {},
   textSize: "medium",
   playerEngine: "exoplayer",
 };
@@ -603,9 +605,13 @@ export async function saveNetworkStreamConfig(
   }
 }
 
-export async function getChannelPlayerEngine(channelId: string): Promise<PlayerEngine | null> {
+export async function getChannelPlayerEngine(
+  channelId: string,
+): Promise<PlayerEngine | null> {
   try {
-    const data = await AsyncStorage.getItem(`${STORAGE_KEYS.CHANNEL_ENGINE}${channelId}`);
+    const data = await AsyncStorage.getItem(
+      `${STORAGE_KEYS.CHANNEL_ENGINE}${channelId}`,
+    );
     return (data as PlayerEngine) || null;
   } catch (error) {
     console.error("Error getting channel player engine:", error);
@@ -613,9 +619,15 @@ export async function getChannelPlayerEngine(channelId: string): Promise<PlayerE
   }
 }
 
-export async function setChannelPlayerEngine(channelId: string, engine: PlayerEngine): Promise<void> {
+export async function setChannelPlayerEngine(
+  channelId: string,
+  engine: PlayerEngine,
+): Promise<void> {
   try {
-    await AsyncStorage.setItem(`${STORAGE_KEYS.CHANNEL_ENGINE}${channelId}`, engine);
+    await AsyncStorage.setItem(
+      `${STORAGE_KEYS.CHANNEL_ENGINE}${channelId}`,
+      engine,
+    );
   } catch (error) {
     console.error("Error setting channel player engine:", error);
   }

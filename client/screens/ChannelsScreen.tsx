@@ -82,9 +82,7 @@ function FocusableCategoryItem({
         [
           styles.categoryItem,
           {
-            backgroundColor: isSelected
-              ? theme.primary + "20"
-              : "transparent",
+            backgroundColor: isSelected ? theme.primary + "20" : "transparent",
           },
           isFocused && {
             backgroundColor: theme.primary + "30",
@@ -270,14 +268,33 @@ export default function ChannelsScreen() {
     updateSettings,
   } = usePlaylist();
 
-  const initialCategory = settings.rememberLastCategory
-    ? settings.lastCategory
-    : "All";
   const [searchQuery, setSearchQuery] = useState("");
   // Debounced query — filteredChannels recomputes only after 200ms of no typing
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState(initialCategory);
+  // Category picked by the user this session; null = derive from settings.
+  const [userCategory, setUserCategory] = useState<string | null>(null);
+  const lastPlaylistIdRef = useRef<string | null | undefined>(playlist?.id);
+
+  // The screen stays mounted while the user switches playlists from the
+  // Settings tab, so drop the previous playlist's selection the moment the
+  // active playlist changes — its categories must never leak across.
+  if (lastPlaylistIdRef.current !== playlist?.id) {
+    lastPlaylistIdRef.current = playlist?.id;
+    setUserCategory(null);
+  }
+
+  // Remembered category for THIS playlist only; falls back to "All" when
+  // remembering is off or the stored category no longer exists here.
+  const rememberedCategory =
+    settings.rememberLastCategory && playlist
+      ? settings.lastCategoryByPlaylist[playlist.id]
+      : undefined;
+  const selectedCategory =
+    userCategory ??
+    (rememberedCategory && playlist?.categories.includes(rememberedCategory)
+      ? rememberedCategory
+      : "All");
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const drawerTranslate = useSharedValue(-DRAWER_WIDTH);
@@ -387,14 +404,25 @@ export default function ChannelsScreen() {
 
   const handleCategoryChange = useCallback(
     (category: string) => {
-      setSelectedCategory(category);
+      setUserCategory(category);
       setSearchQuery("");
       closeDrawer();
-      if (settings.rememberLastCategory) {
-        updateSettings({ lastCategory: category });
+      if (settings.rememberLastCategory && playlist) {
+        updateSettings({
+          lastCategoryByPlaylist: {
+            ...settings.lastCategoryByPlaylist,
+            [playlist.id]: category,
+          },
+        });
       }
     },
-    [closeDrawer, settings.rememberLastCategory, updateSettings],
+    [
+      closeDrawer,
+      playlist,
+      settings.lastCategoryByPlaylist,
+      settings.rememberLastCategory,
+      updateSettings,
+    ],
   );
 
   const handleSearchChange = useCallback((query: string) => {
@@ -509,10 +537,7 @@ export default function ChannelsScreen() {
           <View style={styles.categoryTitleRow}>
             {isCatFavorite ? (
               <View style={styles.favoriteCategoryIcon}>
-                <ThemedText
-                  type="caption"
-                  style={{ color: theme.primary }}
-                >
+                <ThemedText type="caption" style={{ color: theme.primary }}>
                   ★
                 </ThemedText>
               </View>
@@ -676,7 +701,11 @@ export default function ChannelsScreen() {
           >
             <View style={styles.drawerHeader}>
               <ThemedText type="h4">Categories</ThemedText>
-              <FocusableCloseButton onPress={closeDrawer} theme={theme} hasTVPreferredFocus={isTV} />
+              <FocusableCloseButton
+                onPress={closeDrawer}
+                theme={theme}
+                hasTVPreferredFocus={isTV}
+              />
             </View>
 
             <FlashList
@@ -829,8 +858,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "transparent",
   },
-  closeButtonFocused: {
-  },
+  closeButtonFocused: {},
 
   categoryItem: {
     flexDirection: "row",
@@ -866,6 +894,5 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "transparent",
   },
-  categoryFavButtonFocused: {
-  },
+  categoryFavButtonFocused: {},
 });
