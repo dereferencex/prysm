@@ -158,16 +158,8 @@ const TEXT_SIZE_OPTIONS = [
 ];
 
 const PLAYER_ENGINE_OPTIONS = [
-  {
-    label: "ExoPlayer (Media3)",
-    value: "exoplayer" as const,
-    desc: "Default — best for most streams",
-  },
-  {
-    label: "VLC Player",
-    value: "vlc" as const,
-    desc: "Fallback — wider codec support",
-  },
+  { label: "ExoPlayer (Media3)", value: "exoplayer" as const, desc: "Default — best for most streams" },
+  { label: "VLC Player", value: "vlc" as const, desc: "Fallback — wider codec support" },
 ];
 
 export default function SettingsScreen() {
@@ -249,7 +241,7 @@ export default function SettingsScreen() {
       }
     };
     initializeUpdateCheck();
-
+    
     // Listen for app state changes to handle install result
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (nextAppState === "active" && installingApk) {
@@ -261,20 +253,14 @@ export default function SettingsScreen() {
           if (info) {
             setUpdateInfo(info);
             if (!info.available) {
-              Alert.alert(
-                "Update Successful",
-                "App has been updated to the latest version.",
-              );
+              Alert.alert("Update Successful", "App has been updated to the latest version.");
             }
           }
         });
       }
     };
-
-    const subscription = AppState.addEventListener(
-      "change",
-      handleAppStateChange,
-    );
+    
+    const subscription = AppState.addEventListener("change", handleAppStateChange);
     return () => subscription.remove();
   }, [installingApk, isFdroid]);
 
@@ -344,9 +330,7 @@ export default function SettingsScreen() {
   };
 
   const getPlayerEngineLabel = () => {
-    const option = PLAYER_ENGINE_OPTIONS.find(
-      (o) => o.value === settings.playerEngine,
-    );
+    const option = PLAYER_ENGINE_OPTIONS.find((o) => o.value === settings.playerEngine);
     return option?.label || "ExoPlayer (Media3)";
   };
 
@@ -455,7 +439,7 @@ export default function SettingsScreen() {
     try {
       // Clean up any old APK first
       await clearDownloadedApk();
-
+      
       const apkPath = await downloadApk(updateInfo.apkUrl, (progress) => {
         setDownloadProgress(Math.round(progress * 100));
       });
@@ -465,20 +449,23 @@ export default function SettingsScreen() {
       }
       setDownloadingApk(false);
       setInstallingApk(true);
-
+      
       const contentUri = await getApkContentUri(apkPath);
       if (!contentUri) {
         setUpdateError("Failed to prepare update for installation");
         return;
       }
-
+      
       // Use modern intent action for Android 10+
-      await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
-        data: contentUri,
-        type: "application/vnd.android.package-archive",
-        flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
-      });
-
+      await IntentLauncher.startActivityAsync(
+        "android.intent.action.VIEW",
+        {
+          data: contentUri,
+          type: "application/vnd.android.package-archive",
+          flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
+        },
+      );
+      
       // Clean up the APK after successful install launch
       await clearDownloadedApk();
     } catch (error) {
@@ -516,10 +503,8 @@ export default function SettingsScreen() {
   const getAutoRefreshLabel = () => {
     if (settings.autoRefreshInterval === "custom") {
       const mins = settings.customRefreshMinutes;
-      if (mins >= 1440 && mins % 1440 === 0)
-        return `Every ${mins / 1440} day${mins / 1440 > 1 ? "s" : ""}`;
-      if (mins >= 60 && mins % 60 === 0)
-        return `Every ${mins / 60} hour${mins / 60 > 1 ? "s" : ""}`;
+      if (mins >= 1440 && mins % 1440 === 0) return `Every ${mins / 1440} day${mins / 1440 > 1 ? "s" : ""}`;
+      if (mins >= 60 && mins % 60 === 0) return `Every ${mins / 60} hour${mins / 60 > 1 ? "s" : ""}`;
       return `Every ${mins} minute${mins > 1 ? "s" : ""}`;
     }
     const option = AUTO_REFRESH_OPTIONS.find(
@@ -769,9 +754,7 @@ export default function SettingsScreen() {
                 title="Developer"
                 subtitle="dereferencex"
                 value=""
-                onPress={() =>
-                  Linking.openURL("https://github.com/dereferencex")
-                }
+                onPress={() => Linking.openURL("https://github.com/dereferencex")}
                 showChevron
               />
               {!isFdroid &&
@@ -875,18 +858,9 @@ export default function SettingsScreen() {
               </FocusableOption>
             ))}
             {settings.autoRefreshInterval === "custom" && (
-              <View
-                style={[styles.customInputRow, { borderColor: theme.border }]}
-              >
+              <View style={[styles.customInputRow, { borderColor: theme.border }]}>
                 <TextInput
-                  style={[
-                    styles.customInput,
-                    {
-                      color: theme.text,
-                      borderColor: theme.border,
-                      backgroundColor: theme.backgroundSecondary,
-                    },
-                  ]}
+                  style={[styles.customInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.backgroundSecondary }]}
                   keyboardType="numeric"
                   placeholder="Minutes"
                   placeholderTextColor={theme.textSecondary}
@@ -896,26 +870,15 @@ export default function SettingsScreen() {
                   autoFocus
                   selectTextOnFocus
                 />
-                <ThemedText
-                  type="body"
-                  style={{ color: theme.textSecondary, marginLeft: 8 }}
-                >
+                <ThemedText type="body" style={{ color: theme.textSecondary, marginLeft: 8 }}>
                   min
                 </ThemedText>
                 <Pressable
                   onPress={handleCustomMinutesConfirm}
-                  style={[
-                    styles.customSetButton,
-                    { backgroundColor: theme.primary },
-                  ]}
+                  style={[styles.customSetButton, { backgroundColor: theme.primary }]}
                   focusable={!isTV}
                 >
-                  <ThemedText
-                    type="body"
-                    style={{ color: "#fff", fontWeight: "600" }}
-                  >
-                    Set
-                  </ThemedText>
+                  <ThemedText type="body" style={{ color: "#fff", fontWeight: "600" }}>Set</ThemedText>
                 </Pressable>
               </View>
             )}
@@ -1291,7 +1254,10 @@ export default function SettingsScreen() {
               </Button>
               <Button
                 onPress={handleDeletePlaylist}
-                style={[styles.confirmButton, { backgroundColor: theme.error }]}
+                style={[
+                  styles.confirmButton,
+                  { backgroundColor: theme.error },
+                ]}
               >
                 Delete
               </Button>
@@ -1344,7 +1310,10 @@ export default function SettingsScreen() {
               </Button>
               <Button
                 onPress={handleClearAllData}
-                style={[styles.confirmButton, { backgroundColor: theme.error }]}
+                style={[
+                  styles.confirmButton,
+                  { backgroundColor: theme.error },
+                ]}
               >
                 Clear All
               </Button>
@@ -1713,14 +1682,16 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "transparent",
   },
-  deleteButtonFocused: {},
+  deleteButtonFocused: {
+  },
   editButton: {
     padding: Spacing.md,
     borderRadius: BorderRadius.xs,
     borderWidth: 2,
     borderColor: "transparent",
   },
-  editButtonFocused: {},
+  editButtonFocused: {
+  },
   editInputContainer: {
     marginBottom: Spacing.md,
   },
