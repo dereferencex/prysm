@@ -16,7 +16,7 @@ import {
   type DynamicPalette,
 } from "../../modules/dynamic-color/src";
 
-export type ThemeMode = "light" | "dark";
+type ThemeMode = "light" | "dark";
 
 interface ThemeContextType {
   themeMode: ThemeMode;
@@ -32,15 +32,6 @@ const THEME_STORAGE_KEY = "prysm_theme_mode";
 const DYNAMIC_STORAGE_KEY = "prysm_dynamic_colors";
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
-
-export async function loadSavedThemeMode(): Promise<ThemeMode | null> {
-  try {
-    const saved = await AsyncStorage.getItem(THEME_STORAGE_KEY);
-    return saved === "light" || saved === "dark" ? saved : null;
-  } catch {
-    return null;
-  }
-}
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [themeMode, setThemeModeState] = useState<ThemeMode>("dark");

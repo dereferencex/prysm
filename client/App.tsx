@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect } from "react";
 import { StyleSheet, View, ActivityIndicator, Platform } from "react-native";
 import {
   NavigationContainer,
@@ -26,18 +26,10 @@ import { queryClient } from "@/lib/query-client";
 
 import RootStackNavigator from "@/navigation/RootStackNavigator";
 import { PlaylistProvider } from "@/context/PlaylistContext";
-import {
-  ThemeProvider,
-  useThemeContext,
-  loadSavedThemeMode,
-} from "@/context/ThemeContext";
+import { ThemeProvider, useThemeContext } from "@/context/ThemeContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LogCapture } from "@/components/LogCapture";
 import { Colors } from "@/constants/theme";
-import {
-  getDynamicPalette,
-  isDynamicColorSupported,
-} from "../modules/dynamic-color/src";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 // Deep link config — handles prysmplayer://play?channelId=<id> from the
@@ -113,40 +105,16 @@ export default function App() {
     Rubik_600SemiBold,
     Rubik_700Bold,
   });
-  const [bootMode, setBootMode] = useState<"light" | "dark">("dark");
-  const [prefsLoaded, setPrefsLoaded] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    loadSavedThemeMode()
-      .then((mode) => {
-        if (!cancelled && mode) setBootMode(mode);
-      })
-      .finally(() => {
-        if (!cancelled) setPrefsLoaded(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const bootTheme = useMemo(() => {
-    const base = Colors[bootMode];
-    const palette = isDynamicColorSupported()
-      ? getDynamicPalette(bootMode === "dark")
-      : null;
-    return palette ? { ...base, ...palette } : base;
-  }, [bootMode]);
 
   useEffect(() => {
     configureOrientation();
   }, []);
 
   useEffect(() => {
-    if ((fontsLoaded || fontError) && prefsLoaded) {
+    if (fontsLoaded || fontError) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError, prefsLoaded]);
+  }, [fontsLoaded, fontError]);
 
   const configureOrientation = async () => {
     try {
@@ -166,13 +134,8 @@ export default function App() {
 
   if (!fontsLoaded && !fontError) {
     return (
-      <View
-        style={[
-          styles.loadingContainer,
-          { backgroundColor: bootTheme.backgroundRoot },
-        ]}
-      >
-        <ActivityIndicator size="large" color={bootTheme.primary} />
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.dark.primary} />
       </View>
     );
   }
@@ -197,6 +160,7 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
+    backgroundColor: Colors.dark.backgroundRoot,
     justifyContent: "center",
     alignItems: "center",
   },
