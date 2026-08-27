@@ -59,6 +59,11 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         setAspectRatio(16f / 9f)
     }
 
+    // User-selected resize mode (contain/cover/fill). Persisted so we can
+    // restore it when leaving PiP, where we force FIT (contain) so the video
+    // is never cropped or cut off in the tiny window.
+    private var userResizeMode: Int = AspectRatioFrameLayout.RESIZE_MODE_FIT
+
     private val surfaceView: SurfaceView? = if (isTV) SurfaceView(context) else null
     private val textureView: TextureView? = if (!isTV) TextureView(context) else null
     private val subtitleView = SubtitleView(context)
@@ -138,11 +143,29 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
     }
 
     fun setResizeMode(mode: Int) {
-        aspectFrame.resizeMode = mode
+        userResizeMode = mode
+        applyResizeMode(mode)
+    }
+
+    // Applies an effective resize mode, overriding to FIT (contain) while in
+    // PiP so the video is never cropped or cut off in the tiny window.
+    private fun applyResizeMode(mode: Int) {
+        val effective = if (PipRegistry.isInPipMode) RESIZE_MODE_FIT else mode
+        aspectFrame.resizeMode = effective
         aspectFrame.requestLayout()
         requestLayout()
-        playerManager.setResizeMode(mode)
+        playerManager.setResizeMode(effective)
     }
+
+    // Force FIT (contain) without overwriting the user's saved resize mode.
+    private fun forcePipFit() {
+        aspectFrame.resizeMode = RESIZE_MODE_FIT
+        aspectFrame.requestLayout()
+        requestLayout()
+        playerManager.setResizeMode(RESIZE_MODE_FIT)
+    }
+
+    private val RESIZE_MODE_FIT = AspectRatioFrameLayout.RESIZE_MODE_FIT
 
     fun load(
         url: String,
@@ -198,10 +221,13 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
                 .setAspectRatio(Rational(ratio.numerator, ratio.denominator))
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 builder.setAutoEnterEnabled(false)
-                // Seamless resize scales the existing surface buffer
-                // without a relayout, which renders as a wrongly
-                // zoomed picture during the entry transition.
-                builder.setSeamlessResizeEnabled(false)
+                // Seamless resize must stay ENABLED (the framework default).
+                // Disabling it makes the framework recompose the existing
+                // fullscreen buffer into the shrunken PiP window without any
+                // rescale — which is exactly what renders the video black /
+                // zoomed / cut-off until the window is dragged. Keeping it on
+                // lets SurfaceFlinger correctly rescale the TextureView buffer
+                // during the enter animation, so the fit is always correct.
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 val loc = IntArray(2)
@@ -226,9 +252,16 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
      */
     fun onPipModeChangedFromSystem(isInPip: Boolean) {
         if (isInPip) {
+            // The PiP window's proportions rarely match the video's display
+            // ratio, and the user's cover/fill mode would crop or cut the video
+            // off (portrait → black, landscape → clipped with black). Force
+            // FIT (contain) so the whole frame is always visible, letterboxed.
+            forcePipFit()
             stopPoller()
             schedulePipSettleLayoutPasses()
         } else {
+            // Restore the user's fullscreen resize mode now that we're back.
+            applyResizeMode(userResizeMode)
             if (!backgroundAudioEnabled) {
                 when {
                     surfaceView != null -> playerManager.setVideoSurfaceView(surfaceView)
@@ -245,32 +278,19 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
     }
 
     /**
-     * After the enter transition settles, force the view hierarchy to
-     * remeasure for the shrunken PiP window and rebind the renderer's output
-     * surface. This is the fix for the classic TextureView PiP symptom where
-     * the first composited frames reuse the pre-PiP buffer — showing the video
-     * zoomed/black until some unrelated event (dragging the window) repaints.
-     *
-     * A single fixed-delay pass is not enough on every device: the transition
-     * duration varies, so we chain two passes and rebind the surface, which
-     * forces the renderer to reconfigure to the final window size.
+     * After the enter transition settles, force one clean re-measure/invalidate
+     * of the aspect frame for the final PiP window size. With seamless resize
+     * enabled the framework already rescales the buffer, so we only need to
+     * ensure the aspect frame is laid out against the settled window bounds.
      */
     private fun schedulePipSettleLayoutPasses() {
-        fun settle() {
-            // Remeasure the aspect frame against the (settled) PiP window size.
+        mainHandler.post { textureView?.invalidate() }
+        mainHandler.postDelayed({
             aspectFrame.forceLayout()
             aspectFrame.requestLayout()
             aspectFrame.invalidate()
-            // Rebinding the TextureView surface makes the renderer re-render at
-            // the new buffer dimensions instead of the stale fullscreen buffer.
-            textureView?.let {
-                playerManager.setTextureView(it)
-                it.invalidate()
-            }
-        }
-        mainHandler.post { textureView?.invalidate() }
-        mainHandler.postDelayed({ settle() }, PIP_SETTLE_DELAY_MS)
-        mainHandler.postDelayed({ settle() }, PIP_SETTLE_DELAY_MS + 250L)
+            textureView?.invalidate()
+        }, PIP_SETTLE_DELAY_MS)
     }
 
     fun getCurrentPosition(): Long = playerManager.getCurrentPosition()
