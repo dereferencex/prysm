@@ -24,6 +24,7 @@ class PlayerManager(
     private var lastLoadParams: LoadParams? = null
     private var pendingSurfaceView: SurfaceView? = null
     private var pendingTextureView: TextureView? = null
+    private var playerView: androidx.media3.ui.PlayerView? = null
 
     data class LoadParams(
         val url: String,
@@ -127,6 +128,27 @@ class PlayerManager(
         activeController?.setTextureView(textureView)
     }
 
+    fun setPlayerView(view: androidx.media3.ui.PlayerView?) {
+        playerView = view
+        // ExoPlayer renders through PlayerView; VLC still binds its own surface
+        // (the PlayerView's inner surface view on mobile, or SurfaceView on TV).
+        pendingSurfaceView?.let { setVideoSurfaceView(it) }
+        pendingTextureView?.let { setTextureView(it) }
+        activeController?.setPlayerView(view)
+        if (view != null && pendingSurfaceView == null && pendingTextureView == null) {
+            // Mobile: let controllers source their surface from PlayerView.
+            view.videoSurfaceView?.let {
+                if (it is SurfaceView) {
+                    pendingSurfaceView = it
+                    activeController?.setVideoSurfaceView(it)
+                } else if (it is TextureView) {
+                    pendingTextureView = it
+                    activeController?.setTextureView(it)
+                }
+            }
+        }
+    }
+
     fun clearVideoSurface() {
         pendingSurfaceView = null
         pendingTextureView = null
@@ -134,6 +156,7 @@ class PlayerManager(
     }
 
     private fun applyPendingSurface(controller: PlayerController) {
+        controller.setPlayerView(playerView)
         pendingSurfaceView?.let { controller.setVideoSurfaceView(it) }
         pendingTextureView?.let { controller.setTextureView(it) }
     }

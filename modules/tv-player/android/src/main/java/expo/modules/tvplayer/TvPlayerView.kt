@@ -23,6 +23,7 @@ import android.widget.Toast
 import android.app.PictureInPictureParams
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
 import androidx.media3.ui.SubtitleView
 import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.viewevent.EventDispatcher
@@ -34,15 +35,6 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
 
     companion object {
         private const val TAG = "TvPlayerView"
-
-        /**
-         * Delay before the post-entry layout pass. The system PiP enter
-         * transition runs ~300 ms; laying out earlier uses the animating
-         * window frame and leaves TextureView compositing a fullscreen-size
-         * buffer into the small window (video renders zoomed until the next
-         * forced redraw — e.g. dragging the window).
-         */
-        private const val PIP_SETTLE_DELAY_MS = 350L
     }
 
     override val shouldUseAndroidLayout: Boolean = true
@@ -65,7 +57,23 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
     private var userResizeMode: Int = AspectRatioFrameLayout.RESIZE_MODE_FIT
 
     private val surfaceView: SurfaceView? = if (isTV) SurfaceView(context) else null
-    private val textureView: TextureView? = if (!isTV) TextureView(context) else null
+
+    // On mobile the video renders through media3's PlayerView, which owns the
+    // surface + aspect-ratio lifecycle internally. This is what makes PiP
+    // resizing robust across repeated enter/exit cycles (the manual TextureView
+    // approach rendered black / mis-scaled after the first PiP session).
+    private val playerView: PlayerView? = if (!isTV) {
+        PlayerView(context).apply {
+            useController = false
+            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+            setShutterBackgroundColor(android.graphics.Color.BLACK)
+        }
+    } else null
+
+    // The native surface view from PlayerView — handed to VLC (VLC media only
+    // used on mobile as a fallback; PiP is ExoPlayer-only anyway).
+    private val mobileSurface: View? get() = playerView?.videoSurfaceView
+
     private val subtitleView = SubtitleView(context)
 
     private var backgroundAudioEnabled = false
@@ -102,30 +110,43 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT,
         )
-        if (isTV) {
-            aspectFrame.addView(surfaceView, fillParams)
-        } else {
-            aspectFrame.addView(textureView, fillParams)
-        }
-
         subtitleView.setFractionalTextSize(SubtitleView.DEFAULT_TEXT_SIZE_FRACTION)
-        aspectFrame.addView(subtitleView, fillParams)
 
-        addView(aspectFrame, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            1f,
-        ))
+        when {
+            isTV -> {
+                // TV keeps the manual SurfaceView wrapped in an AspectRatioFrameLayout.
+                aspectFrame.addView(surfaceView, fillParams)
+                aspectFrame.addView(subtitleView, fillParams)
+                addView(aspectFrame, LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    1f,
+                ))
+            }
+            else -> {
+                // Mobile renders through PlayerView (ExoPlayer) with subtitles
+                // overlaid; PlayerView manages its own aspect ratio + surface
+                // lifecycle, which PiP depends on.
+                val content = FrameLayout(context).apply {
+                    addView(playerView, fillParams)
+                    addView(subtitleView, fillParams)
+                }
+                addView(content, LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    1f,
+                ))
+            }
+        }
 
         if (!isTV) {
             PipRegistry.setPipListener(this)
         }
 
         playerManager.setCallbacks(this)
-
+        playerManager.setPlayerView(playerView)
         when {
             isTV && surfaceView != null -> playerManager.setVideoSurfaceView(surfaceView)
-            textureView != null -> playerManager.setTextureView(textureView)
         }
     }
 
@@ -151,21 +172,45 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
     // PiP so the video is never cropped or cut off in the tiny window.
     private fun applyResizeMode(mode: Int) {
         val effective = if (PipRegistry.isInPipMode) RESIZE_MODE_FIT else mode
-        aspectFrame.resizeMode = effective
-        aspectFrame.requestLayout()
-        requestLayout()
-        playerManager.setResizeMode(effective)
+        onResizeMode(effective)
     }
 
     // Force FIT (contain) without overwriting the user's saved resize mode.
     private fun forcePipFit() {
-        aspectFrame.resizeMode = RESIZE_MODE_FIT
-        aspectFrame.requestLayout()
+        onResizeMode(RESIZE_MODE_FIT)
+    }
+
+    // Route the resize mode to the correct surface owner: PlayerView (mobile /
+    // ExoPlayer), the AspectRatioFrameLayout (TV), and the VLC controller.
+    private fun onResizeMode(mode: Int) {
+        if (!isTV) {
+            playerView?.resizeMode = mode
+            playerView?.requestLayout()
+        } else {
+            aspectFrame.resizeMode = mode
+            aspectFrame.requestLayout()
+        }
         requestLayout()
-        playerManager.setResizeMode(RESIZE_MODE_FIT)
+        playerManager.setResizeMode(mode)
     }
 
     private val RESIZE_MODE_FIT = AspectRatioFrameLayout.RESIZE_MODE_FIT
+
+    // Re-attach the rendering surface after PiP exit / window reattach. On TV
+    // this is the SurfaceView; on mobile the PlayerView's inner surface is
+    // handed off so the active engine (ExoPlayer via PlayerView, or VLC
+    // fallback) can render into it.
+    private fun attachPipSurface() {
+        if (isTV) {
+            surfaceView?.let { playerManager.setVideoSurfaceView(it) }
+        } else {
+            val s = mobileSurface
+            when (s) {
+                is TextureView -> playerManager.setTextureView(s)
+                is SurfaceView -> playerManager.setVideoSurfaceView(s)
+            }
+        }
+    }
 
     fun load(
         url: String,
@@ -258,39 +303,18 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
             // FIT (contain) so the whole frame is always visible, letterboxed.
             forcePipFit()
             stopPoller()
-            schedulePipSettleLayoutPasses()
         } else {
             // Restore the user's fullscreen resize mode now that we're back.
             applyResizeMode(userResizeMode)
             if (!backgroundAudioEnabled) {
-                when {
-                    surfaceView != null -> playerManager.setVideoSurfaceView(surfaceView)
-                    textureView != null -> playerManager.setTextureView(textureView)
-                }
+                attachPipSurface()
                 if (playerManager.isPlaying()) mainHandler.post { playerManager.play() }
             }
             if (playerManager.isPlaying()) startPoller()
-            textureView?.invalidate()
         }
         mainHandler.post {
             onPipModeChange(mapOf("isInPiP" to isInPip))
         }
-    }
-
-    /**
-     * After the enter transition settles, force one clean re-measure/invalidate
-     * of the aspect frame for the final PiP window size. With seamless resize
-     * enabled the framework already rescales the buffer, so we only need to
-     * ensure the aspect frame is laid out against the settled window bounds.
-     */
-    private fun schedulePipSettleLayoutPasses() {
-        mainHandler.post { textureView?.invalidate() }
-        mainHandler.postDelayed({
-            aspectFrame.forceLayout()
-            aspectFrame.requestLayout()
-            aspectFrame.invalidate()
-            textureView?.invalidate()
-        }, PIP_SETTLE_DELAY_MS)
     }
 
     fun getCurrentPosition(): Long = playerManager.getCurrentPosition()
@@ -473,10 +497,7 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         super.onAttachedToWindow()
         if (!isTV) PipRegistry.setPipListener(this)
         if (backgroundAudioEnabled || PipRegistry.isInPipMode) {
-            when {
-                isTV && surfaceView != null -> playerManager.setVideoSurfaceView(surfaceView)
-                textureView != null -> playerManager.setTextureView(textureView)
-            }
+            attachPipSurface()
             if (playerManager.isPlaying()) {
                 startPoller()
             }

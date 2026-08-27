@@ -30,6 +30,13 @@ interface PlayerController {
     fun setTextureView(textureView: TextureView)
     fun clearVideoSurface()
 
+    /**
+     * Optional: hand an ExoPlayer the media3 PlayerView so it renders /
+     * surface-lifecycles through PlayerView (used for robust PiP). Engines
+     * that don't support it (VLC) simply ignore this.
+     */
+    fun setPlayerView(playerView: androidx.media3.ui.PlayerView?) {}
+
     fun play()
     fun pause()
     fun seekTo(positionMs: Long)

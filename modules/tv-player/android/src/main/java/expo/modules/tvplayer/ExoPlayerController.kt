@@ -395,6 +395,8 @@ class ExoPlayerController(
     private var callbacks: PlayerController.Callbacks? = null
     private var surfaceView: SurfaceView? = null
     private var textureView: TextureView? = null
+    // When set, the player renders through media3 PlayerView (mobile / PiP).
+    private var playerView: androidx.media3.ui.PlayerView? = null
 
     private var currentUrl: String = ""
     private var currentHeaders: Map<String, String> = emptyMap()
@@ -448,16 +450,36 @@ class ExoPlayerController(
     }
 
     override fun setVideoSurfaceView(surfaceView: SurfaceView) {
+        if (playerView != null) return // PlayerView owns the surface
         this.surfaceView = surfaceView
         exoPlayer?.setVideoSurfaceView(surfaceView)
     }
 
     override fun setTextureView(textureView: TextureView) {
+        if (playerView != null) return // PlayerView owns the surface
         this.textureView = textureView
         exoPlayer?.let { attachTextureView(it, textureView) }
     }
 
+    override fun setPlayerView(view: androidx.media3.ui.PlayerView?) {
+        // Binding through PlayerView is mutually exclusive with a raw surface:
+        // PlayerView manages its own surface + aspect lifecycle (robust PiP).
+        playerView?.player = null
+        playerView = view
+        if (view != null) {
+            surfaceView = null
+            textureView = null
+            releaseTextureSurface()
+        }
+        exoPlayer?.let { view?.player = it }
+    }
+
     override fun clearVideoSurface() {
+        // When rendering through PlayerView, PlayerView owns the surface
+        // lifecycle and detaches/reattaches it internally around PiP. Manually
+        // nulling the surface here would fight PlayerView and cause the
+        // black / mis-scaled frame on PiP re-entry.
+        if (playerView != null) return
         exoPlayer?.let {
             it.setVideoSurface(null)
             it.setVideoSurfaceView(null)
@@ -536,6 +558,7 @@ class ExoPlayerController(
             player.removeListener(aspectRatioListener)
             player.removeListener(playerListener)
             player.removeListener(subtitleListener)
+            playerView?.player = null
             player.setVideoSurface(null)
             player.setVideoSurfaceView(null)
             player.stop()
@@ -723,8 +746,14 @@ class ExoPlayerController(
             .setHandleAudioBecomingNoisy(true)
             .build()
 
-        surfaceView?.let { player.setVideoSurfaceView(it) }
-        textureView?.let { attachTextureView(player, it) }
+        if (playerView != null) {
+            // Mobile: render through PlayerView (owns surface + aspect frame),
+            // which survives PiP enter/exit without black/mis-scale issues.
+            playerView?.player = player
+        } else {
+            surfaceView?.let { player.setVideoSurfaceView(it) }
+            textureView?.let { attachTextureView(player, it) }
+        }
 
         player.addListener(aspectRatioListener)
         player.addListener(playerListener)
