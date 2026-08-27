@@ -245,19 +245,32 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
     }
 
     /**
-     * After the enter transition settles, force one full layout pass and
-     * repaint. Without this the first composited frames reuse the pre-PiP
-     * measurements/surface buffer, which shows the video zoomed until some
-     * other event (e.g. dragging the window) triggers a redraw.
+     * After the enter transition settles, force the view hierarchy to
+     * remeasure for the shrunken PiP window and rebind the renderer's output
+     * surface. This is the fix for the classic TextureView PiP symptom where
+     * the first composited frames reuse the pre-PiP buffer — showing the video
+     * zoomed/black until some unrelated event (dragging the window) repaints.
+     *
+     * A single fixed-delay pass is not enough on every device: the transition
+     * duration varies, so we chain two passes and rebind the surface, which
+     * forces the renderer to reconfigure to the final window size.
      */
     private fun schedulePipSettleLayoutPasses() {
-        mainHandler.post { textureView?.invalidate() }
-        mainHandler.postDelayed({
+        fun settle() {
+            // Remeasure the aspect frame against the (settled) PiP window size.
             aspectFrame.forceLayout()
             aspectFrame.requestLayout()
             aspectFrame.invalidate()
-            textureView?.invalidate()
-        }, PIP_SETTLE_DELAY_MS)
+            // Rebinding the TextureView surface makes the renderer re-render at
+            // the new buffer dimensions instead of the stale fullscreen buffer.
+            textureView?.let {
+                playerManager.setTextureView(it)
+                it.invalidate()
+            }
+        }
+        mainHandler.post { textureView?.invalidate() }
+        mainHandler.postDelayed({ settle() }, PIP_SETTLE_DELAY_MS)
+        mainHandler.postDelayed({ settle() }, PIP_SETTLE_DELAY_MS + 250L)
     }
 
     fun getCurrentPosition(): Long = playerManager.getCurrentPosition()

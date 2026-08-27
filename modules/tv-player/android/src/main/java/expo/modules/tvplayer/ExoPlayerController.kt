@@ -794,7 +794,20 @@ class ExoPlayerController(
                 player.setVideoSurface(surface)
             }
 
-            override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) {}
+            override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) {
+                // The TextureView buffer was resized (PiP window shrink/grow,
+                // rotation, etc.). Rebind a fresh Surface so the renderer
+                // reconfigures to the new buffer dimensions. Without this the
+                // renderer keeps pushing its previous fullscreen-sized frames
+                // into the smaller buffer, which shows as black / zoomed /
+                // cropped video until an unrelated event (e.g. dragging the
+                // PiP window) forces a repaint.
+                if (released) return
+                releaseTextureSurface()
+                val surface = Surface(st)
+                currentTextureSurface = surface
+                player.setVideoSurface(surface)
+            }
 
             override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean {
                 releaseTextureSurface()
