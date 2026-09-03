@@ -56,7 +56,7 @@ object PipRegistry {
             listenerRef = null
             return
         }
-        if (!view.isAttachedToWindow) return
+        if (!view.isAttachedToWindow && !isEnteringPip) return
         view.onPipModeChangedFromSystem(isInPip)
     }
 }

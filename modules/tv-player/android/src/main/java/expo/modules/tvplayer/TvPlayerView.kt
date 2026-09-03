@@ -277,10 +277,15 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 val loc = IntArray(2)
-                aspectFrame.getLocationOnScreen(loc)
-                builder.setSourceRectHint(
-                    Rect(loc[0], loc[1], loc[0] + aspectFrame.width, loc[1] + aspectFrame.height),
-                )
+                val hintView = if (!isTV) playerView else aspectFrame
+                hintView?.getLocationOnScreen(loc)
+                val w = hintView?.width ?: 0
+                val h = hintView?.height ?: 0
+                if (w > 0 && h > 0) {
+                    builder.setSourceRectHint(
+                        Rect(loc[0], loc[1], loc[0] + w, loc[1] + h),
+                    )
+                }
                 builder.setTitle(context.applicationInfo.loadLabel(activity.packageManager))
             }
             activity.enterPictureInPictureMode(builder.build())
@@ -487,7 +492,7 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         }
 
         super.onDetachedFromWindow()
-        if (!isTV) PipRegistry.clearPipListener(this)
+        if (!isTV && !PipRegistry.isEnteringPip) PipRegistry.clearPipListener(this)
 
         if (backgroundAudioEnabled || PipRegistry.isInPipMode) {
             stopPoller()
