@@ -5,9 +5,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRecyclingState } from "@shopify/flash-list";
 
 import { ThemedText } from "@/components/ThemedText";
+import { EpgBadge } from "@/components/EpgBadge";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { Channel } from "@/types/playlist";
+import type { EpgNowNext } from "@/types/epg";
 import { TextSizeOption } from "@/lib/storage";
 
 const isTV = Platform.isTV;
@@ -23,6 +25,8 @@ interface ChannelCardHorizontalProps {
   textSize: TextSizeOption;
   themeBackground: string;
   themeTextSecondary: string;
+  epgNowNext?: EpgNowNext;
+  showEpg?: boolean;
 }
 
 const placeholderImage = require("../../assets/images/placeholder-channel.png");
@@ -49,6 +53,8 @@ function ChannelCardHorizontalInner({
   textSize,
   themeBackground,
   themeTextSecondary,
+  epgNowNext,
+  showEpg,
 }: ChannelCardHorizontalProps) {
   const { theme } = useTheme();
   const textStyles = getTextStyles(textSize);
@@ -159,25 +165,29 @@ function ChannelCardHorizontalInner({
         >
           {channel.name}
         </ThemedText>
-        <View style={styles.liveIndicator}>
-          <View
-            style={[
-              styles.liveDot,
-              isCompact && styles.liveDotCompact,
-              { backgroundColor: theme.success },
-            ]}
-          />
-          <ThemedText
-            type="caption"
-            style={[
-              styles.category,
-              { fontSize: textStyles.label, color: themeTextSecondary },
-            ]}
-            numberOfLines={1}
-          >
-            LIVE
-          </ThemedText>
-        </View>
+        {showEpg && epgNowNext ? (
+          <EpgBadge nowNext={epgNowNext} />
+        ) : (
+          <View style={styles.liveIndicator}>
+            <View
+              style={[
+                styles.liveDot,
+                isCompact && styles.liveDotCompact,
+                { backgroundColor: theme.success },
+              ]}
+            />
+            <ThemedText
+              type="caption"
+              style={[
+                styles.category,
+                { fontSize: textStyles.label, color: themeTextSecondary },
+              ]}
+              numberOfLines={1}
+            >
+              LIVE
+            </ThemedText>
+          </View>
+        )}
       </View>
     </Pressable>
   );
@@ -192,6 +202,9 @@ export const ChannelCardHorizontal = React.memo(
     prev.isUltraWide === next.isUltraWide &&
     prev.textSize === next.textSize &&
     prev.themeBackground === next.themeBackground &&
+    prev.showEpg === next.showEpg &&
+    prev.epgNowNext?.now?.id === next.epgNowNext?.now?.id &&
+    prev.epgNowNext?.next?.id === next.epgNowNext?.next?.id &&
     prev.onPress === next.onPress &&
     prev.onFavoritePress === next.onFavoritePress &&
     prev.onLongPress === next.onLongPress,

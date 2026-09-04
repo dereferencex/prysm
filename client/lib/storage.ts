@@ -31,6 +31,7 @@ export interface PlaylistInfo {
   };
   channelCount: number;
   lastUpdated: number;
+  epgUrls?: string[];
 }
 
 export type AutoRefreshInterval = "off" | "5min" | "15min" | "1day" | "custom";
@@ -100,6 +101,18 @@ export interface AppSettings {
   lastCategoryByPlaylist: Record<string, string>;
   textSize: TextSizeOption;
   playerEngine: PlayerEngine;
+  /** Master EPG kill-switch. Auto-enabled when url-tvg is detected. */
+  showEpg: boolean;
+  /** Show Now/Next badges on channel cards. */
+  showEpgInCards: boolean;
+  /** Show Now/Next overlay in the player. */
+  showEpgInPlayer: boolean;
+  /** True once the user has manually toggled EPG (stops auto-enable). */
+  epgUserSet: boolean;
+  /** Manual EPG URL override keyed by playlist id (wins over auto-detect). */
+  epgUrlOverrides: Record<string, string>;
+  /** EPG refresh cadence in hours. */
+  epgRefreshHours: number;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -113,6 +126,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lastCategoryByPlaylist: {},
   textSize: "medium",
   playerEngine: "exoplayer",
+  showEpg: false,
+  showEpgInCards: true,
+  showEpgInPlayer: true,
+  epgUserSet: false,
+  epgUrlOverrides: {},
+  epgRefreshHours: 12,
 };
 
 interface PlaylistMeta {
@@ -129,6 +148,7 @@ interface PlaylistMeta {
   lastUpdated: number;
   totalChannels: number;
   chunkCount: number;
+  epgUrls?: string[];
 }
 
 interface MinimalChannel {
@@ -245,6 +265,7 @@ export async function savePlaylist(
       lastUpdated: playlist.lastUpdated,
       totalChannels: channels.length,
       chunkCount,
+      epgUrls: playlist.epgUrls,
     };
 
     await AsyncStorage.setItem(
@@ -290,6 +311,7 @@ export async function savePlaylist(
       xtreamCredentials,
       channelCount: meta.totalChannels,
       lastUpdated: meta.lastUpdated,
+      epgUrls: playlist.epgUrls,
     };
 
     if (existingIndex >= 0) {
@@ -359,6 +381,7 @@ export async function getPlaylist(
       categories,
       lastUpdated: meta.lastUpdated,
       channels,
+      epgUrls: meta.epgUrls,
     };
   } catch (error) {
     console.error("Error getting playlist:", error);

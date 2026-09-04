@@ -15,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 
 import { ThemedText } from "@/components/ThemedText";
+import { useEpg } from "@/context/EpgContext";
 import {
   AdvancedVideoPlayer,
   VideoQuality,
@@ -91,14 +92,27 @@ export default function PlayerScreen() {
 
   const channel = getChannelById(channelId);
   const isFavorite = favorites.includes(channelId);
+  const epg = useEpg();
+  const epgNowNext =
+    settings.showEpg && settings.showEpgInPlayer && epg.effectiveUrl
+      ? epg.getNowNext(channelId)
+      : undefined;
+  const epgSubtitle = epgNowNext?.now
+    ? `${channel?.group ?? ""} • ${epgNowNext.now.title}`.trim()
+    : channel?.group;
 
-  const [manifestDrm, setManifestDrm] = useState<import("@/types/playlist").DRMInfo | undefined>(undefined);
+  const [manifestDrm, setManifestDrm] = useState<
+    import("@/types/playlist").DRMInfo | undefined
+  >(undefined);
 
   useEffect(() => {
     if (!channel) return;
     // If the channel already has KODIPROP DRM with a valid license key or URL, no
     // need to fetch from the manifest.
-    if (channel.drm?.type && (channel.drm?.licenseServer || channel.drm?.licenseKey)) {
+    if (
+      channel.drm?.type &&
+      (channel.drm?.licenseServer || channel.drm?.licenseKey)
+    ) {
       setManifestDrm(undefined);
       return;
     }
@@ -108,15 +122,26 @@ export default function PlayerScreen() {
         // Only store DRM info that has both a type AND a usable licenseServer URL
         // or licenseKey, or is ClearKey (which may not need a license server URL).
         // This prevents partial DRM state (type set, nothing usable) from being stored.
-        if (drm?.type && (drm.licenseServer || drm.licenseKey || drm.type === "clearkey")) {
+        if (
+          drm?.type &&
+          (drm.licenseServer || drm.licenseKey || drm.type === "clearkey")
+        ) {
           setManifestDrm(drm);
         } else {
           setManifestDrm(undefined);
         }
       }
     });
-    return () => { cancelled = true; };
-  }, [channel?.url, channel?.drm?.type, channel?.drm?.licenseServer, channel?.drm?.licenseKey, channel?.headers]);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    channel?.url,
+    channel?.drm?.type,
+    channel?.drm?.licenseServer,
+    channel?.drm?.licenseKey,
+    channel?.headers,
+  ]);
 
   const recentChannelObjects = useMemo(() => {
     if (!playlist) return [];
@@ -194,7 +219,10 @@ export default function PlayerScreen() {
 
   const drmConfig = useMemo((): DRMConfig | undefined => {
     // Prefer KODIPROP-extracted DRM from the playlist
-    if (channel?.drm?.type && (channel.drm.licenseServer || channel.drm.licenseKey)) {
+    if (
+      channel?.drm?.type &&
+      (channel.drm.licenseServer || channel.drm.licenseKey)
+    ) {
       return {
         type: channel.drm.type as DRMConfig["type"],
         licenseServer: channel.drm.licenseServer,
@@ -208,7 +236,12 @@ export default function PlayerScreen() {
     // Fall back to DRM extracted from the manifest itself.
     // manifestDrm is only set when it has both type and a usable
     // licenseServer, licenseKey, or is ClearKey.
-    if (manifestDrm?.type && (manifestDrm.licenseServer || manifestDrm.licenseKey || manifestDrm.type === "clearkey")) {
+    if (
+      manifestDrm?.type &&
+      (manifestDrm.licenseServer ||
+        manifestDrm.licenseKey ||
+        manifestDrm.type === "clearkey")
+    ) {
       return {
         type: manifestDrm.type as DRMConfig["type"],
         licenseServer: manifestDrm.licenseServer,
@@ -222,11 +255,11 @@ export default function PlayerScreen() {
     return undefined;
   }, [channel?.drm, manifestDrm]);
 
-  const streamHeaders = useMemo(():
-    | Record<string, string>
-    | undefined => {
+  const streamHeaders = useMemo((): Record<string, string> | undefined => {
     if (!channel?.headers) return undefined;
-    return Object.keys(channel.headers).length > 0 ? channel.headers : undefined;
+    return Object.keys(channel.headers).length > 0
+      ? channel.headers
+      : undefined;
   }, [channel?.headers]);
 
   if (!channel) {
@@ -239,7 +272,10 @@ export default function PlayerScreen() {
         </ThemedText>
         <Pressable
           onPress={handleBack}
-          style={[styles.errorButton, { backgroundColor: theme.primary + "30" }]}
+          style={[
+            styles.errorButton,
+            { backgroundColor: theme.primary + "30" },
+          ]}
           focusable={true}
           hasTVPreferredFocus={true}
           accessibilityLabel="Go back"
@@ -259,7 +295,7 @@ export default function PlayerScreen() {
       <AdvancedVideoPlayer
         source={channel.url}
         title={channel.name}
-        subtitle={channel.group}
+        subtitle={epgSubtitle}
         poster={channel.logo}
         channelId={channel.id}
         autoPlay={settings.autoPlay}

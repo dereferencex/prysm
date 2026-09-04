@@ -26,6 +26,7 @@ import { queryClient } from "@/lib/query-client";
 
 import RootStackNavigator from "@/navigation/RootStackNavigator";
 import { PlaylistProvider } from "@/context/PlaylistContext";
+import { EpgProvider } from "@/context/EpgContext";
 import { ThemeProvider, useThemeContext } from "@/context/ThemeContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LogCapture } from "@/components/LogCapture";
@@ -88,9 +89,11 @@ function AppContent() {
     >
       <KeyboardProvider>
         <PlaylistProvider>
-          <NavigationContainer theme={navigationTheme} linking={linking}>
-            <RootStackNavigator />
-          </NavigationContainer>
+          <EpgProvider>
+            <NavigationContainer theme={navigationTheme} linking={linking}>
+              <RootStackNavigator />
+            </NavigationContainer>
+          </EpgProvider>
         </PlaylistProvider>
         <StatusBar style={isDark ? "light" : "dark"} />
       </KeyboardProvider>

@@ -139,3 +139,11 @@ export const getPlayerControlSize = (): {
     icon: baseIconSize,
   };
 };
+
+/** EPG guide layout: grid (timeline) on TV / wide, list on phones. */
+export const getEpgLayout = (): "grid" | "list" => {
+  const { width } = getScreenDimensions();
+  const ratio = getAspectRatio();
+  if (ratio > 1.7 || width > 900) return "grid";
+  return "list";
+};

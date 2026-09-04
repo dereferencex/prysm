@@ -30,6 +30,7 @@ import { SettingsRow } from "@/components/SettingsRow";
 import { Button } from "@/components/Button";
 import { useTheme } from "@/hooks/useTheme";
 import { usePlaylist } from "@/context/PlaylistContext";
+import { useEpg } from "@/context/EpgContext";
 import { useResponsive } from "@/hooks/useResponsive";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
@@ -158,8 +159,16 @@ const TEXT_SIZE_OPTIONS = [
 ];
 
 const PLAYER_ENGINE_OPTIONS = [
-  { label: "ExoPlayer (Media3)", value: "exoplayer" as const, desc: "Default — best for most streams" },
-  { label: "VLC Player", value: "vlc" as const, desc: "Fallback — wider codec support" },
+  {
+    label: "ExoPlayer (Media3)",
+    value: "exoplayer" as const,
+    desc: "Default — best for most streams",
+  },
+  {
+    label: "VLC Player",
+    value: "vlc" as const,
+    desc: "Fallback — wider codec support",
+  },
 ];
 
 export default function SettingsScreen() {
@@ -205,6 +214,10 @@ export default function SettingsScreen() {
   const [playlistToEdit, setPlaylistToEdit] = useState<string | null>(null);
   const [editPlaylistName, setEditPlaylistName] = useState("");
   const [editPlaylistUrl, setEditPlaylistUrl] = useState("");
+  const [showEpgUrlModal, setShowEpgUrlModal] = useState(false);
+  const [epgUrlText, setEpgUrlText] = useState("");
+  const epgState = useEpg();
+  const epg = epgState;
 
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [checkingForUpdate, setCheckingForUpdate] = useState(false);
@@ -241,7 +254,7 @@ export default function SettingsScreen() {
       }
     };
     initializeUpdateCheck();
-    
+
     // Listen for app state changes to handle install result
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (nextAppState === "active" && installingApk) {
@@ -253,14 +266,20 @@ export default function SettingsScreen() {
           if (info) {
             setUpdateInfo(info);
             if (!info.available) {
-              Alert.alert("Update Successful", "App has been updated to the latest version.");
+              Alert.alert(
+                "Update Successful",
+                "App has been updated to the latest version.",
+              );
             }
           }
         });
       }
     };
-    
-    const subscription = AppState.addEventListener("change", handleAppStateChange);
+
+    const subscription = AppState.addEventListener(
+      "change",
+      handleAppStateChange,
+    );
     return () => subscription.remove();
   }, [installingApk, isFdroid]);
 
@@ -282,6 +301,65 @@ export default function SettingsScreen() {
   const handleToggleRememberCategory = (value: boolean) => {
     if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     updateSettings({ rememberLastCategory: value });
+  };
+
+  const handleToggleEpg = (value: boolean) => {
+    if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    updateSettings({ showEpg: value, epgUserSet: true });
+  };
+
+  const handleToggleEpgCards = (value: boolean) => {
+    if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    updateSettings({ showEpgInCards: value });
+  };
+
+  const handleToggleEpgPlayer = (value: boolean) => {
+    if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    updateSettings({ showEpgInPlayer: value });
+  };
+
+  const handleOpenEpgUrlModal = () => {
+    const current = activePlaylistId
+      ? (settings.epgUrlOverrides[activePlaylistId] ?? "")
+      : "";
+    setEpgUrlText(current);
+    setShowEpgUrlModal(true);
+  };
+
+  const handleSaveEpgUrl = async () => {
+    if (!activePlaylistId) {
+      setShowEpgUrlModal(false);
+      return;
+    }
+    const v = epgUrlText.trim();
+    const next = { ...settings.epgUrlOverrides };
+    if (v) next[activePlaylistId] = v;
+    else delete next[activePlaylistId];
+    await updateSettings({ epgUrlOverrides: next, epgUserSet: true });
+    setShowEpgUrlModal(false);
+    if (settings.showEpg) void epg.refreshEpg(true);
+  };
+
+  const handleRefreshEpg = async () => {
+    if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await epg.refreshEpg(true);
+    setToastMessage(
+      epg.programCount > 0
+        ? `EPG refreshed: ${epg.programCount} programs`
+        : "EPG refresh finished",
+    );
+    setShowToast(true);
+  };
+
+  const getEpgSubtitle = () => {
+    if (!epg.effectiveUrl) return "No EPG source detected";
+    if (epg.lastUpdated) {
+      const h = Math.round((Date.now() - epg.lastUpdated) / 3600000);
+      return `${epg.programCount} programs · updated ${h < 1 ? "just now" : `${h}h ago`}`;
+    }
+    return epg.isManualOverride
+      ? "Manual URL set"
+      : "Auto-detected from playlist";
   };
 
   const handleRefreshPlaylist = async () => {
@@ -330,7 +408,9 @@ export default function SettingsScreen() {
   };
 
   const getPlayerEngineLabel = () => {
-    const option = PLAYER_ENGINE_OPTIONS.find((o) => o.value === settings.playerEngine);
+    const option = PLAYER_ENGINE_OPTIONS.find(
+      (o) => o.value === settings.playerEngine,
+    );
     return option?.label || "ExoPlayer (Media3)";
   };
 
@@ -439,7 +519,7 @@ export default function SettingsScreen() {
     try {
       // Clean up any old APK first
       await clearDownloadedApk();
-      
+
       const apkPath = await downloadApk(updateInfo.apkUrl, (progress) => {
         setDownloadProgress(Math.round(progress * 100));
       });
@@ -449,23 +529,20 @@ export default function SettingsScreen() {
       }
       setDownloadingApk(false);
       setInstallingApk(true);
-      
+
       const contentUri = await getApkContentUri(apkPath);
       if (!contentUri) {
         setUpdateError("Failed to prepare update for installation");
         return;
       }
-      
+
       // Use modern intent action for Android 10+
-      await IntentLauncher.startActivityAsync(
-        "android.intent.action.VIEW",
-        {
-          data: contentUri,
-          type: "application/vnd.android.package-archive",
-          flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
-        },
-      );
-      
+      await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
+        data: contentUri,
+        type: "application/vnd.android.package-archive",
+        flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
+      });
+
       // Clean up the APK after successful install launch
       await clearDownloadedApk();
     } catch (error) {
@@ -503,8 +580,10 @@ export default function SettingsScreen() {
   const getAutoRefreshLabel = () => {
     if (settings.autoRefreshInterval === "custom") {
       const mins = settings.customRefreshMinutes;
-      if (mins >= 1440 && mins % 1440 === 0) return `Every ${mins / 1440} day${mins / 1440 > 1 ? "s" : ""}`;
-      if (mins >= 60 && mins % 60 === 0) return `Every ${mins / 60} hour${mins / 60 > 1 ? "s" : ""}`;
+      if (mins >= 1440 && mins % 1440 === 0)
+        return `Every ${mins / 1440} day${mins / 1440 > 1 ? "s" : ""}`;
+      if (mins >= 60 && mins % 60 === 0)
+        return `Every ${mins / 60} hour${mins / 60 > 1 ? "s" : ""}`;
       return `Every ${mins} minute${mins > 1 ? "s" : ""}`;
     }
     const option = AUTO_REFRESH_OPTIONS.find(
@@ -642,6 +721,67 @@ export default function SettingsScreen() {
                 showChevron
               />
             </View>
+
+            <ThemedText
+              type="small"
+              style={[styles.sectionTitle, { color: theme.textSecondary }]}
+            >
+              EPG GUIDE
+            </ThemedText>
+            <View style={styles.section}>
+              <SettingsRow
+                icon="calendar"
+                title="Show EPG Guide"
+                subtitle="Enable program guide (auto-detected from M3U)"
+                isToggle
+                toggleValue={settings.showEpg}
+                onToggle={handleToggleEpg}
+              />
+              {settings.showEpg ? (
+                <>
+                  <SettingsRow
+                    icon="time"
+                    title="Now / Next on cards"
+                    subtitle="Show current program on channel cards"
+                    isToggle
+                    toggleValue={settings.showEpgInCards}
+                    onToggle={handleToggleEpgCards}
+                  />
+                  <SettingsRow
+                    icon="play-circle"
+                    title="Now / Next in player"
+                    subtitle="Show program info while watching"
+                    isToggle
+                    toggleValue={settings.showEpgInPlayer}
+                    onToggle={handleToggleEpgPlayer}
+                  />
+                  <SettingsRow
+                    icon="link"
+                    title="EPG Source"
+                    subtitle={getEpgSubtitle()}
+                    value={epg.isManualOverride ? "Manual" : "Auto"}
+                    onPress={handleOpenEpgUrlModal}
+                    showChevron
+                  />
+                  <SettingsRow
+                    icon="refresh-circle"
+                    title="Refresh EPG Now"
+                    subtitle={
+                      epg.effectiveUrl
+                        ? epg.effectiveUrl.slice(0, 48)
+                        : "No source URL"
+                    }
+                    onPress={handleRefreshEpg}
+                    disabled={!epg.effectiveUrl || epg.isLoading}
+                    rightComponent={
+                      epg.isLoading ? (
+                        <ActivityIndicator size="small" color={theme.primary} />
+                      ) : undefined
+                    }
+                  />
+                </>
+              ) : null}
+            </View>
           </View>
 
           {/* ── Right column (or continuation on single column) ─────── */}
@@ -754,7 +894,9 @@ export default function SettingsScreen() {
                 title="Developer"
                 subtitle="dereferencex"
                 value=""
-                onPress={() => Linking.openURL("https://github.com/dereferencex")}
+                onPress={() =>
+                  Linking.openURL("https://github.com/dereferencex")
+                }
                 showChevron
               />
               {!isFdroid &&
@@ -858,9 +1000,18 @@ export default function SettingsScreen() {
               </FocusableOption>
             ))}
             {settings.autoRefreshInterval === "custom" && (
-              <View style={[styles.customInputRow, { borderColor: theme.border }]}>
+              <View
+                style={[styles.customInputRow, { borderColor: theme.border }]}
+              >
                 <TextInput
-                  style={[styles.customInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.backgroundSecondary }]}
+                  style={[
+                    styles.customInput,
+                    {
+                      color: theme.text,
+                      borderColor: theme.border,
+                      backgroundColor: theme.backgroundSecondary,
+                    },
+                  ]}
                   keyboardType="numeric"
                   placeholder="Minutes"
                   placeholderTextColor={theme.textSecondary}
@@ -870,15 +1021,26 @@ export default function SettingsScreen() {
                   autoFocus
                   selectTextOnFocus
                 />
-                <ThemedText type="body" style={{ color: theme.textSecondary, marginLeft: 8 }}>
+                <ThemedText
+                  type="body"
+                  style={{ color: theme.textSecondary, marginLeft: 8 }}
+                >
                   min
                 </ThemedText>
                 <Pressable
                   onPress={handleCustomMinutesConfirm}
-                  style={[styles.customSetButton, { backgroundColor: theme.primary }]}
+                  style={[
+                    styles.customSetButton,
+                    { backgroundColor: theme.primary },
+                  ]}
                   focusable={!isTV}
                 >
-                  <ThemedText type="body" style={{ color: "#fff", fontWeight: "600" }}>Set</ThemedText>
+                  <ThemedText
+                    type="body"
+                    style={{ color: "#fff", fontWeight: "600" }}
+                  >
+                    Set
+                  </ThemedText>
                 </Pressable>
               </View>
             )}
@@ -1254,10 +1416,7 @@ export default function SettingsScreen() {
               </Button>
               <Button
                 onPress={handleDeletePlaylist}
-                style={[
-                  styles.confirmButton,
-                  { backgroundColor: theme.error },
-                ]}
+                style={[styles.confirmButton, { backgroundColor: theme.error }]}
               >
                 Delete
               </Button>
@@ -1310,10 +1469,7 @@ export default function SettingsScreen() {
               </Button>
               <Button
                 onPress={handleClearAllData}
-                style={[
-                  styles.confirmButton,
-                  { backgroundColor: theme.error },
-                ]}
+                style={[styles.confirmButton, { backgroundColor: theme.error }]}
               >
                 Clear All
               </Button>
@@ -1417,6 +1573,89 @@ export default function SettingsScreen() {
                 ) : (
                   "Save"
                 )}
+              </Button>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={showEpgUrlModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowEpgUrlModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowEpgUrlModal(false)}
+          focusable={!isTV}
+        >
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: theme.backgroundDefault },
+            ]}
+            onStartShouldSetResponder={() => true}
+          >
+            <ThemedText type="h4" style={styles.modalTitle}>
+              EPG Source URL
+            </ThemedText>
+            {epg.autoDetectedUrls.length > 0 ? (
+              <ThemedText
+                type="small"
+                style={{ color: theme.textSecondary, marginBottom: 8 }}
+                numberOfLines={2}
+              >
+                Auto-detected: {epg.autoDetectedUrls[0].slice(0, 64)}
+              </ThemedText>
+            ) : (
+              <ThemedText
+                type="small"
+                style={{ color: theme.textSecondary, marginBottom: 8 }}
+              >
+                No url-tvg found in this playlist. Paste an XMLTV URL.
+              </ThemedText>
+            )}
+            <View style={styles.editInputContainer}>
+              <ThemedText
+                type="small"
+                style={[styles.editInputLabel, { color: theme.textSecondary }]}
+              >
+                Manual override (empty = use auto)
+              </ThemedText>
+              <TextInput
+                value={epgUrlText}
+                onChangeText={setEpgUrlText}
+                placeholder="https://example.com/epg.xml"
+                placeholderTextColor={theme.textSecondary}
+                style={[
+                  styles.editInput,
+                  {
+                    color: theme.text,
+                    backgroundColor: theme.backgroundSecondary,
+                    borderColor: theme.backgroundSecondary,
+                  },
+                ]}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                showSoftInputOnFocus={true}
+              />
+            </View>
+            <View style={styles.confirmButtons}>
+              <Button
+                onPress={() => setShowEpgUrlModal(false)}
+                style={[
+                  styles.confirmButton,
+                  { backgroundColor: theme.backgroundSecondary },
+                ]}
+                textStyle={{ color: theme.text }}
+                hasTVPreferredFocus={isTV}
+              >
+                Cancel
+              </Button>
+              <Button onPress={handleSaveEpgUrl} style={styles.confirmButton}>
+                Save
               </Button>
             </View>
           </View>
@@ -1682,16 +1921,14 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "transparent",
   },
-  deleteButtonFocused: {
-  },
+  deleteButtonFocused: {},
   editButton: {
     padding: Spacing.md,
     borderRadius: BorderRadius.xs,
     borderWidth: 2,
     borderColor: "transparent",
   },
-  editButtonFocused: {
-  },
+  editButtonFocused: {},
   editInputContainer: {
     marginBottom: Spacing.md,
   },

@@ -39,6 +39,8 @@ export interface Playlist {
   channels: Channel[];
   categories: string[];
   lastUpdated: number;
+  /** Auto-detected XMLTV URLs from the M3U header (url-tvg / x-tvg-url). */
+  epgUrls?: string[];
 }
 
 export interface PlaylistState {

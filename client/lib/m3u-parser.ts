@@ -122,7 +122,10 @@ function parseDRM(
       } else if (kodi.key === "inputstream.adaptive.license_key") {
         // Value may be a URL (Widevine/PlayReady license server) or an
         // embedded key (ClearKey KID:KEY or JSON). Route accordingly.
-        if (kodi.value.startsWith("http://") || kodi.value.startsWith("https://")) {
+        if (
+          kodi.value.startsWith("http://") ||
+          kodi.value.startsWith("https://")
+        ) {
           drm.licenseServer = kodi.value;
         } else {
           drm.licenseKey = kodi.value;
@@ -358,7 +361,26 @@ export function parseM3U(
     channels,
     categories,
     lastUpdated: Date.now(),
+    epgUrls: extractEpgUrls(content),
   };
+}
+
+function extractEpgUrls(content: string): string[] {
+  const firstLines = content.slice(0, 4096).split("\n").slice(0, 5).join("\n");
+  const urls: string[] = [];
+  const attrRegex =
+    /(?:url-tvg|x-tvg-url|tvg-url)\s*=\s*(?:"([^"]+)"|'([^']+)'|(\S+))/gi;
+  let m: RegExpExecArray | null;
+  while ((m = attrRegex.exec(firstLines)) !== null) {
+    const raw = m[1] ?? m[2] ?? m[3] ?? "";
+    for (const part of raw.split(/[\s,]+/)) {
+      const u = part.trim().replace(/^["']|["']$/g, "");
+      if (u && (u.startsWith("http://") || u.startsWith("https://"))) {
+        if (!urls.includes(u)) urls.push(u);
+      }
+    }
+  }
+  return urls;
 }
 
 export const PRYSM_USER_AGENT =
@@ -602,7 +624,10 @@ export function parsePlaylist(
 
   // Check for XSPF (XML-based)
   // The XSPF standard uses <trackList> (camelCase) — not <tracklist>.
-  if (trimmed.includes("<playlist") && (trimmed.includes("<trackList>") || trimmed.includes("<tracklist>"))) {
+  if (
+    trimmed.includes("<playlist") &&
+    (trimmed.includes("<trackList>") || trimmed.includes("<tracklist>"))
+  ) {
     return parseXSPF(content, playlistName);
   }
 

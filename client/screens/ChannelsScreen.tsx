@@ -33,8 +33,10 @@ import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
 import { SearchBar } from "@/components/SearchBar";
 import { ChannelCardHorizontal } from "@/components/ChannelCardHorizontal";
+import { EpgGuideView } from "@/components/EpgGuideView";
 import { EmptyState } from "@/components/EmptyState";
 import { usePlaylist } from "@/context/PlaylistContext";
+import { useEpg } from "@/context/EpgContext";
 import { useThemeContext } from "@/context/ThemeContext";
 import { useResponsive } from "@/hooks/useResponsive";
 import { useOrientation } from "@/hooks/useOrientation";
@@ -296,6 +298,10 @@ export default function ChannelsScreen() {
       ? rememberedCategory
       : "All");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [guideView, setGuideView] = useState(false);
+  const epg = useEpg();
+  const epgEnabled = settings.showEpg && Boolean(epg.effectiveUrl);
+  const epgBadgesEnabled = epgEnabled && settings.showEpgInCards;
 
   const drawerTranslate = useSharedValue(-DRAWER_WIDTH);
   const backdropOpacity = useSharedValue(0);
@@ -506,6 +512,8 @@ export default function ChannelsScreen() {
         textSize={settings.textSize}
         themeBackground={theme.backgroundDefault}
         themeTextSecondary={theme.textSecondary}
+        epgNowNext={epgBadgesEnabled ? epg.getNowNext(channel.id) : undefined}
+        showEpg={epgBadgesEnabled}
       />
     ),
     [
@@ -518,6 +526,8 @@ export default function ChannelsScreen() {
       settings.textSize,
       theme.backgroundDefault,
       theme.textSecondary,
+      epgBadgesEnabled,
+      epg,
     ],
   );
 
@@ -640,6 +650,30 @@ export default function ChannelsScreen() {
               placeholder="Search channels..."
             />
           </View>
+          {epgEnabled ? (
+            <Pressable
+              onPress={() => setGuideView((v) => !v)}
+              focusable
+              accessibilityRole="button"
+              accessibilityLabel={
+                guideView ? "Show grid view" : "Show guide view"
+              }
+              style={[
+                styles.guideToggle,
+                {
+                  backgroundColor: guideView
+                    ? theme.primary + "30"
+                    : theme.backgroundSecondary,
+                },
+              ]}
+            >
+              <Ionicons
+                name={guideView ? "grid" : "calendar"}
+                size={20}
+                color={guideView ? theme.primary : theme.text}
+              />
+            </Pressable>
+          ) : null}
         </View>
         <View style={styles.selectedCategoryRow}>
           <ThemedText
@@ -656,24 +690,34 @@ export default function ChannelsScreen() {
       </View>
 
       <View style={styles.listContainer}>
-        <FlashList<Channel>
-          key={`grid-${gridColumns}`}
-          data={filteredChannels}
-          renderItem={renderChannel}
-          keyExtractor={keyExtractor}
-          numColumns={gridColumns}
-          ListHeaderComponent={ListHeader}
-          ListHeaderComponentStyle={styles.listHeaderWrapper}
-          ListEmptyComponent={ListEmpty}
-          drawDistance={isTV ? TV_DRAW_DISTANCE : MOBILE_DRAW_DISTANCE}
-          maxItemsInRecyclePool={isTV ? gridColumns * 12 : gridColumns * 8}
-          contentContainerStyle={{
-            paddingBottom: insets.bottom + Spacing.md,
-            paddingHorizontal: Spacing.xs,
-          }}
-          ItemSeparatorComponent={ItemSeparator}
-          showsVerticalScrollIndicator={false}
-        />
+        {epgEnabled && guideView ? (
+          <EpgGuideView
+            channels={filteredChannels}
+            getProgramsForChannel={epg.getProgramsForChannel}
+            onSelectChannel={(id) =>
+              navigation.navigate("Player", { channelId: id })
+            }
+          />
+        ) : (
+          <FlashList<Channel>
+            key={`grid-${gridColumns}`}
+            data={filteredChannels}
+            renderItem={renderChannel}
+            keyExtractor={keyExtractor}
+            numColumns={gridColumns}
+            ListHeaderComponent={ListHeader}
+            ListHeaderComponentStyle={styles.listHeaderWrapper}
+            ListEmptyComponent={ListEmpty}
+            drawDistance={isTV ? TV_DRAW_DISTANCE : MOBILE_DRAW_DISTANCE}
+            maxItemsInRecyclePool={isTV ? gridColumns * 12 : gridColumns * 8}
+            contentContainerStyle={{
+              paddingBottom: insets.bottom + Spacing.md,
+              paddingHorizontal: Spacing.xs,
+            }}
+            ItemSeparatorComponent={ItemSeparator}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
       </View>
 
       <Modal
@@ -758,6 +802,13 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   menuButton: {
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.md,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  guideToggle: {
     width: 44,
     height: 44,
     borderRadius: BorderRadius.md,

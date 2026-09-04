@@ -9,6 +9,7 @@ import {
   getChannelCardWidth,
   getGridColumns,
   getPlayerControlSize,
+  getEpgLayout,
 } from "@/lib/responsive";
 
 interface ResponsiveValues {
@@ -21,6 +22,7 @@ interface ResponsiveValues {
   cardWidth: number;
   gridColumns: number;
   playerControls: { play: number; nav: number; icon: number };
+  epgLayout: "grid" | "list";
 }
 
 export function useResponsive(): ResponsiveValues {
@@ -47,5 +49,6 @@ export function useResponsive(): ResponsiveValues {
     cardWidth: getChannelCardWidth(),
     gridColumns: getGridColumns(),
     playerControls: getPlayerControlSize(),
+    epgLayout: getEpgLayout(),
   };
 }
