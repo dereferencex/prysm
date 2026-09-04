@@ -690,12 +690,22 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
           }
           // ALWAYS pause the player when background play is disabled
           TvPlayerCommands.pause(tvPlayerRef);
+          // Drop the foreground session so the system UI clears instead of
+          // showing a dead resume tile for a player that can't continue.
+          TvPlayerCommands.releaseMediaSession(tvPlayerRef);
         }
       } else if (nextAppState === "active") {
         // App came back to foreground
         if (isTV && isBackgroundPlayingRef.current) {
           // Re-attach video surface if background audio was active
           TvPlayerCommands.play(tvPlayerRef);
+        }
+
+        // Re-publish to the system media UI (released on backgrounding).
+        // Native play()/onReady() also ensure this; this covers the
+        // paused-in-foreground case so the resume tile persists.
+        if (!backgroundPlay && nativeReady) {
+          TvPlayerCommands.ensureMediaSession(tvPlayerRef);
         }
 
         // Enable background audio if setting is on and video is playing

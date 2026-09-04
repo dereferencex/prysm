@@ -23,6 +23,7 @@ import android.widget.LinearLayout
 import android.widget.Toast
 import android.app.PictureInPictureParams
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.MediaSession
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.SubtitleView
@@ -80,6 +81,13 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
     private var backgroundAudioEnabled = false
     private var serviceStarting = false
     private var currentUrl: String? = null
+
+    // Activity-scoped MediaSession for foreground playback. This is what puts
+    // transport controls (play/pause) + title/artwork in the notification
+    // shade player, lock screen, Quick Settings tile and BT/Auto — like
+    // Hotstar/Netflix — with NO background-play opt-in. The background
+    // service builds its own session when enabled; the two never coexist.
+    private var foregroundSession: MediaSession? = null
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val positionPoller = object : Runnable {
@@ -241,7 +249,10 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         playerManager.load(url, headers, drmType, drmLicenseUrl, drmLicenseKey, drmHeaders, drmPssh, autoPlay)
     }
 
-    fun play() { playerManager.play() }
+    fun play() {
+        playerManager.play()
+        ensureForegroundSession()
+    }
     fun pause() { playerManager.pause() }
     fun seekTo(positionMs: Long) { playerManager.seekTo(positionMs) }
     fun setVolume(volume: Float) { playerManager.setVolume(volume) }
@@ -330,8 +341,10 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
     fun getPlayerEngine(): String = playerEngine.name.lowercase()
 
     fun setMediaMetadata(title: String, artist: String, artworkUri: String?) {
-        // Only relevant for ExoPlayer's MediaSession
-        // VLC doesn't support media metadata in the same way
+        // Forwarded to ExoPlayer as playlist metadata — drives the system
+        // media notification / lock screen / control center via the
+        // MediaSession. No-op for VLC (no session support).
+        playerManager.setMediaMetadata(title, artist, artworkUri)
     }
 
     fun selectAudioTrack(groupIndex: Int, trackIndex: Int) {
@@ -342,6 +355,39 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         playerManager.selectSubtitleTrack(groupIndex, trackIndex)
     }
 
+    /**
+     * Publishes this player to the system media UI. Idempotent — safe to call
+     * from play(), onReady() and onAttachedToWindow().
+     */
+    fun ensureForegroundSession() {
+        if (backgroundAudioEnabled) return // service owns the session
+        if (foregroundSession != null) return
+        if (playerEngine != PlayerEngine.EXOPLAYER) return
+        val player = PlayerRegistry.player ?: return
+        try {
+            foregroundSession = MediaSession.Builder(context, player)
+                .setCallback(object : MediaSession.Callback {
+                    override fun onConnect(
+                        session: MediaSession,
+                        controller: MediaSession.ControllerInfo,
+                    ): MediaSession.ConnectionResult =
+                        MediaSession.ConnectionResult.AcceptedResultBuilder(session).build()
+                })
+                .build()
+            Log.d(TAG, "Foreground MediaSession built")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to build foreground session: ${e.message}")
+            foregroundSession = null
+        }
+    }
+
+    fun releaseForegroundSession() {
+        try {
+            foregroundSession?.release()
+        } catch (_: Exception) {}
+        foregroundSession = null
+    }
+
     fun enableBackgroundAudio() {
         if (backgroundAudioEnabled || serviceStarting) return
         if (playerEngine != PlayerEngine.EXOPLAYER) {
@@ -350,6 +396,9 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
             return
         }
 
+        // The service builds its own session — release ours first so the
+        // system never shows two players for the same stream.
+        releaseForegroundSession()
         serviceStarting = true
         TvPlayerService.backgroundPlayEnabled = true
 
@@ -379,9 +428,13 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         if (!silent) {
             try { onBackgroundAudioChange(mapOf("enabled" to false)) } catch (_: Exception) {}
         }
+        // Service session is gone — restore the foreground session so system
+        // controls keep working while the app stays open.
+        if (playerManager.isPlaying()) ensureForegroundSession()
     }
 
     fun releasePlayer() {
+        releaseForegroundSession()
         PipRegistry.isPlayerActive = false
         stopPoller()
         disableBackgroundAudio(silent = true)
@@ -397,6 +450,9 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
     
     fun stopPlayback() {
         Log.d(TAG, "stopPlayback() called - stopping player for new channel")
+        // Drop our session so the system never shows two players during a
+        // channel switch; the new view builds its own on ready.
+        releaseForegroundSession()
         playerManager.pause()
         disableBackgroundAudio(silent = true)
     }
@@ -406,6 +462,7 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
     override fun onReady() {
         onReady(mapOf<String, Any>())
         onBufferingChange(mapOf("isBuffering" to false))
+        ensureForegroundSession()
         startPoller()
     }
 
@@ -502,6 +559,9 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         if (!isTV) PipRegistry.setPipListener(this)
+        if (!backgroundAudioEnabled && playerManager.isPlaying()) {
+            ensureForegroundSession()
+        }
         if (backgroundAudioEnabled || PipRegistry.isInPipMode) {
             attachPipSurface()
             if (playerManager.isPlaying()) {

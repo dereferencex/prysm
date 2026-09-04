@@ -147,6 +147,16 @@ class TvPlayerModule : Module() {
                 view.isBackgroundAudioEnabled()
             }
 
+            // ── Foreground MediaSession (system controls without background opt-in) ──
+
+            AsyncFunction("ensureMediaSession") { view: TvPlayerView ->
+                view.ensureForegroundSession()
+            }
+
+            AsyncFunction("releaseMediaSession") { view: TvPlayerView ->
+                view.releaseForegroundSession()
+            }
+
             // ── Track selection ────────────────────────────────────────────
 
             AsyncFunction("selectAudioTrack") { view: TvPlayerView, groupIndex: Int, trackIndex: Int ->

@@ -174,6 +174,16 @@ class PlayerManager(
         }
     }
 
+    fun setMediaMetadata(title: String, artist: String, artworkUri: String?) {
+        // ExoPlayer-only: VLC has no MediaSession (background audio requires
+        // ExoPlayer anyway). Routing to the Exo controller instance also when
+        // it isn't active stores the values as pending so they apply on the
+        // next buildPlayer() after an engine switch back.
+        val exo = (activeController as? ExoPlayerController)
+            ?: (getOrCreateController(PlayerEngine.EXOPLAYER) as ExoPlayerController)
+        exo.setMediaMetadata(title, artist, artworkUri)
+    }
+
     fun selectAudioTrack(groupIndex: Int, trackIndex: Int) {
         activeController?.selectAudioTrack(groupIndex, trackIndex)
     }

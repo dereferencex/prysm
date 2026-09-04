@@ -14,6 +14,7 @@ import androidx.media3.common.C
 import androidx.media3.common.DrmInitData
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaItem.DrmConfiguration
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackGroup
@@ -413,6 +414,15 @@ class ExoPlayerController(
     private var savedPosition: Long = 0L
     private var pendingHlsFallback = false
 
+    // Pending system-media metadata (channel title / EPG now-playing / logo).
+    // Applied as *playlist* metadata so the notification / lock screen /
+    // control center update without touching the playing item (no rebuffer).
+    // Our MediaItems are built without item-level metadata, so the playlist
+    // metadata is what Media3 surfaces via player.mediaMetadata.
+    private var pendingMediaTitle: String? = null
+    private var pendingMediaArtist: String? = null
+    private var pendingArtworkUri: String? = null
+
     private var currentTextureSurface: Surface? = null
     private var currentSurfaceTextureListener: TextureView.SurfaceTextureListener? = null
 
@@ -548,6 +558,43 @@ class ExoPlayerController(
     override fun getCurrentPosition(): Long = exoPlayer?.currentPosition ?: 0L
     override fun getDuration(): Long = exoPlayer?.duration?.takeIf { it != C.TIME_UNSET } ?: 0L
     override fun isPlaying(): Boolean = exoPlayer?.isPlaying ?: false
+
+    /**
+     * Updates the metadata shown in the system media UI (notification shade
+     * player, lock screen, Quick Settings media tile, Bluetooth / Auto).
+     *
+     * Applied via setPlaylistMetadata() so the playing item is untouched —
+     * no re-prepare, no rebuffer on live streams. Media3's notification
+     * provider observes the change and refreshes automatically. Artwork is
+     * passed as a URI (channel logo) and loaded async by Media3's
+     * BitmapLoader. Safe to call before a player exists — values are stored
+     * and applied on the next buildPlayer().
+     */
+    fun setMediaMetadata(title: String, artist: String, artworkUri: String?) {
+        pendingMediaTitle = title.ifBlank { null }
+        pendingMediaArtist = artist.ifBlank { null }
+        pendingArtworkUri = artworkUri?.ifBlank { null }
+        exoPlayer?.let { applyPendingMetadata(it) }
+    }
+
+    private fun applyPendingMetadata(player: ExoPlayer) {
+        val title = pendingMediaTitle ?: return
+        try {
+            val builder = MediaMetadata.Builder().setTitle(title)
+            pendingMediaArtist?.let { builder.setArtist(it) }
+            pendingArtworkUri?.let { uri ->
+                try {
+                    builder.setArtworkUri(Uri.parse(uri))
+                } catch (_: Exception) {
+                    // Malformed logo URL — show title/artist without artwork.
+                }
+            }
+            player.setPlaylistMetadata(builder.build())
+            Log.d(TAG, "Applied playlist metadata: title=$title")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to apply playlist metadata: ${e.message}")
+        }
+    }
 
     fun releasePlayer(silent: Boolean = false) {
         if (released) return
@@ -742,7 +789,9 @@ class ExoPlayerController(
             .setRenderersFactory(renderersFactory)
             .setTrackSelector(trackSelector)
             .setMediaSourceFactory(mediaSourceFactory)
-            .setAudioAttributes(audioAttrs, false)
+            // handleAudioFocus=true: pause on calls/transient loss, resume on
+            // gain — standard music-app behaviour for the system media UI.
+            .setAudioAttributes(audioAttrs, true)
             .setHandleAudioBecomingNoisy(true)
             .build()
 
@@ -801,6 +850,7 @@ class ExoPlayerController(
         if (currentAutoPlay) player.playWhenReady = true
 
         exoPlayer = player
+        applyPendingMetadata(player)
         PlayerRegistry.registerPlayer(player)
         Log.d(TAG, "ExoPlayer built and prepared")
     }

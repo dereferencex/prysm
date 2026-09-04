@@ -151,6 +151,21 @@ export const TvPlayerCommands = {
   ): Promise<boolean> | undefined =>
     viewRef.current?.isBackgroundAudioEnabled(),
 
+  /**
+   * Publish playback to the system media UI (shade player, lock screen,
+   * Quick Settings tile, BT/Auto) during foreground playback. No-op while
+   * background audio owns the session. Called automatically on play/ready;
+   * call explicitly when returning to the foreground.
+   */
+  ensureMediaSession: (
+    viewRef: React.RefObject<any>,
+  ): Promise<void> | undefined => viewRef.current?.ensureMediaSession(),
+
+  /** Remove the foreground session (e.g. app backgrounded, playback off). */
+  releaseMediaSession: (
+    viewRef: React.RefObject<any>,
+  ): Promise<void> | undefined => viewRef.current?.releaseMediaSession(),
+
   selectAudioTrack: (
     viewRef: React.RefObject<any>,
     groupIndex: number,
