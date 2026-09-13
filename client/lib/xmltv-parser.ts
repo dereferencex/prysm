@@ -1,4 +1,6 @@
 import { fetchPlaylistNative } from "../../modules/tv-player/src/index";
+import { gunzipSync, strFromU8 } from "fflate";
+import * as FileSystemLegacy from "expo-file-system/legacy";
 import type { EpgProgram } from "@/types/epg";
 import { PRYSM_USER_AGENT } from "./m3u-parser";
 
@@ -8,15 +10,15 @@ import { PRYSM_USER_AGENT } from "./m3u-parser";
  * Multiple URLs may be comma or space separated (quoted or unquoted).
  */
 export function extractEpgUrlsFromM3U(content: string): string[] {
-  const firstLines = content.slice(0, 4096).split("\n").slice(0, 5).join("\n");
+  const firstLines = content.slice(0, 8192).split("\n").slice(0, 30).join("\n");
   const urls: string[] = [];
   const attrRegex =
     /(?:url-tvg|x-tvg-url|tvg-url)\s*=\s*(?:"([^"]+)"|'([^']+)'|(\S+))/gi;
   let m: RegExpExecArray | null;
   while ((m = attrRegex.exec(firstLines)) !== null) {
     const raw = m[1] ?? m[2] ?? m[3] ?? "";
-    // Split on comma or whitespace to support multi-EPG headers
-    for (const part of raw.split(/[\s,]+/)) {
+    // Split on comma, semicolon, pipe or whitespace to support multi-EPG headers
+    for (const part of raw.split(/[\s,;|]+/)) {
       const u = part.trim().replace(/^["']|["']$/g, "");
       if (u && (u.startsWith("http://") || u.startsWith("https://"))) {
         if (!urls.includes(u)) urls.push(u);
@@ -140,6 +142,12 @@ export function parseXMLTV(
 }
 
 async function fetchXmlContent(url: string): Promise<string> {
+  // Gzipped sources (e.g. *.xml.gz, like the popular matthuisman guides):
+  // text fetch would return binary garbage, so download + inflate instead.
+  const pathNoQuery = url.split("?")[0].toLowerCase();
+  if (pathNoQuery.endsWith(".gz")) {
+    return downloadAndDecode(url);
+  }
   try {
     const result = await fetchPlaylistNative(url);
     if (result.success && result.content) {
@@ -149,6 +157,7 @@ async function fetchXmlContent(url: string): Promise<string> {
       ) {
         return result.content;
       }
+      // Binary (probably gzip) despite a non-.gz URL — fall through.
     }
   } catch {
     // fall through to JS fetch
@@ -159,9 +168,88 @@ async function fetchXmlContent(url: string): Promise<string> {
   if (!response.ok) throw new Error(`EPG fetch failed: ${response.status}`);
   const text = await response.text();
   if (!text.includes("<tv") && !text.includes("<programme")) {
+    // Mislabeled gzip (or other binary) — retry via download + inflate.
+    try {
+      return await downloadAndDecode(url);
+    } catch {
+      // fall through to the XMLTV error below
+    }
     throw new Error("URL did not return XMLTV data");
   }
   return text;
+}
+
+const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+
+function base64ToBytes(b64: string): Uint8Array {
+  const clean = b64.replace(/[^A-Za-z0-9+/=]/g, "");
+  const len = clean.length;
+  const outLen =
+    Math.floor((len * 3) / 4) -
+    (clean.endsWith("==") ? 2 : clean.endsWith("=") ? 1 : 0);
+  const out = new Uint8Array(outLen);
+  let o = 0;
+  for (let i = 0; i < len; i += 4) {
+    const a = B64.indexOf(clean[i]);
+    const b = B64.indexOf(clean[i + 1]);
+    const c = B64.indexOf(clean[i + 2]);
+    const d = B64.indexOf(clean[i + 3]);
+    const n = (a << 18) | (b << 12) | ((c & 63) << 6) | (d & 63);
+    if (o < outLen) out[o++] = (n >> 16) & 255;
+    if (o < outLen) out[o++] = (n >> 8) & 255;
+    if (o < outLen) out[o++] = n & 255;
+  }
+  return out;
+}
+
+/**
+ * Downloads a (possibly gzipped) EPG file to the cache dir and decodes it
+ * to an XML string. Sniffs the gzip magic bytes rather than trusting the
+ * extension or Content-Type, so mislabeled sources work too.
+ */
+async function downloadAndDecode(url: string): Promise<string> {
+  const dir = FileSystemLegacy.cacheDirectory;
+  if (!dir) {
+    const resp = await fetch(url, {
+      headers: { "User-Agent": PRYSM_USER_AGENT, Accept: "*/*" },
+    });
+    if (!resp.ok) throw new Error(`EPG fetch failed: ${resp.status}`);
+    const buf = await resp.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    if (bytes.length < 2) throw new Error("Empty EPG download");
+    const isGzip = bytes[0] === 0x1f && bytes[1] === 0x8b;
+    const xmlBytes = isGzip ? gunzipSync(bytes) : bytes;
+    const xml = strFromU8(xmlBytes);
+    if (!xml.includes("<tv") && !xml.includes("<programme")) {
+      throw new Error("URL did not return XMLTV data");
+    }
+    return xml;
+  }
+  const tmp = `${dir}epg_${Date.now()}.bin`;
+  try {
+    const dl = await FileSystemLegacy.downloadAsync(url, tmp, {
+      headers: { "User-Agent": PRYSM_USER_AGENT, Accept: "*/*" },
+    });
+    const b64 = await FileSystemLegacy.readAsStringAsync(dl.uri, {
+      encoding: FileSystemLegacy.EncodingType.Base64,
+    });
+    const bytes = base64ToBytes(b64);
+    if (bytes.length < 2) throw new Error("Empty EPG download");
+    const isGzip = bytes[0] === 0x1f && bytes[1] === 0x8b;
+    const xmlBytes = isGzip ? gunzipSync(bytes) : bytes;
+    const xml = strFromU8(xmlBytes);
+    if (!xml.includes("<tv") && !xml.includes("<programme")) {
+      throw new Error("URL did not return XMLTV data");
+    }
+    return xml;
+  } finally {
+    try {
+      const info = await FileSystemLegacy.getInfoAsync(tmp);
+      if (info.exists) await FileSystemLegacy.deleteAsync(tmp);
+    } catch {
+      // best-effort cleanup
+    }
+  }
 }
 
 export async function fetchAndParseEPG(

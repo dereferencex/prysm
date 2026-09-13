@@ -18,6 +18,8 @@ import SettingsScreen from "@/screens/SettingsScreen";
 import { ThemedText } from "@/components/ThemedText";
 import { useResponsive } from "@/hooks/useResponsive";
 import { useTheme } from "@/hooks/useTheme";
+import { usePlaylist } from "@/context/PlaylistContext";
+import { TvContainer } from "@/components/tv/TvContainer";
 import { Colors, Spacing, BorderRadius } from "@/constants/theme";
 
 const isTV = Platform.isTV;
@@ -212,6 +214,7 @@ export default function MainTabNavigator() {
   const insets = useSafeAreaInsets();
   const { sidebarWidth, isExtraWide } = useResponsive();
   const { theme } = useTheme();
+  const { settings } = usePlaylist();
   const [currentScreen, setCurrentScreen] = useState<ScreenName>("Channels");
 
   const channelsRef = useRef<View>(null);
@@ -225,9 +228,17 @@ export default function MainTabNavigator() {
   const useSidebar = isLandscape || isTVDevice;
   const compact = sidebarWidth < 90 || isExtraWide;
 
+  const isTvMode =
+    settings?.tvInterfaceMode === "tv" ||
+    (settings?.tvInterfaceMode !== "standard" && isTVDevice);
+
   const handleScreenChange = useCallback((screen: ScreenName) => {
     setCurrentScreen(screen);
   }, []);
+
+  if (isTvMode) {
+    return <TvContainer />;
+  }
 
   const renderScreen = () => {
     switch (currentScreen) {

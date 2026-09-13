@@ -366,14 +366,14 @@ export function parseM3U(
 }
 
 function extractEpgUrls(content: string): string[] {
-  const firstLines = content.slice(0, 4096).split("\n").slice(0, 5).join("\n");
+  const firstLines = content.slice(0, 8192).split("\n").slice(0, 30).join("\n");
   const urls: string[] = [];
   const attrRegex =
     /(?:url-tvg|x-tvg-url|tvg-url)\s*=\s*(?:"([^"]+)"|'([^']+)'|(\S+))/gi;
   let m: RegExpExecArray | null;
   while ((m = attrRegex.exec(firstLines)) !== null) {
     const raw = m[1] ?? m[2] ?? m[3] ?? "";
-    for (const part of raw.split(/[\s,]+/)) {
+    for (const part of raw.split(/[\s,;|]+/)) {
       const u = part.trim().replace(/^["']|["']$/g, "");
       if (u && (u.startsWith("http://") || u.startsWith("https://"))) {
         if (!urls.includes(u)) urls.push(u);

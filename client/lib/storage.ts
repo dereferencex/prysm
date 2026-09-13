@@ -113,6 +113,8 @@ export interface AppSettings {
   epgUrlOverrides: Record<string, string>;
   /** EPG refresh cadence in hours. */
   epgRefreshHours: number;
+  /** UI mode: "auto" selects TV layout on TV devices, "tv" forces TV 3-column UI, "standard" uses mobile/tablet UI. */
+  tvInterfaceMode: "auto" | "tv" | "standard";
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -132,6 +134,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   epgUserSet: false,
   epgUrlOverrides: {},
   epgRefreshHours: 12,
+  tvInterfaceMode: "auto",
 };
 
 interface PlaylistMeta {

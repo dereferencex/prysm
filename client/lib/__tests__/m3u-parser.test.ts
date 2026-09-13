@@ -4,6 +4,10 @@ import {
 } from "../m3u-parser";
 import type { Channel } from "@/types/playlist";
 
+jest.mock("../../../modules/tv-player/src/index", () => ({
+  fetchPlaylistNative: jest.fn().mockResolvedValue({ success: false, content: "" }),
+}));
+
 // ── parseKodiProp: direct unit tests ──────────────────────────────────────────
 
 describe("parseKodiProp", () => {
