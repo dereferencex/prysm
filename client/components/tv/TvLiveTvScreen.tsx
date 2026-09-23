@@ -1,6 +1,5 @@
 import React, {
   useState,
-  useRef,
   useMemo,
   useCallback,
   useEffect,
@@ -13,8 +12,7 @@ import {
   Platform,
   ViewStyle,
   ScrollView,
-  Dimensions,
-  ActivityIndicator,
+  type LayoutChangeEvent,
 } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -26,13 +24,11 @@ import { ThemedText } from "@/components/ThemedText";
 import { usePlaylist } from "@/context/PlaylistContext";
 import { useEpg } from "@/context/EpgContext";
 import { useTheme } from "@/hooks/useTheme";
+import { useFocusScroll } from "@/hooks/useFocusScroll";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { Channel } from "@/types/playlist";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
-import {
-  TvPlayerView,
-  TvPlayerCommands,
-} from "../../../modules/tv-player/src/index";
+import { TvEpgBanner } from "./TvEpgBanner";
 
 const isTV = Platform.isTV;
 const placeholderImage = require("../../../assets/images/placeholder-channel.png");
@@ -41,14 +37,6 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 interface TvLiveTvScreenProps {
   categoryTypeFilter?: "all" | "movies" | "series";
-}
-
-function formatTimeHHMM(ms: number): string {
-  if (!ms) return "";
-  const d = new Date(ms);
-  const h = d.getHours().toString().padStart(2, "0");
-  const m = d.getMinutes().toString().padStart(2, "0");
-  return `${h}:${m}`;
 }
 
 export function TvLiveTvScreen({
@@ -190,56 +178,26 @@ export function TvLiveTvScreen({
     );
   }, [playlist, filteredChannels, selectedChannelId]);
 
-  // Video Preview Player
-  const previewPlayerRef = useRef<any>(null);
-  const [previewPlaying, setPreviewPlaying] = useState(false);
-  const [previewError, setPreviewError] = useState(false);
-  const debouncePreviewRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Focus auto-scroll for the two vertical lists
+  const categoryScroll = useFocusScroll<string>({ axis: "vertical" });
+  const channelScroll = useFocusScroll<string>({ axis: "vertical" });
 
-  const loadChannelPreview = useCallback((channel: Channel) => {
-    if (!previewPlayerRef.current) return;
-    setPreviewError(false);
-    try {
-      TvPlayerCommands.loadSource(previewPlayerRef, {
-        url: channel.url,
-        headers: channel.headers,
-        drmType: channel.drm?.type,
-        drmLicenseUrl: channel.drm?.licenseServer,
-        drmLicenseKey: channel.drm?.licenseKey,
-        drmHeaders: channel.drm?.headers,
-        drmPssh: channel.drm?.pssh,
-        autoPlay: true,
-      });
-      // Mute preview playback to avoid audio clash while browsing
-      TvPlayerCommands.setVolume(previewPlayerRef, 0);
-    } catch (e) {
-      setPreviewError(true);
-    }
-  }, []);
+  // Channel focus handler (keep focused row in view + update banner)
+  const handleChannelFocus = useCallback(
+    (ch: Channel) => {
+      setFocusedChannelId(ch.id);
+      setSelectedChannelId(ch.id);
+      channelScroll.focusOn(ch.id);
+    },
+    [channelScroll],
+  );
 
-  useEffect(() => {
-    if (!activeChannel) return;
-
-    if (debouncePreviewRef.current) {
-      clearTimeout(debouncePreviewRef.current);
-    }
-
-    debouncePreviewRef.current = setTimeout(() => {
-      loadChannelPreview(activeChannel);
-    }, 200);
-
-    return () => {
-      if (debouncePreviewRef.current) {
-        clearTimeout(debouncePreviewRef.current);
-      }
-    };
-  }, [activeChannel, loadChannelPreview]);
-
-  // Channel focus handler (debounced preview update)
-  const handleChannelFocus = useCallback((ch: Channel) => {
-    setFocusedChannelId(ch.id);
-    setSelectedChannelId(ch.id);
-  }, []);
+  const handleCategoryFocus = useCallback(
+    (cat: string) => {
+      categoryScroll.focusOn(cat);
+    },
+    [categoryScroll],
+  );
 
   // Channel press handler: opens full player
   const handleChannelPress = useCallback(
@@ -250,28 +208,11 @@ export function TvLiveTvScreen({
     [navigation],
   );
 
-  // EPG details for the active preview channel
+  // EPG details for the active banner channel
   const activeEpg = useMemo(() => {
     if (!activeChannel) return null;
     return epg.getNowNext(activeChannel.id);
   }, [activeChannel, epg]);
-
-  const currentProgram = activeEpg?.now;
-  const programTime = useMemo(() => {
-    if (!currentProgram) return "";
-    const startStr = formatTimeHHMM(currentProgram.start);
-    const endStr = formatTimeHHMM(currentProgram.end);
-    if (!startStr && !endStr) return "";
-    return `${startStr} – ${endStr}`;
-  }, [currentProgram]);
-
-  const programProgress = useMemo(() => {
-    if (!currentProgram || !currentProgram.start || !currentProgram.end) return 0;
-    const now = Date.now();
-    const total = currentProgram.end - currentProgram.start;
-    if (total <= 0) return 0;
-    return Math.max(0, Math.min(1, (now - currentProgram.start) / total));
-  }, [currentProgram]);
 
   const providerName = playlist?.name || "Provider";
 
@@ -327,8 +268,12 @@ export function TvLiveTvScreen({
 
         {/* Categories List */}
         <ScrollView
+          ref={categoryScroll.scrollRef}
           style={styles.categoryScrollView}
           showsVerticalScrollIndicator={false}
+          onLayout={categoryScroll.onScrollViewLayout}
+          onScroll={categoryScroll.onScroll}
+          scrollEventThrottle={16}
         >
           {filteredCategories.map((cat) => {
             const isSelected = selectedCategory === cat;
@@ -344,6 +289,8 @@ export function TvLiveTvScreen({
                 isFav={isFav}
                 onSelect={() => setSelectedCategory(cat)}
                 onToggleFav={() => toggleFavoriteCategory(cat)}
+                onLayoutItem={(e) => categoryScroll.registerItem(cat, e)}
+                onFocused={() => handleCategoryFocus(cat)}
               />
             );
           })}
@@ -385,8 +332,12 @@ export function TvLiveTvScreen({
 
         {/* Channels List */}
         <ScrollView
+          ref={channelScroll.scrollRef}
           style={styles.channelScrollView}
           showsVerticalScrollIndicator={false}
+          onLayout={channelScroll.onScrollViewLayout}
+          onScroll={channelScroll.onScroll}
+          scrollEventThrottle={16}
         >
           {filteredChannels.length === 0 ? (
             <View style={styles.emptyChannelsContainer}>
@@ -409,6 +360,10 @@ export function TvLiveTvScreen({
                   nowTitle={nowTitle}
                   isSelected={isSelected}
                   isFocused={isFocused}
+                  hasTVPreferredFocus={isTV && index === 0}
+                  onLayoutItem={(e) =>
+                    channelScroll.registerItem(channel.id, e)
+                  }
                   onFocus={() => handleChannelFocus(channel)}
                   onPress={() => handleChannelPress(channel)}
                   onLongPress={() => toggleFavorite(channel.id)}
@@ -419,122 +374,30 @@ export function TvLiveTvScreen({
         </ScrollView>
       </View>
 
-      {/* ─── COLUMN 3: CHANNEL PREVIEW ─── */}
+      {/* ─── COLUMN 3: EPG PROGRAM BANNER ─── */}
       <View style={styles.previewColumn}>
-        <ThemedText type="body" style={styles.previewTitle}>
-          Channel Preview
-        </ThemedText>
+        <View style={styles.previewHeaderRow}>
+          <ThemedText type="body" style={styles.previewTitle}>
+            Now Showing
+          </ThemedText>
+          {epg.isLoading ? (
+            <ThemedText type="caption" style={styles.previewEpgStatus}>
+              Updating guide…
+            </ThemedText>
+          ) : null}
+        </View>
 
         {activeChannel ? (
-          <View style={styles.previewContent}>
-            {/* Video Frame */}
-            <Pressable
-              onPress={() => handleChannelPress(activeChannel)}
-              focusable
-              style={({ focused }) => [
-                styles.videoContainer,
-                focused && styles.videoContainerFocused,
-              ]}
-            >
-              <TvPlayerView
-                ref={previewPlayerRef}
-                style={styles.videoPlayer}
-                onPlayingChange={(e) =>
-                  setPreviewPlaying(e.nativeEvent.isPlaying)
-                }
-                onError={() => setPreviewError(true)}
-              />
-
-              {/* Fallback / Poster overlay if native video is offline or loading */}
-              {(!previewPlaying || previewError) && (
-                <View style={styles.previewPosterOverlay}>
-                  <Image
-                    source={
-                      activeChannel.logo
-                        ? { uri: activeChannel.logo }
-                        : placeholderImage
-                    }
-                    style={styles.previewLogo}
-                    contentFit="contain"
-                  />
-                  {previewPlaying ? null : (
-                    <ActivityIndicator
-                      size="small"
-                      color="#38BDF8"
-                      style={{ marginTop: 8 }}
-                    />
-                  )}
-                </View>
-              )}
-            </Pressable>
-
-            {/* Channel & Program Info */}
-            <View style={styles.previewInfoContainer}>
-              <ThemedText
-                type="h3"
-                numberOfLines={1}
-                style={styles.previewChannelName}
-              >
-                {activeChannel.name}
-              </ThemedText>
-
-              <ThemedText
-                type="body"
-                numberOfLines={1}
-                style={styles.previewShowTitle}
-              >
-                {currentProgram?.title || "No schedule information"}
-              </ThemedText>
-
-              {programTime ? (
-                <ThemedText type="small" style={styles.previewTime}>
-                  {programTime}
-                </ThemedText>
-              ) : null}
-
-              {/* Progress Bar */}
-              {currentProgram ? (
-                <View style={styles.progressBarTrack}>
-                  <View
-                    style={[
-                      styles.progressBarFill,
-                      { width: `${Math.round(programProgress * 100)}%` },
-                    ]}
-                  />
-                </View>
-              ) : null}
-
-              {/* Description */}
-              <ThemedText
-                type="caption"
-                numberOfLines={3}
-                style={styles.previewDescription}
-              >
-                {currentProgram?.desc ||
-                  (activeChannel.group
-                    ? `Category: ${activeChannel.group}`
-                    : "Live TV broadcast")}
-              </ThemedText>
-
-              {/* Open Prompt / Action */}
-              <Pressable
-                onPress={() => handleChannelPress(activeChannel)}
-                focusable
-                style={({ focused }) => [
-                  styles.openActionContainer,
-                  focused && styles.openActionContainerFocused,
-                ]}
-              >
-                <ThemedText type="body" style={styles.openActionText}>
-                  Press OK again to open this channel
-                </ThemedText>
-              </Pressable>
-            </View>
-          </View>
+          <TvEpgBanner
+            channel={activeChannel}
+            now={activeEpg?.now}
+            next={activeEpg?.next}
+            onPress={() => handleChannelPress(activeChannel)}
+          />
         ) : (
           <View style={styles.noPreviewContainer}>
             <ThemedText type="body" style={{ color: "rgba(255, 255, 255, 0.4)" }}>
-              Select a channel to preview
+              Select a channel to view its program guide
             </ThemedText>
           </View>
         )}
@@ -552,6 +415,8 @@ function CategoryRow({
   isFav,
   onSelect,
   onToggleFav,
+  onLayoutItem,
+  onFocused,
 }: {
   category: string;
   count: number;
@@ -559,6 +424,8 @@ function CategoryRow({
   isFav: boolean;
   onSelect: () => void;
   onToggleFav: () => void;
+  onLayoutItem: (e: LayoutChangeEvent) => void;
+  onFocused: () => void;
 }) {
   const [isFocused, setIsFocused] = useState(false);
 
@@ -566,7 +433,11 @@ function CategoryRow({
     <Pressable
       onPress={onSelect}
       onLongPress={onToggleFav}
-      onFocus={() => setIsFocused(true)}
+      onLayout={onLayoutItem}
+      onFocus={() => {
+        setIsFocused(true);
+        onFocused();
+      }}
       onBlur={() => setIsFocused(false)}
       focusable
       style={
@@ -611,6 +482,8 @@ function ChannelListItem({
   nowTitle,
   isSelected,
   isFocused,
+  hasTVPreferredFocus,
+  onLayoutItem,
   onFocus,
   onPress,
   onLongPress,
@@ -620,6 +493,8 @@ function ChannelListItem({
   nowTitle?: string;
   isSelected: boolean;
   isFocused: boolean;
+  hasTVPreferredFocus?: boolean;
+  onLayoutItem: (e: LayoutChangeEvent) => void;
   onFocus: () => void;
   onPress: () => void;
   onLongPress: () => void;
@@ -631,12 +506,14 @@ function ChannelListItem({
     <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
+      onLayout={onLayoutItem}
       onFocus={() => {
         setInternalFocused(true);
         onFocus();
       }}
       onBlur={() => setInternalFocused(false)}
       focusable
+      hasTVPreferredFocus={hasTVPreferredFocus}
       style={
         [
           styles.channelCard,
@@ -884,7 +761,7 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
-  // ─── Column 3: Channel Preview ───
+  // ─── Column 3: EPG Program Banner ───
   previewColumn: {
     flex: 1,
     backgroundColor: "rgba(12, 22, 37, 0.92)",
@@ -893,100 +770,24 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255, 255, 255, 0.07)",
     padding: Spacing.md,
   },
+  previewHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.sm,
+  },
   previewTitle: {
     color: "#38BDF8",
     fontSize: 15,
     fontWeight: "700",
-    marginBottom: Spacing.sm,
   },
-  previewContent: {
-    flex: 1,
+  previewEpgStatus: {
+    color: "rgba(255, 255, 255, 0.4)",
+    fontSize: 11,
   },
   noPreviewContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-  },
-  videoContainer: {
-    width: "100%",
-    aspectRatio: 16 / 9,
-    backgroundColor: "#000000",
-    borderRadius: 12,
-    overflow: "hidden",
-    borderWidth: 2,
-    borderColor: "transparent",
-  },
-  videoContainerFocused: {
-    borderColor: "#FFFFFF",
-    transform: [{ scale: 1.02 }],
-  },
-  videoPlayer: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  previewPosterOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(7, 13, 23, 0.85)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  previewLogo: {
-    width: 68,
-    height: 68,
-  },
-  previewInfoContainer: {
-    marginTop: Spacing.md,
-    flex: 1,
-  },
-  previewChannelName: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "800",
-  },
-  previewShowTitle: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "600",
-    marginTop: 4,
-  },
-  previewTime: {
-    color: "rgba(255, 255, 255, 0.5)",
-    fontSize: 12,
-    marginTop: 2,
-  },
-  progressBarTrack: {
-    height: 3,
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
-    borderRadius: 2,
-    marginTop: 6,
-    marginBottom: Spacing.xs,
-    overflow: "hidden",
-  },
-  progressBarFill: {
-    height: "100%",
-    backgroundColor: "#38BDF8",
-    borderRadius: 2,
-  },
-  previewDescription: {
-    color: "rgba(255, 255, 255, 0.65)",
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 6,
-  },
-  openActionContainer: {
-    marginTop: Spacing.md,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: BorderRadius.sm,
-    borderWidth: 1.5,
-    borderColor: "transparent",
-  },
-  openActionContainerFocused: {
-    borderColor: "#FFFFFF",
-    backgroundColor: "rgba(56, 189, 248, 0.2)",
-  },
-  openActionText: {
-    color: "#38BDF8",
-    fontSize: 13.5,
-    fontWeight: "600",
   },
 });

@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
+import { useFocusScroll } from "@/hooks/useFocusScroll";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import type { Channel } from "@/types/playlist";
 import type { EpgProgram } from "@/types/epg";
@@ -35,21 +36,25 @@ function GuideCell({
   width,
   isNow,
   onPress,
+  onFocusItem,
 }: {
   program: EpgProgram;
   width: number;
   isNow: boolean;
   onPress: () => void;
+  onFocusItem?: () => void;
 }) {
   const { theme } = useTheme();
   const [focused, setFocused] = useState(false);
   return (
     <Pressable
       onPress={onPress}
-      onFocus={() => setFocused(true)}
+      onFocus={() => {
+        setFocused(true);
+        onFocusItem?.();
+      }}
       onBlur={() => setFocused(false)}
       focusable
-      hasTVPreferredFocus={isNow && isTV ? undefined : undefined}
       style={[
         styles.cell,
         {
@@ -108,6 +113,9 @@ export function EpgGuideView({
   // Cap rows for perf on very large playlists; ChannelsScreen filters first
   const rows = useMemo(() => channels.slice(0, 120), [channels]);
 
+  const rowsScroll = useFocusScroll<string>({ axis: "vertical" });
+  const focusRow = (chId: string) => rowsScroll.focusOn(chId);
+
   return (
     <View style={styles.container}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -131,18 +139,30 @@ export function EpgGuideView({
               </View>
             ))}
           </View>
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {rows.map((ch) => {
+          <ScrollView
+            ref={rowsScroll.scrollRef}
+            showsVerticalScrollIndicator={false}
+            onLayout={rowsScroll.onScrollViewLayout}
+            onScroll={rowsScroll.onScroll}
+            scrollEventThrottle={16}
+          >
+            {rows.map((ch, index) => {
               const progs = getProgramsForChannel(
                 ch.id,
                 windowStart,
                 windowEnd,
               );
               return (
-                <View key={ch.id} style={styles.row}>
+                <View
+                  key={ch.id}
+                  style={styles.row}
+                  onLayout={(e) => rowsScroll.registerItem(ch.id, e)}
+                >
                   <Pressable
                     onPress={() => onSelectChannel(ch.id)}
+                    onFocus={() => focusRow(ch.id)}
                     focusable
+                    hasTVPreferredFocus={isTV && index === 0}
                     style={[
                       styles.chCol,
                       { borderBottomColor: theme.backgroundSecondary },
@@ -182,6 +202,7 @@ export function EpgGuideView({
                             width={w - 4}
                             isNow={isNow}
                             onPress={() => onSelectChannel(ch.id)}
+                            onFocusItem={() => focusRow(ch.id)}
                           />
                         );
                       })

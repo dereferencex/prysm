@@ -6,6 +6,7 @@ import {
   Pressable,
   Platform,
   ViewStyle,
+  type LayoutChangeEvent,
 } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -15,6 +16,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { ThemedText } from "@/components/ThemedText";
 import { usePlaylist } from "@/context/PlaylistContext";
 import { useTheme } from "@/hooks/useTheme";
+import { useFocusScroll } from "@/hooks/useFocusScroll";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { Channel } from "@/types/playlist";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
@@ -32,6 +34,9 @@ export function TvHomeScreen({ onNavigateTab }: TvHomeScreenProps) {
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
   const { playlist, favorites, recentChannels } = usePlaylist();
+
+  const recentScroll = useFocusScroll<string>({ axis: "horizontal" });
+  const favoriteScroll = useFocusScroll<string>({ axis: "horizontal" });
 
   const favoriteChannelList = useMemo(() => {
     if (!playlist) return [];
@@ -90,15 +95,21 @@ export function TvHomeScreen({ onNavigateTab }: TvHomeScreenProps) {
             Recently Watched
           </ThemedText>
           <ScrollView
+            ref={recentScroll.scrollRef}
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.channelRow}
+            onLayout={recentScroll.onScrollViewLayout}
+            onScroll={recentScroll.onScroll}
+            scrollEventThrottle={16}
           >
             {recentChannelList.map((channel) => (
               <ChannelCardTv
                 key={channel.id}
                 channel={channel}
                 onPress={() => handleChannelPress(channel)}
+                onLayoutItem={(e) => recentScroll.registerItem(channel.id, e)}
+                onFocused={() => recentScroll.focusOn(channel.id)}
               />
             ))}
           </ScrollView>
@@ -116,15 +127,21 @@ export function TvHomeScreen({ onNavigateTab }: TvHomeScreenProps) {
           </ThemedText>
         ) : (
           <ScrollView
+            ref={favoriteScroll.scrollRef}
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.channelRow}
+            onLayout={favoriteScroll.onScrollViewLayout}
+            onScroll={favoriteScroll.onScroll}
+            scrollEventThrottle={16}
           >
             {favoriteChannelList.map((channel) => (
               <ChannelCardTv
                 key={channel.id}
                 channel={channel}
                 onPress={() => handleChannelPress(channel)}
+                onLayoutItem={(e) => favoriteScroll.registerItem(channel.id, e)}
+                onFocused={() => favoriteScroll.focusOn(channel.id)}
               />
             ))}
           </ScrollView>
@@ -176,16 +193,24 @@ function QuickTile({
 function ChannelCardTv({
   channel,
   onPress,
+  onLayoutItem,
+  onFocused,
 }: {
   channel: Channel;
   onPress: () => void;
+  onLayoutItem: (e: LayoutChangeEvent) => void;
+  onFocused: () => void;
 }) {
   const [isFocused, setIsFocused] = React.useState(false);
 
   return (
     <Pressable
       onPress={onPress}
-      onFocus={() => setIsFocused(true)}
+      onLayout={onLayoutItem}
+      onFocus={() => {
+        setIsFocused(true);
+        onFocused();
+      }}
       onBlur={() => setIsFocused(false)}
       focusable
       style={

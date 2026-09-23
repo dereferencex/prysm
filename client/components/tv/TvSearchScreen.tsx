@@ -7,6 +7,7 @@ import {
   Pressable,
   Platform,
   ViewStyle,
+  type LayoutChangeEvent,
 } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,6 +17,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { ThemedText } from "@/components/ThemedText";
 import { usePlaylist } from "@/context/PlaylistContext";
 import { useTheme } from "@/hooks/useTheme";
+import { useFocusScroll } from "@/hooks/useFocusScroll";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { Channel } from "@/types/playlist";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
@@ -29,6 +31,7 @@ export function TvSearchScreen() {
   const { theme } = useTheme();
   const { playlist } = usePlaylist();
   const [searchQuery, setSearchQuery] = useState("");
+  const resultsScroll = useFocusScroll<string>({ axis: "vertical" });
 
   const results = useMemo(() => {
     if (!playlist || !searchQuery.trim()) return [];
@@ -71,9 +74,13 @@ export function TvSearchScreen() {
 
       {/* Results */}
       <ScrollView
+        ref={resultsScroll.scrollRef}
         style={styles.resultsScroll}
         contentContainerStyle={styles.resultsGrid}
         showsVerticalScrollIndicator={false}
+        onLayout={resultsScroll.onScrollViewLayout}
+        onScroll={resultsScroll.onScroll}
+        scrollEventThrottle={16}
       >
         {searchQuery.trim() === "" ? (
           <View style={styles.emptyContainer}>
@@ -95,6 +102,8 @@ export function TvSearchScreen() {
               onPress={() =>
                 navigation.navigate("Player", { channelId: channel.id })
               }
+              onLayoutItem={(e) => resultsScroll.registerItem(channel.id, e)}
+              onFocused={() => resultsScroll.focusOn(channel.id)}
             />
           ))
         )}
@@ -106,16 +115,24 @@ export function TvSearchScreen() {
 function ChannelResultCard({
   channel,
   onPress,
+  onLayoutItem,
+  onFocused,
 }: {
   channel: Channel;
   onPress: () => void;
+  onLayoutItem: (e: LayoutChangeEvent) => void;
+  onFocused: () => void;
 }) {
   const [isFocused, setIsFocused] = React.useState(false);
 
   return (
     <Pressable
       onPress={onPress}
-      onFocus={() => setIsFocused(true)}
+      onLayout={onLayoutItem}
+      onFocus={() => {
+        setIsFocused(true);
+        onFocused();
+      }}
       onBlur={() => setIsFocused(false)}
       focusable
       style={
