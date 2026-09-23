@@ -38,6 +38,23 @@ export const Colors = {
     error: "#EF4444",
     overlay: "rgba(0,0,0,0.6)",
   },
+  pitchblack: {
+    text: "#FFFFFF",
+    textSecondary: "#8A8F98",
+    buttonText: "#FFFFFF",
+    tabIconDefault: "#5B6068",
+    tabIconSelected: primaryCyan,
+    link: primaryCyan,
+    primary: primaryCyan,
+    primaryLight: primaryCyanLight,
+    backgroundRoot: "#000000",
+    backgroundDefault: "#050507",
+    backgroundSecondary: "#111318",
+    backgroundTertiary: "#1D2026",
+    success: "#10B981",
+    error: "#EF4444",
+    overlay: "rgba(0,0,0,0.75)",
+  },
 };
 
 export const Spacing = {

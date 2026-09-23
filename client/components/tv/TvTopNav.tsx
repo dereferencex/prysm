@@ -181,10 +181,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#1E3A5F",
     borderColor: "rgba(59, 130, 246, 0.4)",
   },
-  focusedTabButton: {
+focusedTabButton: {
     borderColor: "#FFFFFF",
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    transform: [{ scale: 1.05 }],
+    backgroundColor: "rgba(56, 189, 248, 0.25)",
   },
   tabIcon: {
     marginRight: 6,

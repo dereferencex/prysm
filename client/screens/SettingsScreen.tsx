@@ -439,7 +439,7 @@ export default function SettingsScreen() {
     return option?.label || "Medium";
   };
 
-  const handleThemeSelect = async (value: "light" | "dark") => {
+  const handleThemeSelect = async (value: "light" | "dark" | "pitchblack") => {
     if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await setThemeMode(value);
     setShowThemeModal(false);
@@ -613,7 +613,14 @@ export default function SettingsScreen() {
   };
 
   const getThemeLabel = () => {
-    return themeMode === "dark" ? "Dark" : "Light";
+    switch (themeMode) {
+      case "pitchblack":
+        return "Pitch Black";
+      case "light":
+        return "Light";
+      default:
+        return "Dark";
+    }
   };
 
   const handleTvModeSelect = (mode: "auto" | "tv" | "standard") => {
@@ -827,9 +834,9 @@ export default function SettingsScreen() {
             </ThemedText>
             <View style={styles.section}>
               <SettingsRow
-                icon={isDark ? "moon" : "sunny"}
+                icon={themeMode === "pitchblack" ? "contrast" : isDark ? "moon" : "sunny"}
                 title="Theme"
-                subtitle="Choose light or dark appearance"
+                subtitle="Choose light, dark, or pitch black appearance"
                 value={getThemeLabel()}
                 onPress={() => setShowThemeModal(true)}
                 showChevron
@@ -1182,6 +1189,19 @@ export default function SettingsScreen() {
                 <ThemedText type="body">Light</ThemedText>
               </View>
               {themeMode === "light" ? (
+                <Ionicons name="checkmark" size={20} color={theme.primary} />
+              ) : null}
+            </FocusableOption>
+            <FocusableOption
+              onPress={() => handleThemeSelect("pitchblack")}
+              isSelected={themeMode === "pitchblack"}
+              accessibilityLabel="Pitch Black theme"
+            >
+              <View style={styles.themeOption}>
+                <Ionicons name="contrast" size={20} color={theme.text} />
+                <ThemedText type="body">Pitch Black</ThemedText>
+              </View>
+              {themeMode === "pitchblack" ? (
                 <Ionicons name="checkmark" size={20} color={theme.primary} />
               ) : null}
             </FocusableOption>

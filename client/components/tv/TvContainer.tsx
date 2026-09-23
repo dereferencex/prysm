@@ -1,5 +1,11 @@
 import React, { useState, useCallback } from "react";
-import { View, StyleSheet, Platform, StatusBar } from "react-native";
+import {
+  View,
+  StyleSheet,
+  Platform,
+  StatusBar,
+  TVFocusGuideView,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -90,7 +96,11 @@ export function TvContainer() {
           },
         ]}
       >
-        {renderActiveContent()}
+        {/* TVFocusGuide restores focus to the last focused element when a
+            player/child screen closes and focus returns to this tab */}
+        <TVFocusGuideView autoFocus={Platform.isTV} style={styles.focusGuide}>
+          {renderActiveContent()}
+        </TVFocusGuideView>
       </View>
     </View>
   );
@@ -105,6 +115,9 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   contentWrapper: {
+    flex: 1,
+  },
+  focusGuide: {
     flex: 1,
   },
   guideContainer: {

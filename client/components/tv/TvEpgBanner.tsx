@@ -186,14 +186,13 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255, 255, 255, 0.08)",
     padding: Spacing.lg,
   },
-  cardFocused: {
+cardFocused: {
     borderColor: "#FFFFFF",
-    backgroundColor: "rgba(18, 33, 55, 1)",
-    transform: [{ scale: 1.02 }],
+    backgroundColor: "rgba(24, 44, 73, 1)",
     shadowColor: "#38BDF8",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.4,
-    shadowRadius: 10,
+    shadowRadius: 8,
   },
   headerRow: {
     flexDirection: "row",

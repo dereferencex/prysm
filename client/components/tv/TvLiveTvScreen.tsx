@@ -658,7 +658,6 @@ const styles = StyleSheet.create({
   categoryRowFocused: {
     borderColor: "#FFFFFF",
     backgroundColor: "rgba(56, 189, 248, 0.2)",
-    transform: [{ scale: 1.02 }],
   },
   categoryRowLeft: {
     flexDirection: "row",
@@ -724,7 +723,6 @@ const styles = StyleSheet.create({
   channelCardFocused: {
     borderColor: "#FFFFFF",
     backgroundColor: "rgba(24, 44, 73, 1)",
-    transform: [{ scale: 1.02 }],
     shadowColor: "#38BDF8",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.4,

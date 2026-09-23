@@ -16,7 +16,7 @@ import {
   type DynamicPalette,
 } from "../../modules/dynamic-color/src";
 
-type ThemeMode = "light" | "dark";
+type ThemeMode = "light" | "dark" | "pitchblack";
 
 interface ThemeContextType {
   themeMode: ThemeMode;
@@ -45,12 +45,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   // Support is fixed for the process lifetime; read it once.
   const [dynamicSupported] = useState(() => isDynamicColorSupported());
 
-  const isDark = themeMode === "dark";
+  const isDark = themeMode !== "light";
 
   const loadTheme = useCallback(async () => {
     try {
       const savedTheme = await AsyncStorage.getItem(THEME_STORAGE_KEY);
-      if (savedTheme === "light" || savedTheme === "dark") {
+      if (
+        savedTheme === "light" ||
+        savedTheme === "dark" ||
+        savedTheme === "pitchblack"
+      ) {
         setThemeModeState(savedTheme);
       }
       const savedDynamic = await AsyncStorage.getItem(DYNAMIC_STORAGE_KEY);
@@ -81,8 +85,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    setPalette(dynamicColors ? getDynamicPalette(isDark) : null);
-  }, [dynamicColors, isDark, refreshKey]);
+    setPalette(
+      dynamicColors && themeMode !== "pitchblack"
+        ? getDynamicPalette(isDark)
+        : null,
+    );
+  }, [dynamicColors, isDark, themeMode, refreshKey]);
 
   const setThemeMode = async (mode: ThemeMode) => {
     try {
@@ -107,7 +115,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     await setThemeMode(newMode);
   };
 
-  const baseTheme = isDark ? Colors.dark : Colors.light;
+  const baseTheme =
+    themeMode === "pitchblack"
+      ? Colors.pitchblack
+      : isDark
+        ? Colors.dark
+        : Colors.light;
   const theme =
     dynamicColors && palette ? { ...baseTheme, ...palette } : baseTheme;
 

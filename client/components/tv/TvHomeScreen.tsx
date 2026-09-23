@@ -274,7 +274,6 @@ const styles = StyleSheet.create({
   quickTileFocused: {
     borderColor: "#FFFFFF",
     backgroundColor: "rgba(24, 44, 73, 1)",
-    transform: [{ scale: 1.04 }],
   },
   tileIconContainer: {
     width: 44,
@@ -318,7 +317,6 @@ const styles = StyleSheet.create({
   channelCardFocused: {
     borderColor: "#FFFFFF",
     backgroundColor: "rgba(24, 44, 73, 1)",
-    transform: [{ scale: 1.05 }],
   },
   cardLogoBox: {
     width: "100%",

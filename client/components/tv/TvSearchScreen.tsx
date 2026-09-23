@@ -214,7 +214,6 @@ const styles = StyleSheet.create({
   resultCardFocused: {
     borderColor: "#FFFFFF",
     backgroundColor: "rgba(24, 44, 73, 1)",
-    transform: [{ scale: 1.04 }],
   },
   resultLogoBox: {
     width: 44,
