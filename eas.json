@@ -5,21 +5,23 @@
         "buildType": "apk"
       }
     },
-
+    "emulator": {
+      "android": {
+        "buildType": "apk"
+      }
+    },
     "arm64": {
       "android": {
         "buildType": "apk",
         "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=arm64-v8a"
       }
     },
-
     "armv7": {
       "android": {
         "buildType": "apk",
         "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=armeabi-v7a"
       }
     },
-
     "production": {
       "android": {
         "buildType": "app-bundle"
