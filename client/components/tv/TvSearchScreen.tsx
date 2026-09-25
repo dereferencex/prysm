@@ -211,14 +211,10 @@ function createStyles(theme: typeof Colors.dark) {
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: c.panel,
-      borderRadius: 14,
       padding: Spacing.sm,
-      borderWidth: 2,
-      borderColor: "transparent",
     },
     resultCardFocused: {
-      borderColor: c.focusBorder,
-      backgroundColor: c.focusFill,
+      backgroundColor: c.focusFillStrong,
     },
     resultLogoBox: {
       width: 44,

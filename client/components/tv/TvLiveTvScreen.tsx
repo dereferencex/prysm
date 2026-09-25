@@ -632,7 +632,6 @@ function createStyles(theme: typeof Colors.dark) {
     quickFiltersButton: {
       paddingHorizontal: 6,
       paddingVertical: 2,
-      borderRadius: BorderRadius.xs,
     },
     quickFiltersAction: {
       color: c.accent,
@@ -715,23 +714,15 @@ function createStyles(theme: typeof Colors.dark) {
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: c.panel,
-      borderRadius: 14,
       padding: 9,
       marginBottom: 7,
-      borderWidth: 2,
-      borderColor: "transparent",
     },
     channelCardSelected: {
       backgroundColor: c.selection,
     },
-    // High-visibility focus outline exactly matching reference screenshot:
+    // Focus = a solid fill that travels with the D-pad (square, borderless).
     channelCardFocused: {
-      borderColor: c.focusBorder,
-      backgroundColor: c.focusFill,
-      shadowColor: c.accent,
-      shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: 0.4,
-      shadowRadius: 8,
+      backgroundColor: c.focusFillStrong,
     },
     channelLogoContainer: {
       width: 44,

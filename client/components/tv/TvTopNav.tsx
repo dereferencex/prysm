@@ -168,17 +168,12 @@ function createStyles(theme: any) {
       alignItems: "center",
       paddingVertical: 7,
       paddingHorizontal: Spacing.md,
-      borderRadius: BorderRadius.full,
-      borderWidth: 1.5,
-      borderColor: "transparent",
     },
     activeTabButton: {
       backgroundColor: c.focusFillStrong,
-      borderColor: c.accentBorder,
     },
     focusedTabButton: {
-      borderColor: c.focusBorder,
-      backgroundColor: c.accentTintStrong,
+      backgroundColor: c.focusFillStrong,
     },
     tabIcon: {
       marginRight: 6,

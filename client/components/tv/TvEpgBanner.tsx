@@ -188,18 +188,10 @@ function createStyles(theme: typeof Colors.dark) {
     card: {
       flex: 1,
       backgroundColor: c.panel,
-      borderRadius: BorderRadius.lg,
-      borderWidth: 2,
-      borderColor: c.borderSubtle,
       padding: Spacing.lg,
     },
     cardFocused: {
-      borderColor: c.focusBorder,
-      backgroundColor: c.focusFill,
-      shadowColor: c.accent,
-      shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: 0.4,
-      shadowRadius: 8,
+      backgroundColor: c.focusFillStrong,
     },
     headerRow: {
       flexDirection: "row",

@@ -262,14 +262,10 @@ function createStyles(theme: typeof Colors.dark) {
     quickTile: {
       flex: 1,
       backgroundColor: c.panel,
-      borderRadius: 16,
       padding: Spacing.md,
-      borderWidth: 2,
-      borderColor: c.borderSubtle,
     },
     quickTileFocused: {
-      borderColor: c.focusBorder,
-      backgroundColor: c.focusFill,
+      backgroundColor: c.focusFillStrong,
     },
     tileIconContainer: {
       width: 44,
@@ -305,14 +301,10 @@ function createStyles(theme: typeof Colors.dark) {
     channelCard: {
       width: 170,
       backgroundColor: c.panel,
-      borderRadius: 14,
       padding: Spacing.sm,
-      borderWidth: 2,
-      borderColor: "transparent",
     },
     channelCardFocused: {
-      borderColor: c.focusBorder,
-      backgroundColor: c.focusFill,
+      backgroundColor: c.focusFillStrong,
     },
     cardLogoBox: {
       width: "100%",

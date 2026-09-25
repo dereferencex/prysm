@@ -211,12 +211,11 @@ export const ChannelCardHorizontal = React.memo(
 );
 
 const styles = StyleSheet.create({
-  card: {
-    borderRadius: BorderRadius.sm,
-    overflow: "hidden",
-    borderWidth: 2,
-    borderColor: "transparent",
-  },
+    card: {
+      borderRadius: 0,
+      borderWidth: 0,
+      borderColor: "transparent",
+    },
   logoContainer: {
     width: "100%",
     backgroundColor: "rgba(255,255,255,0.05)",
