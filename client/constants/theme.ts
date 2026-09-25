@@ -57,6 +57,17 @@ export const Colors = {
   },
 };
 
+/** Convert a #RRGGBB hex color to an rgba() string with the given opacity. */
+export function withAlpha(hex: string, alpha: number): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return hex;
+  const r = parseInt(m[1].slice(0, 2), 16);
+  const g = parseInt(m[1].slice(2, 4), 16);
+  const b = parseInt(m[1].slice(4, 6), 16);
+  const a = Math.max(0, Math.min(1, alpha));
+  return `rgba(${r}, ${g}, ${b}, ${a})`;
+}
+
 export const Spacing = {
   xs: 4,
   sm: 8,

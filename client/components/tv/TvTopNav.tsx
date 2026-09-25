@@ -1,14 +1,10 @@
-import React, { useState } from "react";
-import {
-  View,
-  StyleSheet,
-  Pressable,
-  Platform,
-  ViewStyle,
-} from "react-native";
+import React, { useState, useMemo } from "react";
+import { View, StyleSheet, Pressable, ViewStyle } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ThemedText } from "@/components/ThemedText";
 import { Spacing, BorderRadius } from "@/constants/theme";
+import { useTheme } from "@/hooks/useTheme";
+import { createTvPalette } from "./tvPalette";
 
 export type TvTabName =
   | "Home"
@@ -37,7 +33,12 @@ const NAV_ITEMS: NavItem[] = [
     icon: "information-circle-outline",
     iconActive: "information-circle",
   },
-  { id: "Search", label: "Search", icon: "search-outline", iconActive: "search" },
+  {
+    id: "Search",
+    label: "Search",
+    icon: "search-outline",
+    iconActive: "search",
+  },
   {
     id: "Settings",
     label: "Settings",
@@ -58,14 +59,15 @@ function NavTabButton({
   item,
   isActive,
   onPress,
-  theme,
 }: {
   item: NavItem;
   isActive: boolean;
   onPress: () => void;
-  theme: any;
 }) {
+  const { theme } = useTheme();
   const [isFocused, setIsFocused] = useState(false);
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const c = useMemo(() => createTvPalette(theme), [theme]);
 
   return (
     <Pressable
@@ -87,13 +89,7 @@ function NavTabButton({
       <Ionicons
         name={isActive ? item.iconActive : item.icon}
         size={16}
-        color={
-          isFocused
-            ? "#FFFFFF"
-            : isActive
-              ? "#FFFFFF"
-              : "rgba(255, 255, 255, 0.65)"
-        }
+        color={isFocused ? c.text : isActive ? c.text : c.text75}
         style={styles.tabIcon}
       />
       <ThemedText
@@ -101,11 +97,7 @@ function NavTabButton({
         style={[
           styles.tabLabel,
           {
-            color: isFocused
-              ? "#FFFFFF"
-              : isActive
-                ? "#FFFFFF"
-                : "rgba(255, 255, 255, 0.7)",
+            color: isFocused ? c.text : isActive ? c.text : c.text75,
             fontWeight: isActive || isFocused ? "700" : "500",
           },
         ]}
@@ -122,10 +114,13 @@ export function TvTopNav({
   brandTitle = "Prysm",
   theme,
 }: TvTopNavProps) {
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const c = useMemo(() => createTvPalette(theme), [theme]);
+
   return (
     <View style={styles.headerContainer}>
       <View style={styles.brandContainer}>
-        <ThemedText type="h3" style={styles.brandTitle}>
+        <ThemedText type="h3" style={[styles.brandTitle, { color: c.text }]}>
           {brandTitle}
         </ThemedText>
       </View>
@@ -137,7 +132,6 @@ export function TvTopNav({
             item={item}
             isActive={activeTab === item.id}
             onPress={() => onSelectTab(item.id)}
-            theme={theme}
           />
         ))}
       </View>
@@ -145,50 +139,52 @@ export function TvTopNav({
   );
 }
 
-const styles = StyleSheet.create({
-  headerContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.sm,
-    backgroundColor: "transparent",
-  },
-  brandContainer: {
-    marginRight: Spacing["2xl"],
-  },
-  brandTitle: {
-    color: "#FFFFFF",
-    fontSize: 22,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-  },
-  tabsContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.xs,
-  },
-  tabButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 7,
-    paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.full,
-    borderWidth: 1.5,
-    borderColor: "transparent",
-  },
-  activeTabButton: {
-    backgroundColor: "#1E3A5F",
-    borderColor: "rgba(59, 130, 246, 0.4)",
-  },
-focusedTabButton: {
-    borderColor: "#FFFFFF",
-    backgroundColor: "rgba(56, 189, 248, 0.25)",
-  },
-  tabIcon: {
-    marginRight: 6,
-  },
-  tabLabel: {
-    fontSize: 14,
-  },
-});
+function createStyles(theme: any) {
+  const c = createTvPalette(theme);
+  return StyleSheet.create({
+    headerContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: Spacing.xl,
+      paddingTop: Spacing.md,
+      paddingBottom: Spacing.sm,
+      backgroundColor: "transparent",
+    },
+    brandContainer: {
+      marginRight: Spacing["2xl"],
+    },
+    brandTitle: {
+      fontSize: 22,
+      fontWeight: "800",
+      letterSpacing: 0.5,
+    },
+    tabsContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.xs,
+    },
+    tabButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 7,
+      paddingHorizontal: Spacing.md,
+      borderRadius: BorderRadius.full,
+      borderWidth: 1.5,
+      borderColor: "transparent",
+    },
+    activeTabButton: {
+      backgroundColor: c.focusFillStrong,
+      borderColor: c.accentBorder,
+    },
+    focusedTabButton: {
+      borderColor: c.focusBorder,
+      backgroundColor: c.accentTintStrong,
+    },
+    tabIcon: {
+      marginRight: 6,
+    },
+    tabLabel: {
+      fontSize: 14,
+    },
+  });
+}

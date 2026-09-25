@@ -1,10 +1,12 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { View, StyleSheet, Pressable, ViewStyle } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 
 import { ThemedText } from "@/components/ThemedText";
-import { Spacing, BorderRadius } from "@/constants/theme";
+import { Colors, Spacing, BorderRadius } from "@/constants/theme";
+import { useTheme } from "@/hooks/useTheme";
+import { createTvPalette } from "./tvPalette";
 import { Channel } from "@/types/playlist";
 import { EpgProgram } from "@/types/epg";
 
@@ -26,7 +28,10 @@ interface TvEpgBannerProps {
 }
 
 export function TvEpgBanner({ channel, now, next, onPress }: TvEpgBannerProps) {
+  const { theme } = useTheme();
   const [isFocused, setIsFocused] = useState(false);
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const c = useMemo(() => createTvPalette(theme), [theme]);
 
   if (!channel) {
     return (
@@ -137,7 +142,7 @@ export function TvEpgBanner({ channel, now, next, onPress }: TvEpgBannerProps) {
             <Ionicons
               name="play-skip-forward"
               size={13}
-              color="#38BDF8"
+              color={c.accent}
               style={{ marginRight: 5 }}
             />
             <ThemedText type="caption" style={styles.nextLabel}>
@@ -160,7 +165,7 @@ export function TvEpgBanner({ channel, now, next, onPress }: TvEpgBannerProps) {
       )}
 
       <View style={styles.openHint}>
-        <Ionicons name="enter" size={15} color="#38BDF8" />
+        <Ionicons name="enter" size={15} color={c.accent} />
         <ThemedText type="small" style={styles.openHintText}>
           Press OK to open this channel
         </ThemedText>
@@ -169,157 +174,160 @@ export function TvEpgBanner({ channel, now, next, onPress }: TvEpgBannerProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  emptyContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emptyText: {
-    color: "rgba(255, 255, 255, 0.4)",
-  },
-  card: {
-    flex: 1,
-    backgroundColor: "rgba(7, 13, 23, 0.9)",
-    borderRadius: BorderRadius.lg,
-    borderWidth: 2,
-    borderColor: "rgba(255, 255, 255, 0.08)",
-    padding: Spacing.lg,
-  },
-cardFocused: {
-    borderColor: "#FFFFFF",
-    backgroundColor: "rgba(24, 44, 73, 1)",
-    shadowColor: "#38BDF8",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: Spacing.md,
-  },
-  logoBox: {
-    width: 54,
-    height: 54,
-    borderRadius: BorderRadius.md,
-    backgroundColor: "rgba(12, 22, 37, 0.9)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: Spacing.md,
-    padding: 4,
-  },
-  logo: {
-    width: "100%",
-    height: "100%",
-  },
-  headerText: {
-    flex: 1,
-  },
-  channelName: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "800",
-  },
-  channelGroup: {
-    color: "rgba(255, 255, 255, 0.5)",
-    marginTop: 2,
-  },
-  liveBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(220, 38, 38, 0.18)",
-    borderRadius: BorderRadius.full,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-  },
-  liveDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: "#EF4444",
-    marginRight: 6,
-  },
-  liveBadgeText: {
-    color: "#F87171",
-    fontWeight: "700",
-    letterSpacing: 1,
-  },
-  nowSection: {
-    flex: 1,
-  },
-  nowTitle: {
-    color: "#FFFFFF",
-    fontSize: 20,
-    fontWeight: "700",
-    lineHeight: 26,
-  },
-  timeProgressRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 6,
-  },
-  timeText: {
-    color: "rgba(255, 255, 255, 0.6)",
-    fontSize: 12,
-  },
-  progressPct: {
-    color: "#38BDF8",
-    fontWeight: "700",
-  },
-  progressTrack: {
-    height: 4,
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
-    borderRadius: 2,
-    overflow: "hidden",
-    marginTop: 4,
-  },
-  progressFill: {
-    height: "100%",
-    backgroundColor: "#38BDF8",
-    borderRadius: 2,
-  },
-  nowDescription: {
-    color: "rgba(255, 255, 255, 0.65)",
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 10,
-  },
-  nextSection: {
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255, 255, 255, 0.08)",
-    marginTop: Spacing.md,
-    paddingTop: Spacing.md,
-  },
-  nextHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  nextLabel: {
-    color: "#38BDF8",
-    fontWeight: "700",
-    letterSpacing: 1,
-    fontSize: 11,
-  },
-  nextTitle: {
-    color: "rgba(255, 255, 255, 0.85)",
-    fontWeight: "600",
-  },
-  noInfoText: {
-    color: "rgba(255, 255, 255, 0.35)",
-  },
-  openHint: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: Spacing.md,
-    paddingTop: Spacing.sm,
-  },
-  openHintText: {
-    color: "#38BDF8",
-    fontWeight: "600",
-    fontSize: 13,
-    marginLeft: 6,
-  },
-});
+function createStyles(theme: typeof Colors.dark) {
+  const c = createTvPalette(theme);
+  return StyleSheet.create({
+    emptyContainer: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    emptyText: {
+      color: c.text40,
+    },
+    card: {
+      flex: 1,
+      backgroundColor: c.panel,
+      borderRadius: BorderRadius.lg,
+      borderWidth: 2,
+      borderColor: c.borderSubtle,
+      padding: Spacing.lg,
+    },
+    cardFocused: {
+      borderColor: c.focusBorder,
+      backgroundColor: c.focusFill,
+      shadowColor: c.accent,
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.4,
+      shadowRadius: 8,
+    },
+    headerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: Spacing.md,
+    },
+    logoBox: {
+      width: 54,
+      height: 54,
+      borderRadius: BorderRadius.md,
+      backgroundColor: c.panelAlt,
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: Spacing.md,
+      padding: 4,
+    },
+    logo: {
+      width: "100%",
+      height: "100%",
+    },
+    headerText: {
+      flex: 1,
+    },
+    channelName: {
+      color: c.text,
+      fontSize: 16,
+      fontWeight: "800",
+    },
+    channelGroup: {
+      color: c.text50,
+      marginTop: 2,
+    },
+    liveBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: "rgba(220, 38, 38, 0.18)",
+      borderRadius: BorderRadius.full,
+      paddingVertical: 4,
+      paddingHorizontal: 10,
+    },
+    liveDot: {
+      width: 7,
+      height: 7,
+      borderRadius: 4,
+      backgroundColor: "#EF4444",
+      marginRight: 6,
+    },
+    liveBadgeText: {
+      color: "#F87171",
+      fontWeight: "700",
+      letterSpacing: 1,
+    },
+    nowSection: {
+      flex: 1,
+    },
+    nowTitle: {
+      color: c.text,
+      fontSize: 20,
+      fontWeight: "700",
+      lineHeight: 26,
+    },
+    timeProgressRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginTop: 6,
+    },
+    timeText: {
+      color: c.text60,
+      fontSize: 12,
+    },
+    progressPct: {
+      color: c.accent,
+      fontWeight: "700",
+    },
+    progressTrack: {
+      height: 4,
+      backgroundColor: c.border,
+      borderRadius: 2,
+      overflow: "hidden",
+      marginTop: 4,
+    },
+    progressFill: {
+      height: "100%",
+      backgroundColor: c.accent,
+      borderRadius: 2,
+    },
+    nowDescription: {
+      color: c.text60,
+      fontSize: 12,
+      lineHeight: 17,
+      marginTop: 10,
+    },
+    nextSection: {
+      borderTopWidth: 1,
+      borderTopColor: c.borderSubtle,
+      marginTop: Spacing.md,
+      paddingTop: Spacing.md,
+    },
+    nextHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 4,
+    },
+    nextLabel: {
+      color: c.accent,
+      fontWeight: "700",
+      letterSpacing: 1,
+      fontSize: 11,
+    },
+    nextTitle: {
+      color: c.text75,
+      fontWeight: "600",
+    },
+    noInfoText: {
+      color: c.text35,
+    },
+    openHint: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginTop: Spacing.md,
+      paddingTop: Spacing.sm,
+    },
+    openHintText: {
+      color: c.accent,
+      fontWeight: "600",
+      fontSize: 13,
+      marginLeft: 6,
+    },
+  });
+}

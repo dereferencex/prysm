@@ -4,7 +4,6 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  Platform,
   ViewStyle,
   type LayoutChangeEvent,
 } from "react-native";
@@ -17,7 +16,8 @@ import { ThemedText } from "@/components/ThemedText";
 import { usePlaylist } from "@/context/PlaylistContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useFocusScroll } from "@/hooks/useFocusScroll";
-import { Spacing, BorderRadius } from "@/constants/theme";
+import { Colors, Spacing } from "@/constants/theme";
+import { createTvPalette } from "./tvPalette";
 import { Channel } from "@/types/playlist";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { TvTabName } from "./TvTopNav";
@@ -34,6 +34,7 @@ export function TvHomeScreen({ onNavigateTab }: TvHomeScreenProps) {
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
   const { playlist, favorites, recentChannels } = usePlaylist();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   const recentScroll = useFocusScroll<string>({ axis: "horizontal" });
   const favoriteScroll = useFocusScroll<string>({ axis: "horizontal" });
@@ -123,7 +124,8 @@ export function TvHomeScreen({ onNavigateTab }: TvHomeScreenProps) {
         </ThemedText>
         {favoriteChannelList.length === 0 ? (
           <ThemedText type="body" style={styles.emptyText}>
-            No favorite channels yet. Long-press any channel in Live TV to add it.
+            No favorite channels yet. Long-press any channel in Live TV to add
+            it.
           </ThemedText>
         ) : (
           <ScrollView
@@ -162,7 +164,10 @@ function QuickTile({
   subtitle: string;
   onPress: () => void;
 }) {
+  const { theme } = useTheme();
   const [isFocused, setIsFocused] = React.useState(false);
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const c = useMemo(() => createTvPalette(theme), [theme]);
 
   return (
     <Pressable
@@ -171,14 +176,11 @@ function QuickTile({
       onBlur={() => setIsFocused(false)}
       focusable
       style={
-        [
-          styles.quickTile,
-          isFocused && styles.quickTileFocused,
-        ] as ViewStyle[]
+        [styles.quickTile, isFocused && styles.quickTileFocused] as ViewStyle[]
       }
     >
       <View style={styles.tileIconContainer}>
-        <Ionicons name={icon} size={24} color="#38BDF8" />
+        <Ionicons name={icon} size={24} color={c.accent} />
       </View>
       <ThemedText type="body" style={styles.tileTitle}>
         {title}
@@ -201,7 +203,9 @@ function ChannelCardTv({
   onLayoutItem: (e: LayoutChangeEvent) => void;
   onFocused: () => void;
 }) {
+  const { theme } = useTheme();
   const [isFocused, setIsFocused] = React.useState(false);
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   return (
     <Pressable
@@ -222,126 +226,119 @@ function ChannelCardTv({
     >
       <View style={styles.cardLogoBox}>
         <Image
-          source={
-            channel.logo ? { uri: channel.logo } : placeholderImage
-          }
+          source={channel.logo ? { uri: channel.logo } : placeholderImage}
           style={styles.cardLogo}
           contentFit="contain"
           placeholder={placeholderImage}
         />
       </View>
-      <ThemedText
-        type="small"
-        numberOfLines={1}
-        style={styles.cardChannelName}
-      >
+      <ThemedText type="small" numberOfLines={1} style={styles.cardChannelName}>
         {channel.name}
       </ThemedText>
-      <ThemedText
-        type="caption"
-        numberOfLines={1}
-        style={styles.cardCategory}
-      >
+      <ThemedText type="caption" numberOfLines={1} style={styles.cardCategory}>
         {channel.group || "Live TV"}
       </ThemedText>
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "transparent",
-  },
-  contentContainer: {
-    paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing["3xl"],
-  },
-  quickTilesRow: {
-    flexDirection: "row",
-    gap: Spacing.md,
-    marginBottom: Spacing.xl,
-  },
-  quickTile: {
-    flex: 1,
-    backgroundColor: "rgba(12, 22, 37, 0.85)",
-    borderRadius: 16,
-    padding: Spacing.md,
-    borderWidth: 2,
-    borderColor: "rgba(255, 255, 255, 0.08)",
-  },
-  quickTileFocused: {
-    borderColor: "#FFFFFF",
-    backgroundColor: "rgba(24, 44, 73, 1)",
-  },
-  tileIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: "rgba(56, 189, 248, 0.15)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: Spacing.sm,
-  },
-  tileTitle: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-    fontSize: 16,
-  },
-  tileSubtitle: {
-    color: "rgba(255, 255, 255, 0.5)",
-    marginTop: 2,
-  },
-  sectionContainer: {
-    marginBottom: Spacing.xl,
-  },
-  sectionTitle: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: Spacing.md,
-  },
-  channelRow: {
-    flexDirection: "row",
-    gap: Spacing.md,
-  },
-  channelCard: {
-    width: 170,
-    backgroundColor: "rgba(12, 22, 37, 0.85)",
-    borderRadius: 14,
-    padding: Spacing.sm,
-    borderWidth: 2,
-    borderColor: "transparent",
-  },
-  channelCardFocused: {
-    borderColor: "#FFFFFF",
-    backgroundColor: "rgba(24, 44, 73, 1)",
-  },
-  cardLogoBox: {
-    width: "100%",
-    height: 90,
-    backgroundColor: "rgba(7, 14, 25, 0.8)",
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: Spacing.xs,
-    padding: 6,
-  },
-  cardLogo: {
-    width: "100%",
-    height: "100%",
-  },
-  cardChannelName: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-  },
-  cardCategory: {
-    color: "rgba(255, 255, 255, 0.5)",
-    marginTop: 2,
-  },
-  emptyText: {
-    color: "rgba(255, 255, 255, 0.45)",
-    paddingVertical: Spacing.sm,
-  },
-});
+function createStyles(theme: typeof Colors.dark) {
+  const c = createTvPalette(theme);
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: "transparent",
+    },
+    contentContainer: {
+      paddingHorizontal: Spacing.xl,
+      paddingTop: Spacing.md,
+      paddingBottom: Spacing["3xl"],
+    },
+    quickTilesRow: {
+      flexDirection: "row",
+      gap: Spacing.md,
+      marginBottom: Spacing.xl,
+    },
+    quickTile: {
+      flex: 1,
+      backgroundColor: c.panel,
+      borderRadius: 16,
+      padding: Spacing.md,
+      borderWidth: 2,
+      borderColor: c.borderSubtle,
+    },
+    quickTileFocused: {
+      borderColor: c.focusBorder,
+      backgroundColor: c.focusFill,
+    },
+    tileIconContainer: {
+      width: 44,
+      height: 44,
+      borderRadius: 12,
+      backgroundColor: c.accentTint,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: Spacing.sm,
+    },
+    tileTitle: {
+      color: c.text,
+      fontWeight: "700",
+      fontSize: 16,
+    },
+    tileSubtitle: {
+      color: c.text50,
+      marginTop: 2,
+    },
+    sectionContainer: {
+      marginBottom: Spacing.xl,
+    },
+    sectionTitle: {
+      color: c.text,
+      fontSize: 18,
+      fontWeight: "700",
+      marginBottom: Spacing.md,
+    },
+    channelRow: {
+      flexDirection: "row",
+      gap: Spacing.md,
+    },
+    channelCard: {
+      width: 170,
+      backgroundColor: c.panel,
+      borderRadius: 14,
+      padding: Spacing.sm,
+      borderWidth: 2,
+      borderColor: "transparent",
+    },
+    channelCardFocused: {
+      borderColor: c.focusBorder,
+      backgroundColor: c.focusFill,
+    },
+    cardLogoBox: {
+      width: "100%",
+      height: 90,
+      backgroundColor: c.inset,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: Spacing.xs,
+      padding: 6,
+    },
+    cardLogo: {
+      width: "100%",
+      height: "100%",
+    },
+    cardChannelName: {
+      color: c.text,
+      fontWeight: "700",
+    },
+    cardCategory: {
+      color: c.text50,
+      marginTop: 2,
+    },
+    emptyText: {
+      color: c.text45,
+      paddingVertical: Spacing.sm,
+    },
+  });
+}

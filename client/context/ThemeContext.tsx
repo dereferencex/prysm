@@ -85,11 +85,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    setPalette(
-      dynamicColors && themeMode !== "pitchblack"
-        ? getDynamicPalette(isDark)
-        : null,
-    );
+    setPalette(dynamicColors ? getDynamicPalette(isDark) : null);
   }, [dynamicColors, isDark, themeMode, refreshKey]);
 
   const setThemeMode = async (mode: ThemeMode) => {
@@ -121,8 +117,22 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       : isDark
         ? Colors.dark
         : Colors.light;
-  const theme =
-    dynamicColors && palette ? { ...baseTheme, ...palette } : baseTheme;
+  // Pitch black keeps its pure-black surfaces but, when dynamic colors
+  // (monet) are enabled, adopts the wallpaper-derived accent roles so the
+  // app "follows that color" on top of pitch black.
+  const dynamics =
+    dynamicColors && palette
+      ? themeMode === "pitchblack"
+        ? {
+            primary: palette.primary,
+            primaryLight: palette.primaryLight,
+            buttonText: palette.buttonText,
+            tabIconSelected: palette.tabIconSelected,
+            link: palette.link,
+          }
+        : palette
+      : null;
+  const theme = dynamics ? { ...baseTheme, ...dynamics } : baseTheme;
 
   if (!isLoaded) {
     return null;

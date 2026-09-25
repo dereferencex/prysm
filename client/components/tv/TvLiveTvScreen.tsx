@@ -1,9 +1,4 @@
-import React, {
-  useState,
-  useMemo,
-  useCallback,
-  useEffect,
-} from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import {
   View,
   StyleSheet,
@@ -25,7 +20,8 @@ import { usePlaylist } from "@/context/PlaylistContext";
 import { useEpg } from "@/context/EpgContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useFocusScroll } from "@/hooks/useFocusScroll";
-import { Spacing, BorderRadius } from "@/constants/theme";
+import { Colors, Spacing, BorderRadius } from "@/constants/theme";
+import { createTvPalette } from "./tvPalette";
 import { Channel } from "@/types/playlist";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { TvEpgBanner } from "./TvEpgBanner";
@@ -54,6 +50,8 @@ export function TvLiveTvScreen({
     settings,
   } = usePlaylist();
   const epg = useEpg();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const c = useMemo(() => createTvPalette(theme), [theme]);
 
   // Search queries
   const [categorySearch, setCategorySearch] = useState("");
@@ -69,14 +67,10 @@ export function TvLiveTvScreen({
     let cats = [...playlist.categories];
 
     if (categoryTypeFilter === "movies") {
-      cats = cats.filter((c) =>
-        /movie|cinema|film|vod|vod/i.test(c),
-      );
+      cats = cats.filter((c) => /movie|cinema|film|vod|vod/i.test(c));
       if (cats.length === 0) cats = [...playlist.categories];
     } else if (categoryTypeFilter === "series") {
-      cats = cats.filter((c) =>
-        /series|serie|show|season|tv show/i.test(c),
-      );
+      cats = cats.filter((c) => /series|serie|show|season|tv show/i.test(c));
       if (cats.length === 0) cats = [...playlist.categories];
     }
 
@@ -87,16 +81,19 @@ export function TvLiveTvScreen({
   const filteredCategories = useMemo(() => {
     let list = allCategories;
     if (showOnlyFavCategories) {
-      list = list.filter(
-        (c) => c === "All" || favoriteCategories.includes(c),
-      );
+      list = list.filter((c) => c === "All" || favoriteCategories.includes(c));
     }
     if (categorySearch.trim()) {
       const q = categorySearch.toLowerCase().trim();
       list = list.filter((c) => c.toLowerCase().includes(q));
     }
     return list;
-  }, [allCategories, showOnlyFavCategories, categorySearch, favoriteCategories]);
+  }, [
+    allCategories,
+    showOnlyFavCategories,
+    categorySearch,
+    favoriteCategories,
+  ]);
 
   // Channel counts per category
   const categoryCounts = useMemo(() => {
@@ -112,7 +109,10 @@ export function TvLiveTvScreen({
 
   // Ensure valid selected category
   useEffect(() => {
-    if (selectedCategory !== "All" && !allCategories.includes(selectedCategory)) {
+    if (
+      selectedCategory !== "All" &&
+      !allCategories.includes(selectedCategory)
+    ) {
       setSelectedCategory("All");
     }
   }, [allCategories, selectedCategory]);
@@ -233,12 +233,12 @@ export function TvLiveTvScreen({
             value={categorySearch}
             onChangeText={setCategorySearch}
             placeholder="Search categories..."
-            placeholderTextColor="rgba(255, 255, 255, 0.4)"
+            placeholderTextColor={c.text40}
           />
           <Ionicons
             name="search"
             size={18}
-            color="rgba(255, 255, 255, 0.4)"
+            color={c.text40}
             style={styles.searchIcon}
           />
         </View>
@@ -320,12 +320,12 @@ export function TvLiveTvScreen({
             value={channelSearch}
             onChangeText={setChannelSearch}
             placeholder="Search channels..."
-            placeholderTextColor="rgba(255, 255, 255, 0.4)"
+            placeholderTextColor={c.text40}
           />
           <Ionicons
             name="search"
             size={18}
-            color="rgba(255, 255, 255, 0.4)"
+            color={c.text40}
             style={styles.searchIcon}
           />
         </View>
@@ -341,7 +341,7 @@ export function TvLiveTvScreen({
         >
           {filteredChannels.length === 0 ? (
             <View style={styles.emptyChannelsContainer}>
-              <ThemedText type="body" style={{ color: "rgba(255, 255, 255, 0.5)" }}>
+              <ThemedText type="body" style={{ color: c.text50 }}>
                 No channels found
               </ThemedText>
             </View>
@@ -396,7 +396,7 @@ export function TvLiveTvScreen({
           />
         ) : (
           <View style={styles.noPreviewContainer}>
-            <ThemedText type="body" style={{ color: "rgba(255, 255, 255, 0.4)" }}>
+            <ThemedText type="body" style={{ color: c.text40 }}>
               Select a channel to view its program guide
             </ThemedText>
           </View>
@@ -427,7 +427,10 @@ function CategoryRow({
   onLayoutItem: (e: LayoutChangeEvent) => void;
   onFocused: () => void;
 }) {
+  const { theme } = useTheme();
   const [isFocused, setIsFocused] = useState(false);
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const c = useMemo(() => createTvPalette(theme), [theme]);
 
   return (
     <Pressable
@@ -453,7 +456,7 @@ function CategoryRow({
           <Ionicons
             name="star"
             size={13}
-            color="#38BDF8"
+            color={c.accent}
             style={{ marginRight: 6 }}
           />
         ) : null}
@@ -463,7 +466,7 @@ function CategoryRow({
           style={[
             styles.categoryRowText,
             isSelected && styles.categoryRowTextSelected,
-            isFocused && { color: "#FFFFFF" },
+            isFocused && { color: c.text },
           ]}
         >
           {category}
@@ -499,7 +502,9 @@ function ChannelListItem({
   onPress: () => void;
   onLongPress: () => void;
 }) {
+  const { theme } = useTheme();
   const [internalFocused, setInternalFocused] = useState(false);
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const activeFocus = isFocused || internalFocused;
 
   return (
@@ -525,9 +530,7 @@ function ChannelListItem({
       {/* Channel Logo */}
       <View style={styles.channelLogoContainer}>
         <Image
-          source={
-            channel.logo ? { uri: channel.logo } : placeholderImage
-          }
+          source={channel.logo ? { uri: channel.logo } : placeholderImage}
           style={styles.channelLogo}
           contentFit="contain"
           placeholder={placeholderImage}
@@ -544,7 +547,7 @@ function ChannelListItem({
             activeFocus && styles.channelNameTextFocused,
           ]}
         >
-          {String(index).padStart(2, "0")}  {channel.name}
+          {String(index).padStart(2, "0")} {channel.name}
         </ThemedText>
         <ThemedText
           type="small"
@@ -560,232 +563,235 @@ function ChannelListItem({
 
 // ─── Styles ───
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    flexDirection: "row",
-    paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.xs,
-    paddingBottom: Spacing.lg,
-    gap: Spacing.lg,
-    backgroundColor: "transparent",
-  },
+function createStyles(theme: typeof Colors.dark) {
+  const c = createTvPalette(theme);
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      flexDirection: "row",
+      paddingHorizontal: Spacing.xl,
+      paddingTop: Spacing.xs,
+      paddingBottom: Spacing.lg,
+      gap: Spacing.lg,
+      backgroundColor: "transparent",
+    },
 
-  // ─── Column 1: Categories ───
-  categoriesColumn: {
-    width: "27%",
-    backgroundColor: "rgba(12, 22, 37, 0.92)",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.07)",
-    padding: Spacing.md,
-  },
-  columnHeader: {
-    marginBottom: Spacing.sm,
-  },
-  columnTitle: {
-    color: "#FFFFFF",
-    fontSize: 19,
-    fontWeight: "700",
-  },
-  searchBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(7, 13, 23, 0.9)",
-    borderRadius: BorderRadius.sm,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.12)",
-    paddingHorizontal: Spacing.sm,
-    height: 38,
-    marginBottom: Spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
-    color: "#FFFFFF",
-    fontSize: 13,
-    paddingVertical: 0,
-  },
-  searchIcon: {
-    marginLeft: Spacing.xs,
-  },
-  quickFiltersContainer: {
-    marginBottom: Spacing.sm,
-    paddingBottom: Spacing.xs,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255, 255, 255, 0.06)",
-  },
-  quickFiltersRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  quickFiltersLabel: {
-    color: "#FFFFFF",
-    fontWeight: "600",
-    fontSize: 13,
-  },
-  quickFiltersButton: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.xs,
-  },
-  quickFiltersAction: {
-    color: "#38BDF8",
-    fontWeight: "600",
-  },
-  quickFiltersSubtext: {
-    color: "rgba(255, 255, 255, 0.4)",
-    fontSize: 11,
-    marginTop: 2,
-  },
-  categoryScrollView: {
-    flex: 1,
-  },
-  categoryRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 9,
-    paddingHorizontal: Spacing.sm,
-    borderRadius: BorderRadius.sm,
-    marginVertical: 1,
-    borderWidth: 1.5,
-    borderColor: "transparent",
-  },
-  categoryRowSelected: {
-    backgroundColor: "rgba(30, 58, 95, 0.65)",
-  },
-  categoryRowFocused: {
-    borderColor: "#FFFFFF",
-    backgroundColor: "rgba(56, 189, 248, 0.2)",
-  },
-  categoryRowLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  categoryRowText: {
-    color: "rgba(255, 255, 255, 0.75)",
-    fontSize: 13.5,
-    fontWeight: "500",
-  },
-  categoryRowTextSelected: {
-    color: "#38BDF8",
-    fontWeight: "700",
-  },
-  categoryRowCount: {
-    color: "rgba(255, 255, 255, 0.4)",
-    fontSize: 12,
-    marginLeft: Spacing.xs,
-  },
+    // ─── Column 1: Categories ───
+    categoriesColumn: {
+      width: "27%",
+      backgroundColor: c.panel,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+      padding: Spacing.md,
+    },
+    columnHeader: {
+      marginBottom: Spacing.sm,
+    },
+    columnTitle: {
+      color: c.text,
+      fontSize: 19,
+      fontWeight: "700",
+    },
+    searchBox: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: c.inset,
+      borderRadius: BorderRadius.sm,
+      borderWidth: 1,
+      borderColor: c.border,
+      paddingHorizontal: Spacing.sm,
+      height: 38,
+      marginBottom: Spacing.sm,
+    },
+    searchInput: {
+      flex: 1,
+      color: c.text,
+      fontSize: 13,
+      paddingVertical: 0,
+    },
+    searchIcon: {
+      marginLeft: Spacing.xs,
+    },
+    quickFiltersContainer: {
+      marginBottom: Spacing.sm,
+      paddingBottom: Spacing.xs,
+      borderBottomWidth: 1,
+      borderBottomColor: c.borderFaint,
+    },
+    quickFiltersRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    quickFiltersLabel: {
+      color: c.text,
+      fontWeight: "600",
+      fontSize: 13,
+    },
+    quickFiltersButton: {
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: BorderRadius.xs,
+    },
+    quickFiltersAction: {
+      color: c.accent,
+      fontWeight: "600",
+    },
+    quickFiltersSubtext: {
+      color: c.text40,
+      fontSize: 11,
+      marginTop: 2,
+    },
+    categoryScrollView: {
+      flex: 1,
+    },
+    categoryRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: 9,
+      paddingHorizontal: Spacing.sm,
+      borderRadius: BorderRadius.sm,
+      marginVertical: 1,
+      borderWidth: 1.5,
+      borderColor: "transparent",
+    },
+    categoryRowSelected: {
+      backgroundColor: c.selection,
+    },
+    categoryRowFocused: {
+      borderColor: c.focusBorder,
+      backgroundColor: c.focusFill,
+    },
+    categoryRowLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      flex: 1,
+    },
+    categoryRowText: {
+      color: c.text75,
+      fontSize: 13.5,
+      fontWeight: "500",
+    },
+    categoryRowTextSelected: {
+      color: c.accent,
+      fontWeight: "700",
+    },
+    categoryRowCount: {
+      color: c.text40,
+      fontSize: 12,
+      marginLeft: Spacing.xs,
+    },
 
-  // ─── Column 2: Channels ───
-  channelsColumn: {
-    width: "41%",
-    paddingRight: Spacing.xs,
-  },
-  channelHeader: {
-    marginBottom: Spacing.xs,
-  },
-  categoryHeading: {
-    color: "#FFFFFF",
-    fontSize: 20,
-    fontWeight: "800",
-    letterSpacing: 0.2,
-  },
-  providerSubtext: {
-    color: "rgba(255, 255, 255, 0.5)",
-    fontSize: 12,
-    marginTop: 2,
-    marginBottom: Spacing.xs,
-  },
-  channelScrollView: {
-    flex: 1,
-  },
-  emptyChannelsContainer: {
-    padding: Spacing.xl,
-    alignItems: "center",
-  },
-  channelCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(12, 22, 37, 0.8)",
-    borderRadius: 14,
-    padding: 9,
-    marginBottom: 7,
-    borderWidth: 2,
-    borderColor: "transparent",
-  },
-  channelCardSelected: {
-    backgroundColor: "rgba(18, 33, 55, 0.95)",
-  },
-  // High-visibility focus outline exactly matching reference screenshot:
-  channelCardFocused: {
-    borderColor: "#FFFFFF",
-    backgroundColor: "rgba(24, 44, 73, 1)",
-    shadowColor: "#38BDF8",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-  },
-  channelLogoContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: "rgba(7, 14, 25, 0.85)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: Spacing.md,
-    padding: 3,
-  },
-  channelLogo: {
-    width: "100%",
-    height: "100%",
-  },
-  channelInfoContainer: {
-    flex: 1,
-  },
-  channelNameText: {
-    color: "#FFFFFF",
-    fontSize: 14.5,
-    fontWeight: "700",
-  },
-  channelNameTextFocused: {
-    color: "#FFFFFF",
-  },
-  channelSubtitle: {
-    color: "rgba(255, 255, 255, 0.5)",
-    fontSize: 12,
-    marginTop: 3,
-  },
+    // ─── Column 2: Channels ───
+    channelsColumn: {
+      width: "41%",
+      paddingRight: Spacing.xs,
+    },
+    channelHeader: {
+      marginBottom: Spacing.xs,
+    },
+    categoryHeading: {
+      color: c.text,
+      fontSize: 20,
+      fontWeight: "800",
+      letterSpacing: 0.2,
+    },
+    providerSubtext: {
+      color: c.text50,
+      fontSize: 12,
+      marginTop: 2,
+      marginBottom: Spacing.xs,
+    },
+    channelScrollView: {
+      flex: 1,
+    },
+    emptyChannelsContainer: {
+      padding: Spacing.xl,
+      alignItems: "center",
+    },
+    channelCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: c.panel,
+      borderRadius: 14,
+      padding: 9,
+      marginBottom: 7,
+      borderWidth: 2,
+      borderColor: "transparent",
+    },
+    channelCardSelected: {
+      backgroundColor: c.selection,
+    },
+    // High-visibility focus outline exactly matching reference screenshot:
+    channelCardFocused: {
+      borderColor: c.focusBorder,
+      backgroundColor: c.focusFill,
+      shadowColor: c.accent,
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.4,
+      shadowRadius: 8,
+    },
+    channelLogoContainer: {
+      width: 44,
+      height: 44,
+      borderRadius: 10,
+      backgroundColor: c.inset,
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: Spacing.md,
+      padding: 3,
+    },
+    channelLogo: {
+      width: "100%",
+      height: "100%",
+    },
+    channelInfoContainer: {
+      flex: 1,
+    },
+    channelNameText: {
+      color: c.text,
+      fontSize: 14.5,
+      fontWeight: "700",
+    },
+    channelNameTextFocused: {
+      color: c.text,
+    },
+    channelSubtitle: {
+      color: c.text50,
+      fontSize: 12,
+      marginTop: 3,
+    },
 
-  // ─── Column 3: EPG Program Banner ───
-  previewColumn: {
-    flex: 1,
-    backgroundColor: "rgba(12, 22, 37, 0.92)",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.07)",
-    padding: Spacing.md,
-  },
-  previewHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: Spacing.sm,
-  },
-  previewTitle: {
-    color: "#38BDF8",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  previewEpgStatus: {
-    color: "rgba(255, 255, 255, 0.4)",
-    fontSize: 11,
-  },
-  noPreviewContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});
+    // ─── Column 3: EPG Program Banner ───
+    previewColumn: {
+      flex: 1,
+      backgroundColor: c.panel,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: c.borderSubtle,
+      padding: Spacing.md,
+    },
+    previewHeaderRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: Spacing.sm,
+    },
+    previewTitle: {
+      color: c.accent,
+      fontSize: 15,
+      fontWeight: "700",
+    },
+    previewEpgStatus: {
+      color: c.text40,
+      fontSize: 11,
+    },
+    noPreviewContainer: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+  });
+}

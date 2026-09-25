@@ -18,7 +18,8 @@ import { ThemedText } from "@/components/ThemedText";
 import { usePlaylist } from "@/context/PlaylistContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useFocusScroll } from "@/hooks/useFocusScroll";
-import { Spacing, BorderRadius } from "@/constants/theme";
+import { Colors, Spacing } from "@/constants/theme";
+import { createTvPalette } from "./tvPalette";
 import { Channel } from "@/types/playlist";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -32,6 +33,8 @@ export function TvSearchScreen() {
   const { playlist } = usePlaylist();
   const [searchQuery, setSearchQuery] = useState("");
   const resultsScroll = useFocusScroll<string>({ axis: "vertical" });
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const c = useMemo(() => createTvPalette(theme), [theme]);
 
   const results = useMemo(() => {
     if (!playlist || !searchQuery.trim()) return [];
@@ -50,7 +53,7 @@ export function TvSearchScreen() {
         <Ionicons
           name="search"
           size={22}
-          color="#38BDF8"
+          color={c.accent}
           style={styles.searchIcon}
         />
         <TextInput
@@ -58,7 +61,7 @@ export function TvSearchScreen() {
           value={searchQuery}
           onChangeText={setSearchQuery}
           placeholder="Search all channels, movies, sports, or genres..."
-          placeholderTextColor="rgba(255, 255, 255, 0.4)"
+          placeholderTextColor={c.text40}
           autoFocus={Platform.isTV}
         />
         {searchQuery ? (
@@ -67,7 +70,7 @@ export function TvSearchScreen() {
             focusable
             style={styles.clearButton}
           >
-            <Ionicons name="close-circle" size={20} color="rgba(255,255,255,0.6)" />
+            <Ionicons name="close-circle" size={20} color={c.text60} />
           </Pressable>
         ) : null}
       </View>
@@ -91,7 +94,7 @@ export function TvSearchScreen() {
         ) : results.length === 0 ? (
           <View style={styles.emptyContainer}>
             <ThemedText type="body" style={styles.emptyText}>
-              No channels found matching "{searchQuery}"
+              {`No channels found matching "${searchQuery}"`}
             </ThemedText>
           </View>
         ) : (
@@ -123,7 +126,9 @@ function ChannelResultCard({
   onLayoutItem: (e: LayoutChangeEvent) => void;
   onFocused: () => void;
 }) {
+  const { theme } = useTheme();
   const [isFocused, setIsFocused] = React.useState(false);
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   return (
     <Pressable
@@ -144,9 +149,7 @@ function ChannelResultCard({
     >
       <View style={styles.resultLogoBox}>
         <Image
-          source={
-            channel.logo ? { uri: channel.logo } : placeholderImage
-          }
+          source={channel.logo ? { uri: channel.logo } : placeholderImage}
           style={styles.resultLogo}
           contentFit="contain"
         />
@@ -163,91 +166,94 @@ function ChannelResultCard({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.xs,
-  },
-  searchBarContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(12, 22, 37, 0.9)",
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: "rgba(255, 255, 255, 0.12)",
-    paddingHorizontal: Spacing.md,
-    height: 52,
-    marginBottom: Spacing.lg,
-  },
-  searchIcon: {
-    marginRight: Spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "500",
-  },
-  clearButton: {
-    padding: Spacing.xs,
-  },
-  resultsScroll: {
-    flex: 1,
-  },
-  resultsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.md,
-    paddingBottom: Spacing["3xl"],
-  },
-  resultCard: {
-    width: "23%",
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(12, 22, 37, 0.85)",
-    borderRadius: 14,
-    padding: Spacing.sm,
-    borderWidth: 2,
-    borderColor: "transparent",
-  },
-  resultCardFocused: {
-    borderColor: "#FFFFFF",
-    backgroundColor: "rgba(24, 44, 73, 1)",
-  },
-  resultLogoBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: "rgba(7, 14, 25, 0.8)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: Spacing.sm,
-    padding: 3,
-  },
-  resultLogo: {
-    width: "100%",
-    height: "100%",
-  },
-  resultInfo: {
-    flex: 1,
-  },
-  resultName: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-  },
-  resultGroup: {
-    color: "rgba(255, 255, 255, 0.5)",
-    marginTop: 2,
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: Spacing["3xl"],
-    width: "100%",
-  },
-  emptyText: {
-    color: "rgba(255, 255, 255, 0.5)",
-  },
-});
+function createStyles(theme: typeof Colors.dark) {
+  const c = createTvPalette(theme);
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      paddingHorizontal: Spacing.xl,
+      paddingTop: Spacing.xs,
+    },
+    searchBarContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: c.panel,
+      borderRadius: 16,
+      borderWidth: 1.5,
+      borderColor: c.border,
+      paddingHorizontal: Spacing.md,
+      height: 52,
+      marginBottom: Spacing.lg,
+    },
+    searchIcon: {
+      marginRight: Spacing.sm,
+    },
+    searchInput: {
+      flex: 1,
+      color: c.text,
+      fontSize: 16,
+      fontWeight: "500",
+    },
+    clearButton: {
+      padding: Spacing.xs,
+    },
+    resultsScroll: {
+      flex: 1,
+    },
+    resultsGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: Spacing.md,
+      paddingBottom: Spacing["3xl"],
+    },
+    resultCard: {
+      width: "23%",
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: c.panel,
+      borderRadius: 14,
+      padding: Spacing.sm,
+      borderWidth: 2,
+      borderColor: "transparent",
+    },
+    resultCardFocused: {
+      borderColor: c.focusBorder,
+      backgroundColor: c.focusFill,
+    },
+    resultLogoBox: {
+      width: 44,
+      height: 44,
+      borderRadius: 10,
+      backgroundColor: c.inset,
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: Spacing.sm,
+      padding: 3,
+    },
+    resultLogo: {
+      width: "100%",
+      height: "100%",
+    },
+    resultInfo: {
+      flex: 1,
+    },
+    resultName: {
+      color: c.text,
+      fontWeight: "700",
+    },
+    resultGroup: {
+      color: c.text50,
+      marginTop: 2,
+    },
+    emptyContainer: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: Spacing["3xl"],
+      width: "100%",
+    },
+    emptyText: {
+      color: c.text50,
+    },
+  });
+}

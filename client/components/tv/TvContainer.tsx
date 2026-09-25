@@ -72,11 +72,13 @@ export function TvContainer() {
   };
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: theme.backgroundRoot }]}>
       <StatusBar hidden={Platform.isTV} barStyle="light-content" />
 
       {/* Top Navigation Bar with Prysm brand title */}
-      <View style={[styles.navWrapper, { paddingTop: Math.max(insets.top, 8) }]}>
+      <View
+        style={[styles.navWrapper, { paddingTop: Math.max(insets.top, 8) }]}
+      >
         <TvTopNav
           activeTab={activeTab}
           onSelectTab={handleSelectTab}
@@ -109,7 +111,6 @@ export function TvContainer() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: "#070D18", // Deep midnight dark blue matching screenshot
   },
   navWrapper: {
     backgroundColor: "transparent",
