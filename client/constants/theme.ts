@@ -96,45 +96,69 @@ export const BorderRadius = {
 export const Typography = {
   h1: {
     fontSize: 28,
-    lineHeight: 36,
+    lineHeight: 34,
     fontWeight: "700" as const,
+    fontFamily: "Rubik_700Bold",
+    letterSpacing: -0.5,
   },
   h2: {
     fontSize: 24,
-    lineHeight: 32,
+    lineHeight: 30,
     fontWeight: "700" as const,
+    fontFamily: "Rubik_700Bold",
+    letterSpacing: -0.3,
   },
   h3: {
     fontSize: 20,
-    lineHeight: 28,
+    lineHeight: 26,
     fontWeight: "600" as const,
+    fontFamily: "Rubik_600SemiBold",
+    letterSpacing: -0.2,
   },
   h4: {
     fontSize: 18,
     lineHeight: 24,
     fontWeight: "600" as const,
+    fontFamily: "Rubik_600SemiBold",
+    letterSpacing: -0.1,
   },
   body: {
     fontSize: 16,
     lineHeight: 24,
     fontWeight: "400" as const,
+    fontFamily: "Rubik_400Regular",
   },
   small: {
     fontSize: 14,
-    lineHeight: 20,
-    fontWeight: "400" as const,
+    lineHeight: 19,
+    fontWeight: "500" as const,
+    fontFamily: "Rubik_500Medium",
+    letterSpacing: 0.1,
   },
   caption: {
     fontSize: 12,
     lineHeight: 16,
     fontWeight: "400" as const,
+    fontFamily: "Rubik_400Regular",
+    letterSpacing: 0.35,
   },
   link: {
     fontSize: 16,
     lineHeight: 24,
     fontWeight: "400" as const,
+    fontFamily: "Rubik_400Regular",
   },
 };
+
+/** Map a UI "weight role" to the exact bundled Rubik family so every weight
+ * actually renders (Rubik ships as separate per-weight files — never rely on
+ * the synthetic fontWeight fallback, it silently renders 400). */
+export const RubikFamilies = {
+  regular: "Rubik_400Regular",
+  medium: "Rubik_500Medium",
+  semibold: "Rubik_600SemiBold",
+  bold: "Rubik_700Bold",
+} as const;
 
 export const Fonts = Platform.select({
   ios: {
