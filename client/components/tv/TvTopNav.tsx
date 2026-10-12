@@ -9,6 +9,7 @@ import { createTvPalette } from "./tvPalette";
 export type TvTabName =
   | "Home"
   | "Live TV"
+  | "Favorites"
   | "Movies"
   | "Series"
   | "Guide"
@@ -25,8 +26,24 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { id: "Home", label: "Home", icon: "home-outline", iconActive: "home" },
   { id: "Live TV", label: "Live TV", icon: "play", iconActive: "play" },
-  { id: "Movies", label: "Movies", icon: "star-outline", iconActive: "star" },
-  { id: "Series", label: "Series", icon: "menu-outline", iconActive: "menu" },
+  {
+    id: "Favorites",
+    label: "Favorites",
+    icon: "star-outline",
+    iconActive: "star",
+  },
+  {
+    id: "Movies",
+    label: "Movies",
+    icon: "film-outline",
+    iconActive: "film",
+  },
+  {
+    id: "Series",
+    label: "Series",
+    icon: "albums-outline",
+    iconActive: "albums",
+  },
   {
     id: "Guide",
     label: "Guide",
@@ -52,7 +69,6 @@ interface TvTopNavProps {
   onSelectTab: (tab: TvTabName) => void;
   brandTitle?: string;
   theme: any;
-  nextFocusDownRef?: React.RefObject<any>;
 }
 
 function NavTabButton({
@@ -89,7 +105,7 @@ function NavTabButton({
       <Ionicons
         name={isActive ? item.iconActive : item.icon}
         size={16}
-        color={isFocused ? c.text : isActive ? c.text : c.text75}
+        color={isFocused || isActive ? c.text : c.text75}
         style={styles.tabIcon}
       />
       <ThemedText
@@ -97,7 +113,7 @@ function NavTabButton({
         style={[
           styles.tabLabel,
           {
-            color: isFocused ? c.text : isActive ? c.text : c.text75,
+            color: isFocused || isActive ? c.text : c.text75,
             fontWeight: isActive || isFocused ? "700" : "500",
           },
         ]}
@@ -172,8 +188,12 @@ function createStyles(theme: any) {
     activeTabButton: {
       backgroundColor: c.focusFillStrong,
     },
+    // D-pad focus is an outline; the active tab is a solid fill — the two
+    // states are visually distinct at a glance.
     focusedTabButton: {
-      backgroundColor: c.focusFillStrong,
+      borderWidth: 2,
+      borderColor: c.accentBorder,
+      backgroundColor: c.focusFill,
     },
     tabIcon: {
       marginRight: 6,

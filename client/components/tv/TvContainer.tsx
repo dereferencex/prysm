@@ -14,6 +14,7 @@ import { TvTopNav, TvTabName } from "./TvTopNav";
 import { TvLiveTvScreen } from "./TvLiveTvScreen";
 import { TvHomeScreen } from "./TvHomeScreen";
 import { TvSearchScreen } from "./TvSearchScreen";
+import { TvFavoritesScreen } from "./TvFavoritesScreen";
 import { EpgGuideView } from "@/components/EpgGuideView";
 import SettingsScreen from "@/screens/SettingsScreen";
 import { usePlaylist } from "@/context/PlaylistContext";
@@ -42,6 +43,8 @@ export function TvContainer() {
         return <TvHomeScreen onNavigateTab={handleSelectTab} />;
       case "Live TV":
         return <TvLiveTvScreen categoryTypeFilter="all" />;
+      case "Favorites":
+        return <TvFavoritesScreen />;
       case "Movies":
         return <TvLiveTvScreen categoryTypeFilter="movies" />;
       case "Series":
@@ -63,7 +66,7 @@ export function TvContainer() {
       case "Settings":
         return (
           <View style={styles.settingsContainer}>
-            <SettingsScreen />
+            <SettingsScreen embedded />
           </View>
         );
       default:
@@ -99,8 +102,15 @@ export function TvContainer() {
         ]}
       >
         {/* TVFocusGuide restores focus to the last focused element when a
-            player/child screen closes and focus returns to this tab */}
-        <TVFocusGuideView autoFocus={Platform.isTV} style={styles.focusGuide}>
+            player/child screen closes and focus returns to this tab. Keyed by
+            tab so autoFocus re-runs on every tab switch — without this, D-pad
+            focus can be lost after switching to a freshly mounted screen
+            (hasTVPreferredFocus races inside the guide). */}
+        <TVFocusGuideView
+          key={activeTab}
+          autoFocus={Platform.isTV}
+          style={styles.focusGuide}
+        >
           {renderActiveContent()}
         </TVFocusGuideView>
       </View>

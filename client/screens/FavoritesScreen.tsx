@@ -3,9 +3,7 @@ import {
   StyleSheet,
   View,
   ActivityIndicator,
-  Pressable,
   Platform,
-  ViewStyle,
 } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -19,6 +17,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { SearchBar } from "@/components/SearchBar";
 import { ChannelCardHorizontal } from "@/components/ChannelCardHorizontal";
 import { EmptyState } from "@/components/EmptyState";
+import { TVFocusablePressable } from "@/components/TVFocusablePressable";
 import { usePlaylist } from "@/context/PlaylistContext";
 import { useResponsive } from "@/hooks/useResponsive";
 import { useTheme } from "@/hooks/useTheme";
@@ -49,40 +48,30 @@ function FocusableTab({
 }) {
   const [isFocused, setIsFocused] = useState(false);
   const { theme } = useTheme();
-  const tvProps: any = {};
-  if (hasTVPreferredFocus) tvProps.hasTVPreferredFocus = true;
   return (
-    <Pressable
+    <TVFocusablePressable
       onPress={onPress}
-      onFocus={() => setIsFocused(true)}
-      onBlur={() => setIsFocused(false)}
-      focusable={true}
+      onFocusChange={setIsFocused}
       accessibilityLabel={accessibilityLabel}
-      accessibilityRole="button"
-      {...tvProps}
-      style={
-        [
-          styles.tab,
-          { backgroundColor: theme.backgroundSecondary },
-          isActive && [
-            styles.tabActive,
-            {
-              backgroundColor: theme.primary + "20",
-              borderColor: theme.primary + "40",
-            },
-          ],
-          isFocused && [
-            styles.tabFocused,
-            { backgroundColor: theme.primary + "30" },
-          ],
-        ] as ViewStyle[]
-      }
+      hasTVPreferredFocus={hasTVPreferredFocus}
+      baseStyle={[
+        styles.tab,
+        { backgroundColor: theme.backgroundSecondary },
+        isActive && [
+          styles.tabActive,
+          {
+            backgroundColor: theme.primary + "20",
+            borderColor: theme.primary + "40",
+          },
+        ],
+      ]}
+      focusedStyle={[styles.tabFocused, { backgroundColor: theme.primary + "30" }]}
     >
       <Ionicons
         name={icon as any}
         size={16}
         color={
-          isFocused ? "#FFFFFF" : isActive ? theme.primary : theme.textSecondary
+          isFocused ? theme.text : isActive ? theme.primary : theme.textSecondary
         }
       />
       <ThemedText
@@ -91,7 +80,7 @@ function FocusableTab({
           styles.tabText,
           {
             color: isFocused
-              ? "#FFFFFF"
+              ? theme.text
               : isActive
                 ? theme.primary
                 : theme.textSecondary,
@@ -100,7 +89,7 @@ function FocusableTab({
       >
         {label}
       </ThemedText>
-    </Pressable>
+    </TVFocusablePressable>
   );
 }
 
@@ -370,7 +359,7 @@ export default function FavoritesScreen() {
           ListHeaderComponent={ListHeader}
           ListHeaderComponentStyle={styles.listHeaderWrapper}
           ListEmptyComponent={ListEmpty}
-          drawDistance={300}
+          drawDistance={Platform.isTV ? 1200 : 300}
           contentContainerStyle={{
             paddingBottom: insets.bottom + Spacing.md,
             paddingHorizontal: Spacing.xs,

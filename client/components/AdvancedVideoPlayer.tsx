@@ -21,6 +21,7 @@ import {
   useWindowDimensions,
   AppState,
   AppStateStatus,
+  BackHandler,
 } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -328,6 +329,9 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
     NativeSubtitleTrack[]
   >([]);
   const [showRecentPanel, setShowRecentPanel] = useState(false);
+  // Ref mirror for the back ladder / TV event closures
+  const showRecentPanelRef = useRef(false);
+  showRecentPanelRef.current = showRecentPanel;
 
   // Per-channel player engine — loaded from storage, falls back to defaultEngine prop
   const [activePlayerEngine, setActivePlayerEngine] = useState<
@@ -796,6 +800,51 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
     };
   }, [nativeReady]);
 
+  // When the recent-channels panel is open, the controls behind it must not
+  // take D-pad focus — otherwise the D-pad can walk around "under" the panel.
+  const controlsFocusable = showControls && !showRecentPanel;
+
+  // ── TV back ladder ──────────────────────────────────────────────────────────
+  // Shared by the TVEventHandler menu/back events and the Android BACK key
+  // (BackHandler). KEYCODE_BACK is NOT mapped to a TVEventHandler event type,
+  // so without the BackHandler listener a normal BACK press would bypass this
+  // ladder and navigate straight out of the player.
+  const handleBackLadder = useCallback(() => {
+    if (showControlsRef.current) {
+      showControlsRef.current = false;
+      setShowControlsState(false);
+      controlsOpacity.value = withTiming(0, { duration: 200 });
+      setShowRecentPanel(false);
+    } else if (showRecentPanelRef.current) {
+      setShowRecentPanel(false);
+    } else if (isBackgroundPlayingRef.current) {
+      // Background audio is on — ask the user whether to stop it or keep
+      // it playing before navigating away.
+      setShowStopAudioModal(true);
+    } else {
+      // Controls already hidden — navigate back.
+      // Do NOT call TvPlayerCommands.pause() here — it's async and
+      // creates a threading race with onDetachedFromWindow(). The native
+      // cleanup in TvPlayerView handles stopping/releasing the player.
+      onBack?.();
+    }
+    return true;
+  }, [onBack, controlsOpacity]);
+
+  // Intercept the Android BACK key so it runs the ladder above instead of
+  // letting React Navigation pop the player immediately. RN's Modal
+  // subscribes its own hardwareBackPress listener while open, and the most
+  // recently added listener runs first, so open modals still dismiss
+  // themselves before this handler fires.
+  useEffect(() => {
+    if (!isTV) return;
+    const sub = BackHandler.addEventListener(
+      "hardwareBackPress",
+      handleBackLadder,
+    );
+    return () => sub.remove();
+  }, [handleBackLadder]);
+
   // ── TV D-pad handler ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!isTV) return;
@@ -845,21 +894,20 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
           scheduleHideRef.current();
         }
       } else if (eventType === "menu" || eventType === "back") {
-        if (showControlsRef.current) {
-          showControlsRef.current = false;
-          setShowControlsState(false);
-          controlsOpacity.value = withTiming(0, { duration: 200 });
-          setShowRecentPanel(false);
-        } else if (isBackgroundPlayingRef.current) {
-          // Background audio is on — ask the user whether to stop it or keep
-          // it playing before navigating away.
-          setShowStopAudioModal(true);
-        } else {
-          // Controls already hidden — navigate back.
-          // Do NOT call TvPlayerCommands.pause() here — it's async and
-          // creates a threading race with onDetachedFromWindow(). The native
-          // cleanup in TvPlayerView handles stopping/releasing the player.
-          onBack?.();
+        handleBackLadder();
+      } else if (
+        eventType === "channelUp" ||
+        eventType === "channelDown"
+      ) {
+        // Channel +/- keys skip to the next/previous channel like a
+        // traditional TV. Stop background audio first so the old stream
+        // doesn't keep playing over the new one.
+        const nav = eventType === "channelUp" ? onNext : onPrevious;
+        if (nav) {
+          if (isBackgroundPlayingRef.current) {
+            TvPlayerCommands.disableBackgroundAudio(tvPlayerRef);
+          }
+          nav();
         }
       }
     });
@@ -871,7 +919,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
     };
     // onBack is stable from the parent; controlsOpacity is a shared value (stable ref).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onBack]);
+  }, [onBack, handleBackLadder, onNext, onPrevious]);
 
   // ── Playback actions ──────────────────────────────────────────────────────
 
@@ -1404,7 +1452,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                     backgroundColor: theme.primary + "40",
                     borderColor: theme.primary,
                   }}
-                  focusable={showControls}
+                  focusable={controlsFocusable}
                   hitSlop={16}
                   accessibilityLabel="Back"
                   viewRef={backBtnRef}
@@ -1454,7 +1502,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                     backgroundColor: theme.primary + "40",
                     borderColor: theme.primary,
                   }}
-                  focusable={showControls}
+                  focusable={controlsFocusable}
                   accessibilityLabel="Recent channels"
                   viewRef={recentBtnRef}
                   nextFocusDown={nh.playPause}
@@ -1488,7 +1536,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                     backgroundColor: theme.primary + "40",
                     borderColor: theme.primary,
                   }}
-                  focusable={showControls}
+                  focusable={controlsFocusable}
                   accessibilityLabel={
                     isFavorite ? "Remove favourite" : "Add favourite"
                   }
@@ -1524,7 +1572,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                   ...st.navBtnFocused,
                   borderColor: theme.primary,
                 }}
-                focusable={showControls}
+                focusable={controlsFocusable}
                 hitSlop={12}
                 accessibilityLabel="Previous"
                 viewRef={prevBtnRef}
@@ -1553,7 +1601,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                   ...st.navBtnFocused,
                   borderColor: theme.primary,
                 }}
-                focusable={showControls}
+                focusable={controlsFocusable}
                 hitSlop={12}
                 accessibilityLabel="Seek back 10s"
                 viewRef={prevBtnRef}
@@ -1582,7 +1630,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 { backgroundColor: theme.primary },
               ]}
               focusedStyle={st.playBtnFocused}
-              focusable={showControls}
+              focusable={controlsFocusable}
               hasTVPreferredFocus={isTV && showControls}
               accessibilityLabel={isPlaying ? "Pause" : "Play"}
               viewRef={playPauseBtnRef}
@@ -1614,7 +1662,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                   ...st.navBtnFocused,
                   borderColor: theme.primary,
                 }}
-                focusable={showControls}
+                focusable={controlsFocusable}
                 hitSlop={12}
                 accessibilityLabel="Next"
                 viewRef={nextBtnRef}
@@ -1643,7 +1691,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                   ...st.navBtnFocused,
                   borderColor: theme.primary,
                 }}
-                focusable={showControls}
+                focusable={controlsFocusable}
                 hitSlop={12}
                 accessibilityLabel="Seek forward 10s"
                 viewRef={nextBtnRef}
@@ -1718,7 +1766,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                           { borderColor: theme.primary },
                         ],
                       ]}
-                      focusable={showControls}
+                      focusable={controlsFocusable}
                       accessible
                       accessibilityRole="adjustable"
                       accessibilityLabel={`Seek video, ${formatTime(positionMs)} of ${formatTime(durationMs)}`}
@@ -1896,7 +1944,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                     ...st.toolBtnFocused,
                     borderColor: theme.primary,
                   }}
-                  focusable={showControls}
+                  focusable={controlsFocusable}
                   accessibilityLabel="Settings"
                   viewRef={settingsBtnRef}
                   nextFocusUp={nh.seekBar ?? nh.playPause}
@@ -1926,7 +1974,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                     ...st.toolBtnFocused,
                     borderColor: theme.primary,
                   }}
-                  focusable={showControls}
+                  focusable={controlsFocusable}
                   accessibilityLabel={
                     isBackgroundPlaying
                       ? "Disable background audio"
@@ -1960,7 +2008,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                       ...st.toolBtnFocused,
                       borderColor: theme.primary,
                     }}
-                    focusable={showControls}
+                    focusable={controlsFocusable}
                     accessibilityLabel="Picture in picture"
                   >
                     <Ionicons name="browsers-outline" size={20} color="#fff" />
@@ -1984,7 +2032,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                     ...st.toolBtnFocused,
                     borderColor: theme.primary,
                   }}
-                  focusable={showControls}
+                  focusable={controlsFocusable}
                   accessibilityLabel="Aspect ratio"
                   viewRef={aspectBtnRef}
                   nextFocusUp={nh.seekBar ?? nh.playPause}
@@ -2018,6 +2066,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
             hitSlop={16}
             accessibilityLabel="Close recent channels"
             hasTVPreferredFocus={isTV && showRecentPanel}
+            focusable={showRecentPanel}
           >
             <Ionicons name="close" size={22} color="#fff" />
           </TVFocusablePressable>
@@ -2026,6 +2075,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
           {displayedRecent.map((ch) => (
             <TVFocusablePressable
               key={ch.id}
+              focusable={showRecentPanel}
               onPress={() => {
                 navigateToChannel(() => onChannelSelect?.(ch.id));
                 setShowRecentPanel(false);

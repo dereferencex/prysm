@@ -39,7 +39,9 @@ export function createTvPalette(theme: typeof Colors.dark): TvPalette {
     panel: theme.backgroundSecondary,
     panelAlt: theme.backgroundTertiary,
     inset: theme.backgroundRoot,
-    focusBorder: "#FFFFFF",
+    // Theme-aware so light/pitch-black themes keep contrast (was hardcoded
+    // #FFFFFF, which is invisible on light backgrounds).
+    focusBorder: withAlpha(theme.text, 0.9),
     focusFill: withAlpha(theme.primary, 0.25),
     focusFillStrong: withAlpha(theme.primary, 0.4),
     selection: withAlpha(theme.primary, 0.2),

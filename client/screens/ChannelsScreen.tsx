@@ -35,6 +35,7 @@ import { SearchBar } from "@/components/SearchBar";
 import { ChannelCardHorizontal } from "@/components/ChannelCardHorizontal";
 import { EpgGuideView } from "@/components/EpgGuideView";
 import { EmptyState } from "@/components/EmptyState";
+import { TVFocusablePressable } from "@/components/TVFocusablePressable";
 import { usePlaylist } from "@/context/PlaylistContext";
 import { useEpg } from "@/context/EpgContext";
 import { useThemeContext } from "@/context/ThemeContext";
@@ -69,7 +70,7 @@ function FocusableCategoryItem({
   const [isFavFocused, setIsFavFocused] = useState(false);
 
   return (
-    <Pressable
+    <TVFocusablePressable
       onPress={onPress}
       // On TV: long-press the category item to toggle favourite (since the
       // star button is not separately focusable on TV)
@@ -77,21 +78,15 @@ function FocusableCategoryItem({
         isTV && cat !== "All" ? () => onFavoritePress(cat, {}) : undefined
       }
       delayLongPress={500}
-      onFocus={() => setIsFocused(true)}
-      onBlur={() => setIsFocused(false)}
-      focusable={true}
-      style={
-        [
-          styles.categoryItem,
-          {
-            backgroundColor: isSelected ? theme.primary + "20" : "transparent",
-          },
-          isFocused && {
-            backgroundColor: theme.primary + "30",
-          },
-        ] as ViewStyle[]
-      }
+      onFocusChange={setIsFocused}
       testID={`category-${cat}`}
+      baseStyle={[
+        styles.categoryItem,
+        {
+          backgroundColor: isSelected ? theme.primary + "20" : "transparent",
+        },
+      ]}
+      focusedStyle={{ backgroundColor: theme.primary + "30" }}
     >
       <View style={styles.categoryItemLeft}>
         {isFav ? (
@@ -108,7 +103,7 @@ function FocusableCategoryItem({
           style={[
             styles.categoryItemText,
             isSelected && { color: theme.primary, fontWeight: "600" },
-            isFocused && { color: "#FFFFFF" },
+            isFocused && { color: theme.text },
           ]}
         >
           {cat}
@@ -153,7 +148,7 @@ function FocusableCategoryItem({
           </Pressable>
         ) : null}
       </View>
-    </Pressable>
+    </TVFocusablePressable>
   );
 }
 
@@ -164,30 +159,19 @@ function FocusableMenuButton({
   onPress: () => void;
   theme: any;
 }) {
-  const [isFocused, setIsFocused] = useState(false);
   return (
-    <Pressable
+    <TVFocusablePressable
       onPress={onPress}
-      onFocus={() => setIsFocused(true)}
-      onBlur={() => setIsFocused(false)}
-      focusable={true}
-      style={
-        [
-          styles.menuButton,
-          { backgroundColor: theme.backgroundSecondary },
-          isFocused && {
-            backgroundColor: theme.primary + "30",
-          },
-        ] as ViewStyle[]
-      }
+      accessibilityLabel="Open categories"
       testID="menu-button"
+      baseStyle={[
+        styles.menuButton,
+        { backgroundColor: theme.backgroundSecondary },
+      ]}
+      focusedStyle={{ backgroundColor: theme.primary + "30" }}
     >
-      <Ionicons
-        name="menu"
-        size={22}
-        color={isFocused ? "#FFFFFF" : theme.text}
-      />
-    </Pressable>
+      <Ionicons name="menu" size={22} color={theme.text} />
+    </TVFocusablePressable>
   );
 }
 
@@ -200,34 +184,19 @@ function FocusableCloseButton({
   theme: any;
   hasTVPreferredFocus?: boolean;
 }) {
-  const [isFocused, setIsFocused] = useState(false);
-  const tvProps: any = {};
-  if (hasTVPreferredFocus) tvProps.hasTVPreferredFocus = true;
   return (
-    <Pressable
+    <TVFocusablePressable
       onPress={onPress}
-      onFocus={() => setIsFocused(true)}
-      onBlur={() => setIsFocused(false)}
-      focusable={true}
       accessibilityLabel="Close categories"
-      accessibilityRole="button"
-      {...tvProps}
-      style={
-        [
-          styles.closeButton,
-          isFocused && [
-            styles.closeButtonFocused,
-            { backgroundColor: theme.primary + "20" },
-          ],
-        ] as ViewStyle[]
-      }
+      hasTVPreferredFocus={hasTVPreferredFocus}
+      baseStyle={styles.closeButton}
+      focusedStyle={[
+        styles.closeButtonFocused,
+        { backgroundColor: theme.primary + "20" },
+      ]}
     >
-      <Ionicons
-        name="close"
-        size={24}
-        color={isFocused ? "#FFFFFF" : theme.text}
-      />
-    </Pressable>
+      <Ionicons name="close" size={24} color={theme.text} />
+    </TVFocusablePressable>
   );
 }
 
@@ -382,29 +351,27 @@ export default function ChannelsScreen() {
   useEffect(() => {
     if (!isTV) return;
 
-    let tvEventHandler: any = null;
-
+    // react-native-tvos uses an object-based TVEventHandler API that is NOT
+    // exported from the main react-native index — import it from the library
+    // path directly. The old `new TVHandler().enable(...)` constructor API no
+    // longer exists, which silently broke this double-press shortcut.
+    let TVEventHandler: any;
     try {
-      const RN = require("react-native");
-      const TVHandler = RN.TVEventHandler;
-      if (TVHandler) {
-        tvEventHandler = new TVHandler();
-        tvEventHandler.enable(null, (cmp: any, evt: any) => {
-          if (evt && evt.eventType === "left") {
-            handleLeftPress();
-          }
-        });
-      }
-    } catch (e) {
-      // TV handler not available
+      TVEventHandler =
+        require("react-native/Libraries/Components/TV/TVEventHandler").default;
+    } catch (_) {
+      return;
     }
+    if (!TVEventHandler?.addListener) return;
+
+    const subscription = TVEventHandler.addListener((evt: any) => {
+      if (evt?.eventType === "left") handleLeftPress();
+    });
 
     return () => {
-      if (tvEventHandler) {
-        try {
-          tvEventHandler.disable();
-        } catch (e) {}
-      }
+      try {
+        subscription?.remove();
+      } catch (_) {}
     };
   }, [handleLeftPress]);
 
@@ -651,14 +618,13 @@ export default function ChannelsScreen() {
             />
           </View>
           {epgEnabled ? (
-            <Pressable
+            <TVFocusablePressable
               onPress={() => setGuideView((v) => !v)}
-              focusable
               accessibilityRole="button"
               accessibilityLabel={
                 guideView ? "Show grid view" : "Show guide view"
               }
-              style={[
+              baseStyle={[
                 styles.guideToggle,
                 {
                   backgroundColor: guideView
@@ -666,13 +632,14 @@ export default function ChannelsScreen() {
                     : theme.backgroundSecondary,
                 },
               ]}
+              focusedStyle={{ backgroundColor: theme.primary + "40" }}
             >
               <Ionicons
                 name={guideView ? "grid" : "calendar"}
                 size={20}
                 color={guideView ? theme.primary : theme.text}
               />
-            </Pressable>
+            </TVFocusablePressable>
           ) : null}
         </View>
         <View style={styles.selectedCategoryRow}>

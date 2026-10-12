@@ -1,4 +1,5 @@
 import React from "react";
+import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import MainTabNavigator from "@/navigation/MainTabNavigator";
@@ -22,12 +23,27 @@ export type RootStackParamList = {
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#000000",
+  },
+});
+
 export default function RootStackNavigator() {
   const { isLoading } = usePlaylist();
   const screenOptions = useScreenOptions();
 
   if (isLoading) {
-    return null;
+    // Cold start — show a branded loader instead of a black screen while the
+    // playlist/storage hydrates.
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#4DD0E1" />
+      </View>
+    );
   }
 
   return (

@@ -4,9 +4,7 @@ import {
   StyleSheet,
   TextInput,
   ScrollView,
-  Pressable,
   Platform,
-  ViewStyle,
   type LayoutChangeEvent,
 } from "react-native";
 import { Image } from "expo-image";
@@ -15,6 +13,7 @@ import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import { ThemedText } from "@/components/ThemedText";
+import { TVFocusablePressable } from "@/components/TVFocusablePressable";
 import { usePlaylist } from "@/context/PlaylistContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useFocusScroll } from "@/hooks/useFocusScroll";
@@ -65,13 +64,14 @@ export function TvSearchScreen() {
           autoFocus={Platform.isTV}
         />
         {searchQuery ? (
-          <Pressable
+          <TVFocusablePressable
             onPress={() => setSearchQuery("")}
-            focusable
-            style={styles.clearButton}
+            accessibilityLabel="Clear search"
+            baseStyle={styles.clearButton}
+            focusedStyle={styles.clearButtonFocused}
           >
             <Ionicons name="close-circle" size={20} color={c.text60} />
-          </Pressable>
+          </TVFocusablePressable>
         ) : null}
       </View>
 
@@ -127,25 +127,18 @@ function ChannelResultCard({
   onFocused: () => void;
 }) {
   const { theme } = useTheme();
-  const [isFocused, setIsFocused] = React.useState(false);
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   return (
-    <Pressable
+    <TVFocusablePressable
       onPress={onPress}
       onLayout={onLayoutItem}
-      onFocus={() => {
-        setIsFocused(true);
-        onFocused();
+      onFocusChange={(f) => {
+        if (f) onFocused();
       }}
-      onBlur={() => setIsFocused(false)}
-      focusable
-      style={
-        [
-          styles.resultCard,
-          isFocused && styles.resultCardFocused,
-        ] as ViewStyle[]
-      }
+      accessibilityLabel={channel.name}
+      baseStyle={styles.resultCard}
+      focusedStyle={styles.resultCardFocused}
     >
       <View style={styles.resultLogoBox}>
         <Image
@@ -162,7 +155,7 @@ function ChannelResultCard({
           {channel.group || "All Channels"}
         </ThemedText>
       </View>
-    </Pressable>
+    </TVFocusablePressable>
   );
 }
 
@@ -196,6 +189,10 @@ function createStyles(theme: typeof Colors.dark) {
     },
     clearButton: {
       padding: Spacing.xs,
+      borderRadius: 999,
+    },
+    clearButtonFocused: {
+      backgroundColor: c.focusFillStrong,
     },
     resultsScroll: {
       flex: 1,

@@ -3,9 +3,7 @@ import {
   View,
   StyleSheet,
   TextInput,
-  Pressable,
   Platform,
-  ViewStyle,
   ScrollView,
   type LayoutChangeEvent,
 } from "react-native";
@@ -16,6 +14,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import * as Haptics from "expo-haptics";
 
 import { ThemedText } from "@/components/ThemedText";
+import { TVFocusablePressable } from "@/components/TVFocusablePressable";
 import { usePlaylist } from "@/context/PlaylistContext";
 import { useEpg } from "@/context/EpgContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -227,21 +226,11 @@ export function TvLiveTvScreen({
         </View>
 
         {/* Search Categories */}
-        <View style={styles.searchBox}>
-          <TextInput
-            style={styles.searchInput}
-            value={categorySearch}
-            onChangeText={setCategorySearch}
-            placeholder="Search categories..."
-            placeholderTextColor={c.text40}
-          />
-          <Ionicons
-            name="search"
-            size={18}
-            color={c.text40}
-            style={styles.searchIcon}
-          />
-        </View>
+        <SearchField
+          value={categorySearch}
+          onChangeText={setCategorySearch}
+          placeholder="Search categories..."
+        />
 
         {/* Quick Filters */}
         <View style={styles.quickFiltersContainer}>
@@ -249,15 +238,16 @@ export function TvLiveTvScreen({
             <ThemedText type="small" style={styles.quickFiltersLabel}>
               Quick filters
             </ThemedText>
-            <Pressable
+            <TVFocusablePressable
               onPress={() => setShowOnlyFavCategories((prev) => !prev)}
-              focusable
-              style={styles.quickFiltersButton}
+              accessibilityLabel="Toggle favorite categories only"
+              baseStyle={styles.quickFiltersButton}
+              focusedStyle={styles.quickFiltersButtonFocused}
             >
               <ThemedText type="caption" style={styles.quickFiltersAction}>
                 {showOnlyFavCategories ? "Show All" : "Favorites"}
               </ThemedText>
-            </Pressable>
+            </TVFocusablePressable>
           </View>
           <ThemedText type="caption" style={styles.quickFiltersSubtext}>
             {showOnlyFavCategories
@@ -314,21 +304,11 @@ export function TvLiveTvScreen({
         </View>
 
         {/* Search Channels */}
-        <View style={styles.searchBox}>
-          <TextInput
-            style={styles.searchInput}
-            value={channelSearch}
-            onChangeText={setChannelSearch}
-            placeholder="Search channels..."
-            placeholderTextColor={c.text40}
-          />
-          <Ionicons
-            name="search"
-            size={18}
-            color={c.text40}
-            style={styles.searchIcon}
-          />
-        </View>
+        <SearchField
+          value={channelSearch}
+          onChangeText={setChannelSearch}
+          placeholder="Search channels..."
+        />
 
         {/* Channels List */}
         <ScrollView
@@ -408,6 +388,49 @@ export function TvLiveTvScreen({
 
 // ─── Subcomponents ───
 
+function SearchField({
+  value,
+  onChangeText,
+  placeholder,
+}: {
+  value: string;
+  onChangeText: (t: string) => void;
+  placeholder: string;
+}) {
+  const { theme } = useTheme();
+  const [focused, setFocused] = useState(false);
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const c = useMemo(() => createTvPalette(theme), [theme]);
+
+  return (
+    <View
+      style={[
+        styles.searchBox,
+        focused && {
+          borderColor: c.accentBorder,
+          backgroundColor: c.panelAlt,
+        },
+      ]}
+    >
+      <TextInput
+        style={styles.searchInput}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={c.text40}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+      />
+      <Ionicons
+        name="search"
+        size={18}
+        color={focused ? c.accent : c.text40}
+        style={styles.searchIcon}
+      />
+    </View>
+  );
+}
+
 function CategoryRow({
   category,
   count,
@@ -428,28 +451,23 @@ function CategoryRow({
   onFocused: () => void;
 }) {
   const { theme } = useTheme();
-  const [isFocused, setIsFocused] = useState(false);
   const styles = useMemo(() => createStyles(theme), [theme]);
   const c = useMemo(() => createTvPalette(theme), [theme]);
 
   return (
-    <Pressable
+    <TVFocusablePressable
       onPress={onSelect}
       onLongPress={onToggleFav}
       onLayout={onLayoutItem}
-      onFocus={() => {
-        setIsFocused(true);
-        onFocused();
+      onFocusChange={(f) => {
+        if (f) onFocused();
       }}
-      onBlur={() => setIsFocused(false)}
-      focusable
-      style={
-        [
-          styles.categoryRow,
-          isSelected && styles.categoryRowSelected,
-          isFocused && styles.categoryRowFocused,
-        ] as ViewStyle[]
-      }
+      accessibilityLabel={category}
+      baseStyle={[
+        styles.categoryRow,
+        isSelected && styles.categoryRowSelected,
+      ]}
+      focusedStyle={styles.categoryRowFocused}
     >
       <View style={styles.categoryRowLeft}>
         {isFav ? (
@@ -466,7 +484,6 @@ function CategoryRow({
           style={[
             styles.categoryRowText,
             isSelected && styles.categoryRowTextSelected,
-            isFocused && { color: c.text },
           ]}
         >
           {category}
@@ -475,7 +492,7 @@ function CategoryRow({
       <ThemedText type="small" style={styles.categoryRowCount}>
         {count}
       </ThemedText>
-    </Pressable>
+    </TVFocusablePressable>
   );
 }
 
@@ -508,24 +525,21 @@ function ChannelListItem({
   const activeFocus = isFocused || internalFocused;
 
   return (
-    <Pressable
+    <TVFocusablePressable
       onPress={onPress}
       onLongPress={onLongPress}
       onLayout={onLayoutItem}
-      onFocus={() => {
-        setInternalFocused(true);
-        onFocus();
+      onFocusChange={(f) => {
+        setInternalFocused(f);
+        if (f) onFocus();
       }}
-      onBlur={() => setInternalFocused(false)}
-      focusable
       hasTVPreferredFocus={hasTVPreferredFocus}
-      style={
-        [
-          styles.channelCard,
-          activeFocus && styles.channelCardFocused,
-          !activeFocus && isSelected && styles.channelCardSelected,
-        ] as ViewStyle[]
-      }
+      accessibilityLabel={channel.name}
+      baseStyle={[
+        styles.channelCard,
+        !activeFocus && isSelected && styles.channelCardSelected,
+      ]}
+      focusedStyle={styles.channelCardFocused}
     >
       {/* Channel Logo */}
       <View style={styles.channelLogoContainer}>
@@ -557,7 +571,7 @@ function ChannelListItem({
           {nowTitle || "No schedule information"}
         </ThemedText>
       </View>
-    </Pressable>
+    </TVFocusablePressable>
   );
 }
 
@@ -632,6 +646,10 @@ function createStyles(theme: typeof Colors.dark) {
     quickFiltersButton: {
       paddingHorizontal: 6,
       paddingVertical: 2,
+      borderRadius: BorderRadius.xs,
+    },
+    quickFiltersButtonFocused: {
+      backgroundColor: c.focusFillStrong,
     },
     quickFiltersAction: {
       color: c.accent,
@@ -659,9 +677,10 @@ function createStyles(theme: typeof Colors.dark) {
     categoryRowSelected: {
       backgroundColor: c.selection,
     },
+    // Focus = a solid fill that travels with the D-pad (square, borderless),
+    // matching the channel list language.
     categoryRowFocused: {
-      borderColor: c.focusBorder,
-      backgroundColor: c.focusFill,
+      backgroundColor: c.focusFillStrong,
     },
     categoryRowLeft: {
       flexDirection: "row",

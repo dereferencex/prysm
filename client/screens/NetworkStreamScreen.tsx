@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 
 import { ThemedView } from "@/components/ThemedView";
+import { TVFocusablePressable } from "@/components/TVFocusablePressable";
 import { ThemedText } from "@/components/ThemedText";
 import { Button } from "@/components/Button";
 import { useTheme } from "@/hooks/useTheme";
@@ -50,32 +51,23 @@ function FocusablePressable({
   accessibilityLabel?: string;
   hasTVPreferredFocus?: boolean;
 }) {
-  const [isFocused, setIsFocused] = useState(false);
   const { theme } = useTheme();
-  const tvProps: any = {};
-  if (hasTVPreferredFocus) tvProps.hasTVPreferredFocus = true;
   return (
-    <Pressable
+    <TVFocusablePressable
       onPress={onPress}
-      onFocus={() => setIsFocused(true)}
-      onBlur={() => setIsFocused(false)}
-      focusable={true}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      {...tvProps}
-      style={
-        [
-          ...(Array.isArray(style) ? style : [style]),
-          isFocused &&
-            (focusedStyle ?? [
-              styles.focusedBorder,
-              { backgroundColor: theme.primary + "20" },
-            ]),
-        ] as ViewStyle[]
+      hasTVPreferredFocus={hasTVPreferredFocus}
+      baseStyle={style}
+      focusedStyle={
+        focusedStyle ?? [
+          styles.focusedBorder,
+          { backgroundColor: theme.primary + "20" },
+        ]
       }
     >
       {children}
-    </Pressable>
+    </TVFocusablePressable>
   );
 }
 

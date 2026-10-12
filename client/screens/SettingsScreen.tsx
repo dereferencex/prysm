@@ -27,6 +27,7 @@ import * as Application from "expo-application";
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
 import { SettingsRow } from "@/components/SettingsRow";
+import { TVFocusablePressable } from "@/components/TVFocusablePressable";
 import { Button } from "@/components/Button";
 import { useTheme } from "@/hooks/useTheme";
 import { usePlaylist } from "@/context/PlaylistContext";
@@ -63,35 +64,27 @@ function FocusableOption({
   accessibilityLabel?: string;
   hasTVPreferredFocus?: boolean;
 }) {
-  const [isFocused, setIsFocused] = useState(false);
   const { theme } = useTheme();
-  const tvProps: any = {};
-  if (hasTVPreferredFocus) tvProps.hasTVPreferredFocus = true;
   return (
-    <Pressable
+    <TVFocusablePressable
       onPress={onPress}
-      onFocus={() => setIsFocused(true)}
-      onBlur={() => setIsFocused(false)}
-      focusable={true}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      {...tvProps}
-      style={
-        [
-          styles.modalOption,
-          isSelected
-            ? { backgroundColor: theme.primary + "20" }
-            : { backgroundColor: "transparent" },
-          style,
-          isFocused && [
-            styles.modalOptionFocused,
-            { backgroundColor: theme.primary + "30" },
-          ],
-        ] as ViewStyle[]
-      }
+      hasTVPreferredFocus={hasTVPreferredFocus}
+      baseStyle={[
+        styles.modalOption,
+        isSelected
+          ? { backgroundColor: theme.primary + "20" }
+          : { backgroundColor: "transparent" },
+        style,
+      ]}
+      focusedStyle={[
+        styles.modalOptionFocused,
+        { backgroundColor: theme.primary + "30" },
+      ]}
     >
       {children}
-    </Pressable>
+    </TVFocusablePressable>
   );
 }
 
@@ -112,28 +105,18 @@ function FocusablePressable({
   accessibilityLabel?: string;
   hasTVPreferredFocus?: boolean;
 }) {
-  const [isFocused, setIsFocused] = useState(false);
-  const tvProps: any = {};
-  if (hasTVPreferredFocus) tvProps.hasTVPreferredFocus = true;
   return (
-    <Pressable
+    <TVFocusablePressable
       onPress={onPress}
-      onFocus={() => setIsFocused(true)}
-      onBlur={() => setIsFocused(false)}
-      focusable={true}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       hitSlop={hitSlop}
-      {...tvProps}
-      style={
-        [
-          ...(Array.isArray(baseStyle) ? baseStyle : [baseStyle]),
-          isFocused && focusedStyle,
-        ] as ViewStyle[]
-      }
+      hasTVPreferredFocus={hasTVPreferredFocus}
+      baseStyle={baseStyle}
+      focusedStyle={focusedStyle}
     >
       {children}
-    </Pressable>
+    </TVFocusablePressable>
   );
 }
 
@@ -189,7 +172,15 @@ const TV_INTERFACE_OPTIONS = [
   },
 ];
 
-export default function SettingsScreen() {
+export default function SettingsScreen({
+  embedded = false,
+}: {
+  /**
+   * True when rendered under chrome that already accounts for the top safe
+   * area (e.g. the TV top nav). Prevents a doubled top inset.
+   */
+  embedded?: boolean;
+} = {}) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<SettingsNavigationProp>();
   const {
@@ -647,7 +638,9 @@ export default function SettingsScreen() {
         contentContainerStyle={[
           styles.content,
           {
-            paddingTop: insets.top + Spacing.md,
+            // When embedded under the TV top nav the nav has already padded
+            // for the top inset — adding it again doubles the gap.
+            paddingTop: embedded ? Spacing.md : insets.top + Spacing.md,
             paddingBottom: insets.bottom + Spacing.md,
             paddingLeft: insets.left + Spacing.md,
             paddingRight: insets.right + Spacing.md,

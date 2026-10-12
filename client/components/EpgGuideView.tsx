@@ -1,18 +1,19 @@
-import React, { useMemo, useState, useRef, useEffect } from "react";
+import React, { useMemo, useRef, useEffect } from "react";
 import {
   StyleSheet,
   View,
   ScrollView,
-  Pressable,
   Platform,
   useWindowDimensions,
   type LayoutChangeEvent,
 } from "react-native";
 import { Commands as ViewCommands } from "react-native/Libraries/Components/View/ViewNativeComponent";
 import { ThemedText } from "@/components/ThemedText";
+import { TVFocusablePressable } from "@/components/TVFocusablePressable";
 import { useTheme } from "@/hooks/useTheme";
 import { useFocusScroll } from "@/hooks/useFocusScroll";
 import { Spacing, BorderRadius } from "@/constants/theme";
+import { createTvPalette } from "@/components/tv/tvPalette";
 import type { Channel } from "@/types/playlist";
 import type { EpgProgram } from "@/types/epg";
 
@@ -49,27 +50,30 @@ function GuideCell({
   onLayoutItem?: (e: LayoutChangeEvent) => void;
 }) {
   const { theme } = useTheme();
-  const [focused, setFocused] = useState(false);
+  const c = useMemo(() => createTvPalette(theme), [theme]);
   return (
-    <Pressable
+    <TVFocusablePressable
       onPress={onPress}
       onLayout={onLayoutItem}
-      onFocus={() => {
-        setFocused(true);
-        onFocusItem?.();
+      onFocusChange={(f) => {
+        if (f) onFocusItem?.();
       }}
-      onBlur={() => setFocused(false)}
-      focusable
-      style={[
+      accessibilityLabel={program.title}
+      baseStyle={[
         styles.cell,
         {
           width: Math.max(80, width),
           backgroundColor: isNow
             ? theme.primary + "30"
             : theme.backgroundSecondary,
-          borderColor: focused ? theme.primary : "transparent",
         },
       ]}
+      // TV uses the app-wide solid fill; mobile keeps the accent border.
+      focusedStyle={
+        isTV
+          ? { backgroundColor: c.focusFillStrong }
+          : { borderColor: theme.primary }
+      }
     >
       <ThemedText type="small" numberOfLines={1} style={styles.cellTitle}>
         {program.title}
@@ -81,7 +85,7 @@ function GuideCell({
       >
         {fmtSlot(program.start)} - {fmtSlot(program.end)}
       </ThemedText>
-    </Pressable>
+    </TVFocusablePressable>
   );
 }
 
@@ -101,6 +105,7 @@ export function EpgGuideView({
   onSelectChannel,
 }: EpgGuideViewProps) {
   const { theme } = useTheme();
+  const palette = useMemo(() => createTvPalette(theme), [theme]);
   const { width } = useWindowDimensions();
   const slotWidth = isTV ? 170 : Math.max(120, width * 0.32);
   const totalWidth = slotWidth * (WINDOW_HOURS * 2);
@@ -185,16 +190,23 @@ export function EpgGuideView({
                   style={styles.row}
                   onLayout={(e) => rowsScroll.registerItem(ch.id, e)}
                 >
-                  <Pressable
+                  <TVFocusablePressable
                     onPress={() => onSelectChannel(ch.id)}
-                    onFocus={() => focusRow(ch.id)}
-                    ref={index === 0 ? firstChColRef : undefined}
-                    focusable
+                    onFocusChange={(f) => {
+                      if (f) focusRow(ch.id);
+                    }}
+                    viewRef={index === 0 ? firstChColRef : undefined}
                     hasTVPreferredFocus={isTV && index === 0}
-                    style={[
+                    accessibilityLabel={`Play ${ch.name}`}
+                    baseStyle={[
                       styles.chCol,
                       { borderBottomColor: theme.backgroundSecondary },
                     ]}
+                    focusedStyle={
+                      isTV
+                        ? { backgroundColor: palette.focusFillStrong }
+                        : { backgroundColor: palette.focusFill }
+                    }
                   >
                     <ThemedText
                       type="small"
@@ -203,7 +215,7 @@ export function EpgGuideView({
                     >
                       {ch.name}
                     </ThemedText>
-                  </Pressable>
+                  </TVFocusablePressable>
                   <View style={[styles.timeline, { width: totalWidth }]}>
                     {progs.length === 0 ? (
                       <ThemedText

@@ -3,8 +3,6 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  Pressable,
-  ViewStyle,
   type LayoutChangeEvent,
 } from "react-native";
 import { Image } from "expo-image";
@@ -13,6 +11,7 @@ import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import { ThemedText } from "@/components/ThemedText";
+import { TVFocusablePressable } from "@/components/TVFocusablePressable";
 import { usePlaylist } from "@/context/PlaylistContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useFocusScroll } from "@/hooks/useFocusScroll";
@@ -79,7 +78,7 @@ export function TvHomeScreen({ onNavigateTab }: TvHomeScreenProps) {
           icon="star"
           title="Favorites"
           subtitle={`${favorites.length} channels`}
-          onPress={() => onNavigateTab("Live TV")}
+          onPress={() => onNavigateTab("Favorites")}
         />
         <QuickTile
           icon="search"
@@ -165,19 +164,15 @@ function QuickTile({
   onPress: () => void;
 }) {
   const { theme } = useTheme();
-  const [isFocused, setIsFocused] = React.useState(false);
   const styles = useMemo(() => createStyles(theme), [theme]);
   const c = useMemo(() => createTvPalette(theme), [theme]);
 
   return (
-    <Pressable
+    <TVFocusablePressable
       onPress={onPress}
-      onFocus={() => setIsFocused(true)}
-      onBlur={() => setIsFocused(false)}
-      focusable
-      style={
-        [styles.quickTile, isFocused && styles.quickTileFocused] as ViewStyle[]
-      }
+      accessibilityLabel={title}
+      baseStyle={styles.quickTile}
+      focusedStyle={styles.quickTileFocused}
     >
       <View style={styles.tileIconContainer}>
         <Ionicons name={icon} size={24} color={c.accent} />
@@ -188,7 +183,7 @@ function QuickTile({
       <ThemedText type="caption" style={styles.tileSubtitle}>
         {subtitle}
       </ThemedText>
-    </Pressable>
+    </TVFocusablePressable>
   );
 }
 
@@ -204,25 +199,18 @@ function ChannelCardTv({
   onFocused: () => void;
 }) {
   const { theme } = useTheme();
-  const [isFocused, setIsFocused] = React.useState(false);
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   return (
-    <Pressable
+    <TVFocusablePressable
       onPress={onPress}
       onLayout={onLayoutItem}
-      onFocus={() => {
-        setIsFocused(true);
-        onFocused();
+      onFocusChange={(f) => {
+        if (f) onFocused();
       }}
-      onBlur={() => setIsFocused(false)}
-      focusable
-      style={
-        [
-          styles.channelCard,
-          isFocused && styles.channelCardFocused,
-        ] as ViewStyle[]
-      }
+      accessibilityLabel={channel.name}
+      baseStyle={styles.channelCard}
+      focusedStyle={styles.channelCardFocused}
     >
       <View style={styles.cardLogoBox}>
         <Image
@@ -238,7 +226,7 @@ function ChannelCardTv({
       <ThemedText type="caption" numberOfLines={1} style={styles.cardCategory}>
         {channel.group || "Live TV"}
       </ThemedText>
-    </Pressable>
+    </TVFocusablePressable>
   );
 }
 
