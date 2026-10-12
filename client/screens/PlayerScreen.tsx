@@ -300,6 +300,7 @@ export default function PlayerScreen() {
         channelId={channel.id}
         autoPlay={settings.autoPlay}
         backgroundPlay={settings.backgroundPlay}
+        playerEngine={settings.playerEngine}
         drm={drmConfig}
         headers={streamHeaders}
         qualities={DEFAULT_QUALITIES}
