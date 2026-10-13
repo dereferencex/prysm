@@ -11,6 +11,7 @@ import { AppState } from "react-native";
 import { Colors } from "@/constants/theme";
 import {
   getDynamicPalette,
+  getPaletteFromSeed,
   isDynamicColorSupported,
   clearDynamicPaletteCache,
   type DynamicPalette,
@@ -22,20 +23,24 @@ interface ThemeContextType {
   themeMode: ThemeMode;
   isDark: boolean;
   dynamicColors: boolean;
+  seedColor: string | null;
   theme: typeof Colors.dark;
   setThemeMode: (mode: ThemeMode) => Promise<void>;
   setDynamicColors: (enabled: boolean) => Promise<void>;
+  setSeedColor: (color: string | null) => Promise<void>;
   toggleTheme: () => Promise<void>;
 }
 
 const THEME_STORAGE_KEY = "prysm_theme_mode";
 const DYNAMIC_STORAGE_KEY = "prysm_dynamic_colors";
+const SEED_STORAGE_KEY = "prysm_seed_color";
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [themeMode, setThemeModeState] = useState<ThemeMode>("dark");
+  const [themeMode, setThemeModeState] = useState<ThemeMode>("pitchblack");
   const [dynamicColors, setDynamicColorsState] = useState(false);
+  const [seedColor, setSeedColorState] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   // Bumped when the app returns to the foreground so the wallpaper palette
   // is re-read (the user may have changed it while we were backgrounded).
@@ -63,6 +68,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       } else {
         setDynamicColorsState(dynamicSupported);
       }
+      const savedSeed = await AsyncStorage.getItem(SEED_STORAGE_KEY);
+      if (savedSeed && /^#?[0-9a-f]{6}$/i.test(savedSeed)) {
+        setSeedColorState(savedSeed.startsWith("#") ? savedSeed : `#${savedSeed}`);
+      }
     } catch (error) {
       console.error("Error loading theme:", error);
     } finally {
@@ -85,8 +94,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    setPalette(dynamicColors ? getDynamicPalette(isDark) : null);
-  }, [dynamicColors, isDark, themeMode, refreshKey]);
+    if (!dynamicColors) {
+      setPalette(null);
+      return;
+    }
+    // Manual seed color takes precedence (user-picked in Settings, or the
+    // default on Android TV where there is no wallpaper to follow).
+    if (seedColor) {
+      setPalette(getPaletteFromSeed(seedColor, isDark));
+    } else {
+      setPalette(getDynamicPalette(isDark));
+    }
+  }, [dynamicColors, seedColor, isDark, themeMode, refreshKey]);
 
   const setThemeMode = async (mode: ThemeMode) => {
     try {
@@ -103,6 +122,21 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       setDynamicColorsState(enabled);
     } catch (error) {
       console.error("Error saving dynamic colors:", error);
+    }
+  };
+
+  const setSeedColor = async (color: string | null) => {
+    try {
+      if (color) {
+        await AsyncStorage.setItem(SEED_STORAGE_KEY, color);
+        setSeedColorState(color);
+      } else {
+        await AsyncStorage.removeItem(SEED_STORAGE_KEY);
+        setSeedColorState(null);
+      }
+      clearDynamicPaletteCache();
+    } catch (error) {
+      console.error("Error saving seed color:", error);
     }
   };
 
@@ -144,9 +178,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         themeMode,
         isDark,
         dynamicColors,
+        seedColor,
         theme,
         setThemeMode,
         setDynamicColors,
+        setSeedColor,
         toggleTheme,
       }}
     >

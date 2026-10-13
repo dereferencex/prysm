@@ -1,7 +1,6 @@
 package expo.modules.dynamiccolor
 
 import android.app.WallpaperManager
-import android.content.res.Configuration
 import android.content.res.Resources
 import android.os.Build
 import android.util.Log
@@ -14,20 +13,21 @@ import expo.modules.kotlin.modules.ModuleDefinition
  * Two sources, tried in this order by the JS side:
  *  1. getWallpaperSeed() — WallpaperManager.getWallpaperColors() (API 27+).
  *     Works on every OEM skin (Samsung, Xiaomi...) because it reads the
- *     wallpaper directly instead of relying on framework overlays.
+ *     wallpaper directly instead of relying on framework overlays. On
+ *     Android TV this usually returns null (no user wallpaper), in which
+ *     case JS falls back to the user's manually picked seed color.
  *  2. getPalette() — the @android:color/system_* resources, which only
  *     carry wallpaper-derived values where the OEM actually applies
  *     runtime overlays (Pixels and other true-Monet builds).
  *
  * JS synthesizes tonal palettes from the seed via material-color-utilities.
- * On Android TV there is no user wallpaper to follow, so support is false.
  */
 class DynamicColorModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("DynamicColor")
 
     Function("isSupported") {
-      Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1 && !isTvDevice()
+      Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1
     }
 
     Function("getWallpaperSeed") {
@@ -85,11 +85,6 @@ class DynamicColorModule : Module() {
         "backgroundTertiary" to "system_neutral1_200",
       )
     }
-
-  /** Android TV builds ship no user wallpaper palette — report unsupported. */
-  private fun isTvDevice(): Boolean =
-    (Resources.getSystem().configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) ==
-      Configuration.UI_MODE_TYPE_TELEVISION
 
   /** Seed colors from the current system wallpaper — {primary, secondary,
    *  tertiary} as #RRGGBB hex. Null when unavailable (API < 27, live

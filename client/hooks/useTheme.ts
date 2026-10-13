@@ -6,8 +6,10 @@ export function useTheme() {
     isDark,
     themeMode,
     dynamicColors,
+    seedColor,
     setThemeMode,
     setDynamicColors,
+    setSeedColor,
     toggleTheme,
   } = useThemeContext();
 
@@ -16,8 +18,10 @@ export function useTheme() {
     isDark,
     themeMode,
     dynamicColors,
+    seedColor,
     setThemeMode,
     setDynamicColors,
+    setSeedColor,
     toggleTheme,
   };
 }

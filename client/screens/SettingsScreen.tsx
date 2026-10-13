@@ -49,6 +49,20 @@ import * as FileSystemLegacy from "expo-file-system/legacy";
 
 type SettingsNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
+const SEED_PRESETS: { name: string; value: string }[] = [
+  { name: "Teal", value: "#009688" },
+  { name: "Blue", value: "#2196F3" },
+  { name: "Indigo", value: "#3F51B5" },
+  { name: "Purple", value: "#9C27B0" },
+  { name: "Pink", value: "#E91E63" },
+  { name: "Red", value: "#F44336" },
+  { name: "Orange", value: "#FF9800" },
+  { name: "Yellow", value: "#FFC107" },
+  { name: "Green", value: "#4CAF50" },
+  { name: "Cyan", value: "#00BCD4" },
+  { name: "Brown", value: "#795548" },
+];
+
 function FocusableOption({
   onPress,
   isSelected,
@@ -188,8 +202,10 @@ export default function SettingsScreen({
     isDark,
     themeMode,
     dynamicColors,
+    seedColor,
     setThemeMode,
     setDynamicColors,
+    setSeedColor,
   } = useTheme();
   const { width } = useWindowDimensions();
   const { isUltraWide } = useResponsive();
@@ -212,6 +228,7 @@ export default function SettingsScreen({
 
   const [showQualityModal, setShowQualityModal] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
+  const [showSeedModal, setShowSeedModal] = useState(false);
   const [showAutoRefreshModal, setShowAutoRefreshModal] = useState(false);
   const [showTextSizeModal, setShowTextSizeModal] = useState(false);
   const [showPlayerEngineModal, setShowPlayerEngineModal] = useState(false);
@@ -439,6 +456,12 @@ export default function SettingsScreen({
   const handleToggleDynamicColors = (value: boolean) => {
     if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     void setDynamicColors(value);
+  };
+
+  const handleSeedSelect = async (color: string | null) => {
+    if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await setSeedColor(color);
+    setShowSeedModal(false);
   };
 
   const handlePlaylistSelect = async (playlistId: string) => {
@@ -846,10 +869,20 @@ export default function SettingsScreen({
                 <SettingsRow
                   icon="color-palette-outline"
                   title="Material You"
-                  subtitle="Match colors to your wallpaper (Android 12+)"
+                  subtitle="Match colors to your wallpaper or a custom seed"
                   isToggle
                   toggleValue={dynamicColors}
                   onToggle={handleToggleDynamicColors}
+                />
+              )}
+              {dynamicSupported && dynamicColors && (
+                <SettingsRow
+                  icon="color-fill-outline"
+                  title="Seed Color"
+                  subtitle="Pick a base color for the dynamic theme"
+                  value={seedColor ? seedColor.toUpperCase() : "Wallpaper"}
+                  onPress={() => setShowSeedModal(true)}
+                  showChevron
                 />
               )}
               <SettingsRow
@@ -1198,6 +1231,65 @@ export default function SettingsScreen({
                 <Ionicons name="checkmark" size={20} color={theme.primary} />
               ) : null}
             </FocusableOption>
+          </View>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={showSeedModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSeedModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowSeedModal(false)}
+          focusable={!isTV}
+        >
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: theme.backgroundDefault },
+            ]}
+          >
+            <ThemedText type="h4" style={styles.modalTitle}>
+              Seed Color
+            </ThemedText>
+            <FocusableOption
+              onPress={() => handleSeedSelect(null)}
+              isSelected={seedColor === null}
+              accessibilityLabel="Use wallpaper colors"
+              hasTVPreferredFocus={isTV}
+            >
+              <View style={styles.themeOption}>
+                <Ionicons name="color-palette-outline" size={20} color={theme.text} />
+                <ThemedText type="body">Wallpaper (auto)</ThemedText>
+              </View>
+              {seedColor === null ? (
+                <Ionicons name="checkmark" size={20} color={theme.primary} />
+              ) : null}
+            </FocusableOption>
+            {SEED_PRESETS.map((preset) => (
+              <FocusableOption
+                key={preset.value}
+                onPress={() => handleSeedSelect(preset.value)}
+                isSelected={seedColor?.toUpperCase() === preset.value.toUpperCase()}
+                accessibilityLabel={`${preset.name} seed color`}
+              >
+                <View style={styles.themeOption}>
+                  <View
+                    style={[
+                      styles.seedSwatch,
+                      { backgroundColor: preset.value },
+                    ]}
+                  />
+                  <ThemedText type="body">{preset.name}</ThemedText>
+                </View>
+                {seedColor?.toUpperCase() === preset.value.toUpperCase() ? (
+                  <Ionicons name="checkmark" size={20} color={theme.primary} />
+                ) : null}
+              </FocusableOption>
+            ))}
           </View>
         </Pressable>
       </Modal>
@@ -1969,6 +2061,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.md,
+  },
+  seedSwatch: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
   },
   playlistGroup: {
     marginBottom: Spacing.xs,

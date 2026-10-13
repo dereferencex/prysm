@@ -137,6 +137,18 @@ function paletteFromSeed(
   }
 }
 
+/**
+ * Synthesize a palette from an explicit seed color (user-picked).
+ * Used on devices with no usable wallpaper (Android TV, API < 27) or
+ * whenever the user overrides the wallpaper seed in Settings.
+ */
+export function getPaletteFromSeed(
+  seedHex: string,
+  isDark: boolean,
+): DynamicPalette | null {
+  return paletteFromSeed(seedHex, isDark);
+}
+
 /** Read the current wallpaper-derived palette, cached per light/dark mode.
  *  A failed read is not cached so transient errors are retried. */
 export function getDynamicPalette(isDark: boolean): DynamicPalette | null {
