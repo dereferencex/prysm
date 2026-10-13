@@ -1,10 +1,14 @@
 import React, { useState, useMemo } from "react";
 import { View, StyleSheet, Pressable, ViewStyle } from "react-native";
+import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ThemedText } from "@/components/ThemedText";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { createTvPalette } from "./tvPalette";
+
+const brandLogo = require("../../../assets/images/icon.png");
 
 export type TvTabName =
   | "Home"
@@ -104,7 +108,7 @@ function NavTabButton({
     >
       <Ionicons
         name={isActive ? item.iconActive : item.icon}
-        size={16}
+        size={18}
         color={isFocused || isActive ? c.text : c.text75}
         style={styles.tabIcon}
       />
@@ -130,12 +134,18 @@ export function TvTopNav({
   brandTitle = "Prysm",
   theme,
 }: TvTopNavProps) {
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const c = useMemo(() => createTvPalette(theme), [theme]);
 
   return (
-    <View style={styles.headerContainer}>
+    <View style={[styles.topNav, { paddingTop: Math.max(insets.top, 12) }]}>
       <View style={styles.brandContainer}>
+        <Image
+          source={brandLogo}
+          style={styles.brandLogo}
+          contentFit="contain"
+        />
         <ThemedText type="h3" style={[styles.brandTitle, { color: c.text }]}>
           {brandTitle}
         </ThemedText>
@@ -158,45 +168,54 @@ export function TvTopNav({
 function createStyles(theme: any) {
   const c = createTvPalette(theme);
   return StyleSheet.create({
-    headerContainer: {
+    topNav: {
       flexDirection: "row",
       alignItems: "center",
-      paddingHorizontal: Spacing.xl,
-      paddingTop: Spacing.md,
+      backgroundColor: c.panel,
+      borderBottomWidth: 1,
+      borderBottomColor: c.borderSubtle,
+      paddingHorizontal: Spacing.lg,
       paddingBottom: Spacing.sm,
-      backgroundColor: "transparent",
+      gap: Spacing.xl,
     },
     brandContainer: {
-      marginRight: Spacing["2xl"],
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+    brandLogo: {
+      width: 30,
+      height: 30,
+      borderRadius: 8,
     },
     brandTitle: {
-      fontSize: 22,
+      fontSize: 18,
       fontWeight: "800",
       letterSpacing: 0.5,
     },
     tabsContainer: {
       flexDirection: "row",
       alignItems: "center",
-      gap: Spacing.xs,
+      flex: 1,
+      gap: 2,
     },
     tabButton: {
       flexDirection: "row",
       alignItems: "center",
-      paddingVertical: 7,
+      paddingVertical: 8,
       paddingHorizontal: Spacing.md,
+      borderRadius: BorderRadius.sm,
     },
     activeTabButton: {
       backgroundColor: c.focusFillStrong,
     },
-    // D-pad focus is an outline; the active tab is a solid fill — the two
-    // states are visually distinct at a glance.
     focusedTabButton: {
       borderWidth: 2,
       borderColor: c.accentBorder,
       backgroundColor: c.focusFill,
     },
     tabIcon: {
-      marginRight: 6,
+      marginRight: 8,
     },
     tabLabel: {
       fontSize: 14,

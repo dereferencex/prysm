@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from "react";
-import { View, StyleSheet, Pressable, ViewStyle } from "react-native";
+import React, { useMemo } from "react";
+import { View, StyleSheet } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -24,12 +24,14 @@ interface TvEpgBannerProps {
   channel: Channel | null;
   now?: EpgProgram;
   next?: EpgProgram;
-  onPress: () => void;
 }
 
-export function TvEpgBanner({ channel, now, next, onPress }: TvEpgBannerProps) {
+/**
+ * Passive "Now Showing" details panel. Deliberately not focusable — it
+ * mirrors whatever channel currently has D-pad focus in the list.
+ */
+export function TvEpgBanner({ channel, now, next }: TvEpgBannerProps) {
   const { theme } = useTheme();
-  const [isFocused, setIsFocused] = useState(false);
   const styles = useMemo(() => createStyles(theme), [theme]);
   const c = useMemo(() => createTvPalette(theme), [theme]);
 
@@ -55,15 +57,7 @@ export function TvEpgBanner({ channel, now, next, onPress }: TvEpgBannerProps) {
       : 0;
 
   return (
-    <Pressable
-      onPress={onPress}
-      onFocus={() => setIsFocused(true)}
-      onBlur={() => setIsFocused(false)}
-      focusable
-      accessibilityRole="button"
-      accessibilityLabel={`Open ${channel.name}`}
-      style={[styles.card, isFocused && styles.cardFocused] as ViewStyle[]}
-    >
+    <View style={styles.card}>
       <View style={styles.headerRow}>
         <View style={styles.logoBox}>
           <Image
@@ -163,14 +157,7 @@ export function TvEpgBanner({ channel, now, next, onPress }: TvEpgBannerProps) {
           </ThemedText>
         </View>
       )}
-
-      <View style={styles.openHint}>
-        <Ionicons name="enter" size={15} color={c.accent} />
-        <ThemedText type="small" style={styles.openHintText}>
-          Press OK to open this channel
-        </ThemedText>
-      </View>
-    </Pressable>
+    </View>
   );
 }
 
@@ -189,9 +176,6 @@ function createStyles(theme: typeof Colors.dark) {
       flex: 1,
       backgroundColor: c.panel,
       padding: Spacing.lg,
-    },
-    cardFocused: {
-      backgroundColor: c.focusFillStrong,
     },
     headerRow: {
       flexDirection: "row",
@@ -308,18 +292,6 @@ function createStyles(theme: typeof Colors.dark) {
     },
     noInfoText: {
       color: c.text35,
-    },
-    openHint: {
-      flexDirection: "row",
-      alignItems: "center",
-      marginTop: Spacing.md,
-      paddingTop: Spacing.sm,
-    },
-    openHintText: {
-      color: c.accent,
-      fontWeight: "600",
-      fontSize: 13,
-      marginLeft: 6,
     },
   });
 }

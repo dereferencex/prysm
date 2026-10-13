@@ -78,17 +78,14 @@ export function TvContainer() {
     <View style={[styles.root, { backgroundColor: theme.backgroundRoot }]}>
       <StatusBar hidden={Platform.isTV} barStyle="light-content" />
 
-      {/* Top Navigation Bar with Prysm brand title */}
-      <View
-        style={[styles.navWrapper, { paddingTop: Math.max(insets.top, 8) }]}
-      >
-        <TvTopNav
-          activeTab={activeTab}
-          onSelectTab={handleSelectTab}
-          brandTitle="Prysm"
-          theme={theme}
-        />
-      </View>
+      {/* Top navigation — its own focus row. Left/right moves between tabs;
+          down crosses into the content area. */}
+      <TvTopNav
+        activeTab={activeTab}
+        onSelectTab={handleSelectTab}
+        brandTitle="Prysm"
+        theme={theme}
+      />
 
       {/* Active Tab Screen Content */}
       <View
@@ -121,9 +118,6 @@ export function TvContainer() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-  },
-  navWrapper: {
-    backgroundColor: "transparent",
   },
   contentWrapper: {
     flex: 1,

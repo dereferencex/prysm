@@ -372,7 +372,6 @@ export function TvLiveTvScreen({
             channel={activeChannel}
             now={activeEpg?.now}
             next={activeEpg?.next}
-            onPress={() => handleChannelPress(activeChannel)}
           />
         ) : (
           <View style={styles.noPreviewContainer}>
@@ -594,7 +593,6 @@ function createStyles(theme: typeof Colors.dark) {
     categoriesColumn: {
       width: "27%",
       backgroundColor: c.panel,
-      borderRadius: 18,
       borderWidth: 1,
       borderColor: c.borderSubtle,
       padding: Spacing.md,
@@ -778,7 +776,6 @@ function createStyles(theme: typeof Colors.dark) {
     previewColumn: {
       flex: 1,
       backgroundColor: c.panel,
-      borderRadius: 18,
       borderWidth: 1,
       borderColor: c.borderSubtle,
       padding: Spacing.md,
