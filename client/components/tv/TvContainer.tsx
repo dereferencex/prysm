@@ -31,7 +31,7 @@ export function TvContainer() {
   const { playlist } = usePlaylist();
   const epg = useEpg();
 
-  const [activeTab, setActiveTab] = useState<TvTabName>("Live TV");
+  const [activeTab, setActiveTab] = useState<TvTabName>("Home");
 
   const handleSelectTab = useCallback((tab: TvTabName) => {
     setActiveTab(tab);
