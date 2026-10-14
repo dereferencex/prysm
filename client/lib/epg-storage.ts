@@ -29,12 +29,17 @@ export async function saveEpgCache(cache: EpgCache): Promise<void> {
     `${KEYS.META}${cache.playlistId}`,
     JSON.stringify(meta),
   );
-  for (let i = 0; i < chunkCount; i++) {
-    const chunk = cache.programs.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
-    await AsyncStorage.setItem(
-      `${KEYS.CHUNKS}${cache.playlistId}_${i}`,
-      JSON.stringify(chunk),
-    );
+  // Batch chunk writes (multiSet) instead of one round-trip per chunk —
+  // a 60k-programme cache is ~150 sequential awaits otherwise.
+  const BATCH = 20;
+  for (let start = 0; start < chunkCount; start += BATCH) {
+    const pairs: [string, string][] = [];
+    const end = Math.min(start + BATCH, chunkCount);
+    for (let i = start; i < end; i++) {
+      const chunk = cache.programs.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+      pairs.push([`${KEYS.CHUNKS}${cache.playlistId}_${i}`, JSON.stringify(chunk)]);
+    }
+    await AsyncStorage.multiSet(pairs);
   }
   // Remove stale chunks from a previously larger cache
   // (best-effort, ignore errors)

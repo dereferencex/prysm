@@ -368,12 +368,12 @@ export default function SettingsScreen({
   };
 
   const handleRefreshEpg = async () => {
-    if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    await epg.refreshEpg(true);
+    if (!isTV) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const count = await epg.refreshEpg(true);
     setToastMessage(
-      epg.programCount > 0
-        ? `EPG refreshed: ${epg.programCount} programs`
-        : "EPG refresh finished",
+      count != null && count > 0
+        ? `EPG refreshed: ${count} programs`
+        : epg.error || "EPG refresh finished",
     );
     setShowToast(true);
   };

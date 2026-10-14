@@ -18,6 +18,12 @@ jest.mock("expo-file-system/legacy", () => ({
   EncodingType: { Base64: "base64" },
 }));
 
+jest.mock("expo-file-system", () => ({
+  File: jest.fn().mockImplementation(() => ({
+    bytes: jest.fn().mockResolvedValue(new Uint8Array()),
+  })),
+}));
+
 describe("xmltv-parser", () => {
   describe("extractEpgUrlsFromM3U", () => {
     it("extracts single url-tvg with .gz extension", () => {

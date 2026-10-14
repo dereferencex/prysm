@@ -31,7 +31,8 @@ interface EpgContextType {
     from?: number,
     to?: number,
   ) => EpgProgram[];
-  refreshEpg: (force?: boolean) => Promise<void>;
+  /** Returns the new program count, or null if the refresh was skipped/failed. */
+  refreshEpg: (force?: boolean) => Promise<number | null>;
   clearCache: () => Promise<void>;
 }
 
@@ -152,15 +153,19 @@ export function EpgProvider({ children }: { children: ReactNode }) {
   }, [playlistId, settings.showEpg]);
 
   const refreshEpg = useCallback(
-    async (force = false) => {
-      if (!playlist || !effectiveUrl || !settings.showEpg) return;
-      if (loadingRef.current) return;
+    async (force = false): Promise<number | null> => {
+      if (!playlist || !effectiveUrl || !settings.showEpg) return null;
+      if (loadingRef.current) return null;
       loadingRef.current = true;
       setIsLoading(true);
       setError(null);
       try {
         if (!force) {
+          console.log("[epg] cache check start");
           const cached = await getEpgCache(playlist.id);
+          console.log(
+            `[epg] cache check done: ${cached ? cached.programs.length : "none"}`,
+          );
           const maxAge = settings.epgRefreshHours * 3600 * 1000;
           if (
             cached &&
@@ -170,11 +175,13 @@ export function EpgProvider({ children }: { children: ReactNode }) {
           ) {
             setPrograms(cached.programs);
             setLastUpdated(cached.lastUpdated);
-            return;
+            return cached.programs.length;
           }
         }
+        console.log("[epg] fetchAndParseEPG start");
         const { programs: raw, channelNames } =
           await fetchAndParseEPG(effectiveUrl);
+        console.log(`[epg] fetched: ${raw.length} raw programs`);
         const matcher = buildChannelMatcher(playlist.channels, channelNames);
         // Build reverse map xmltvId -> channelIds
         const reverse = new Map<string, string[]>();
@@ -195,22 +202,26 @@ export function EpgProvider({ children }: { children: ReactNode }) {
         setPrograms(mapped);
         const ts = Date.now();
         setLastUpdated(ts);
-        await saveEpgCache({
+        // Persist in the background — don't hold the spinner on ~80 writes
+        void saveEpgCache({
           playlistId: playlist.id,
           sourceUrl: effectiveUrl,
           lastUpdated: ts,
           programCount: mapped.length,
           programs: mapped,
-        });
+        }).catch(() => {});
+        return mapped.length;
       } catch (e: any) {
+        console.log(`[epg] refresh error: ${e?.message}`);
         // Fall back to cache on failure
         const cached = await getEpgCache(playlist.id);
         if (cached && cached.programs.length > 0) {
           setPrograms(cached.programs);
           setLastUpdated(cached.lastUpdated);
-        } else {
-          setError(e?.message || "Failed to load EPG");
+          return cached.programs.length;
         }
+        setError(e?.message || "Failed to load EPG");
+        return null;
       } finally {
         loadingRef.current = false;
         setIsLoading(false);
