@@ -154,6 +154,7 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
 
         playerManager.setCallbacks(this)
         playerManager.setPlayerView(playerView)
+        playerManager.onEngineChanged = { engine -> handleEngineChanged(engine) }
         when {
             isTV && surfaceView != null -> playerManager.setVideoSurfaceView(surfaceView)
         }
@@ -164,11 +165,38 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
             "vlc" -> PlayerEngine.VLC
             else -> PlayerEngine.EXOPLAYER
         }
-        if (newEngine != playerEngine) {
+        if (newEngine != playerManager.getCurrentEngine()) {
             Log.d(TAG, "Setting player engine to $newEngine (was $playerEngine)")
-            playerEngine = newEngine
+            // playerEngine, shutter and the onEngineChange event are all
+            // applied by handleEngineChanged() via the onEngineChanged hook,
+            // which also covers switches PlayerManager initiates itself
+            // (error auto-fallback to VLC).
             playerManager.switchEngine(newEngine)
-            onEngineChange(mapOf("engine" to newEngine.name.lowercase()))
+        }
+    }
+
+    // Keeps playerEngine in sync with the authoritative manager state, hides
+    // media3's black shutter when VLC owns the surface (media3 only ever hides
+    // it for ExoPlayer's first frame, which fully blacked out VLC video on
+    // mobile), and notifies JS about the engine change.
+    private fun handleEngineChanged(engine: PlayerEngine) {
+        playerEngine = engine
+        applyShutterForEngine()
+        onEngineChange(mapOf("engine" to engine.name.lowercase()))
+    }
+
+    // The exo_shutter View sits above the SurfaceView inside PlayerView and
+    // stays VISIBLE until ExoPlayer renders its first frame — with VLC active
+    // that black View covers the video for the whole session. Force it off for
+    // VLC and back on for ExoPlayer (matches media3's fresh-load behaviour:
+    // shutter until first frame).
+    private fun applyShutterForEngine() {
+        if (isTV) return
+        val shutter = playerView?.findViewById<View>(androidx.media3.ui.R.id.exo_shutter) ?: return
+        val visibility =
+            if (playerManager.getCurrentEngine() == PlayerEngine.EXOPLAYER) View.VISIBLE else View.GONE
+        if (shutter.visibility != visibility) {
+            shutter.visibility = visibility
         }
     }
 
@@ -247,6 +275,9 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         PlayerRegistry.registerPlayer(exoPlayer = null, view = this)
         currentUrl = url
         playerManager.load(url, headers, drmType, drmLicenseUrl, drmLicenseKey, drmHeaders, drmPssh, autoPlay)
+        // releasePlayer() can leave the exo_shutter VISIBLE again — re-assert
+        // the per-engine state after every load.
+        applyShutterForEngine()
     }
 
     fun play() {
@@ -496,6 +527,14 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         if (width > 0 && height > 0) {
             val ratio = (width * pixelWidthHeightRatio).toFloat() / height
             aspectFrame.setAspectRatio(ratio)
+            if (!isTV) {
+                // On mobile the aspect lives in PlayerView's content frame
+                // (aspectFrame is TV-only and never attached). ExoPlayer
+                // updates it itself; VLC's size callback must do it here.
+                playerView?.findViewById<AspectRatioFrameLayout>(
+                    androidx.media3.ui.R.id.exo_content_frame,
+                )?.setAspectRatio(ratio)
+            }
             requestLayout()
             if (!isTV && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 // Track the DISPLAY ratio (anamorphic streams have a pixel

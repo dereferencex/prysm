@@ -607,14 +607,18 @@ class VlcPlayerController(
             for (i in 0 until media.trackCount) {
                 val track = media.getTrack(i)
                 Log.d(TAG, "VLC: Track $i type=${track.type}, codec=${track.codec}")
-                if (track.type == 2) { // 2 = video track type in libvlc
-                    val widthField = track.javaClass.getField("width")
-                    val heightField = track.javaClass.getField("height")
-                    val w = widthField.getInt(track)
-                    val h = heightField.getInt(track)
-                    Log.d(TAG, "VLC: Found video track ${w}x${h}")
+                // IMedia.Track.Type: Unknown=-1, Audio=0, Video=1, Text=2.
+                // The old `type == 2` check matched TEXT tracks (and their
+                // reflection-looked-up "width" field threw), so the video size
+                // was never reported.
+                if (track is IMedia.VideoTrack) {
+                    val w = track.width
+                    val h = track.height
+                    val sarRatio =
+                        if (track.sarDen > 0) track.sarNum.toFloat() / track.sarDen else 1.0f
+                    Log.d(TAG, "VLC: Found video track ${w}x$h sar=${track.sarNum}/${track.sarDen}")
                     if (w > 0 && h > 0) {
-                        callbacks?.onVideoSizeChanged(w, h, 1.0f)
+                        callbacks?.onVideoSizeChanged(w, h, sarRatio)
                     }
                     break
                 }

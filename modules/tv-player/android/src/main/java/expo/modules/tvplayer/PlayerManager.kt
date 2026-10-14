@@ -26,6 +26,10 @@ class PlayerManager(
     private var pendingTextureView: TextureView? = null
     private var playerView: androidx.media3.ui.PlayerView? = null
 
+    // Fired whenever the engine actually changes — including switches initiated
+    // natively (error auto-fallback), not just via TvPlayerView.setPlayerEngine.
+    var onEngineChanged: ((PlayerEngine) -> Unit)? = null
+
     data class LoadParams(
         val url: String,
         val headers: Map<String, String>,
@@ -92,6 +96,7 @@ class PlayerManager(
 
         isSwitching = false
         Log.d(TAG, "Engine switch complete to $newEngine")
+        onEngineChanged?.invoke(newEngine)
     }
 
     fun load(
