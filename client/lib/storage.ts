@@ -101,7 +101,7 @@ export interface AppSettings {
   lastCategoryByPlaylist: Record<string, string>;
   textSize: TextSizeOption;
   playerEngine: PlayerEngine;
-  /** Master EPG kill-switch. Auto-enabled when url-tvg is detected. */
+  /** Master EPG kill-switch. On by default; auto-enabled when url-tvg is detected. */
   showEpg: boolean;
   /** Show Now/Next badges on channel cards. */
   showEpgInCards: boolean;
@@ -128,7 +128,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lastCategoryByPlaylist: {},
   textSize: "medium",
   playerEngine: "exoplayer",
-  showEpg: false,
+  showEpg: true,
   showEpgInCards: true,
   showEpgInPlayer: true,
   epgUserSet: false,
