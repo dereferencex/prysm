@@ -1,10 +1,11 @@
-import React, { useEffect } from "react";
+import React, { useCallback, useEffect } from "react";
 import { StyleSheet, View, ActivityIndicator, Platform } from "react-native";
 import {
   NavigationContainer,
   DarkTheme,
   DefaultTheme,
   LinkingOptions,
+  useNavigationContainerRef,
 } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
@@ -31,6 +32,10 @@ import { ThemeProvider, useThemeContext } from "@/context/ThemeContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LogCapture } from "@/components/LogCapture";
 import { Colors } from "@/constants/theme";
+import {
+  isManualOrientationLockActive,
+  setManualOrientationLock,
+} from "@/lib/orientation";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 // Deep link config — handles prysmplayer://play?channelId=<id> from the
@@ -58,6 +63,43 @@ SplashScreen.preventAutoHideAsync();
 
 function AppContent() {
   const { isDark, theme } = useThemeContext();
+  const navigationRef = useNavigationContainerRef<RootStackParamList>();
+
+  // Orientation policy: TV stays landscape, player screens rotate freely so
+  // video can be watched in landscape, every other screen is portrait-locked —
+  // so backing out of the player returns the app to portrait.
+  const configureOrientation = useCallback(async () => {
+    try {
+      const isTV = Platform.isTV || Device.deviceType === Device.DeviceType.TV;
+
+      if (isTV) {
+        await ScreenOrientation.lockAsync(
+          ScreenOrientation.OrientationLock.LANDSCAPE,
+        );
+        return;
+      }
+
+      const state = navigationRef.getRootState();
+      const routeName = state?.routes[state.index]?.name;
+      const isPlayerRoute =
+        routeName === "Player" || routeName === "NetworkPlayer";
+
+      if (isPlayerRoute) {
+        // A manual lock from the in-player rotate button wins — switching
+        // channels must not silently drop it.
+        if (!isManualOrientationLockActive()) {
+          await ScreenOrientation.unlockAsync();
+        }
+      } else {
+        setManualOrientationLock(false);
+        await ScreenOrientation.lockAsync(
+          ScreenOrientation.OrientationLock.PORTRAIT_UP,
+        );
+      }
+    } catch (error) {
+      console.log("Orientation lock not supported:", error);
+    }
+  }, [navigationRef]);
 
   const navigationTheme = isDark
     ? {
@@ -90,7 +132,13 @@ function AppContent() {
       <KeyboardProvider>
         <PlaylistProvider>
           <EpgProvider>
-            <NavigationContainer theme={navigationTheme} linking={linking}>
+            <NavigationContainer
+              ref={navigationRef}
+              theme={navigationTheme}
+              linking={linking}
+              onReady={configureOrientation}
+              onStateChange={configureOrientation}
+            >
               <RootStackNavigator />
             </NavigationContainer>
           </EpgProvider>
@@ -110,30 +158,10 @@ export default function App() {
   });
 
   useEffect(() => {
-    configureOrientation();
-  }, []);
-
-  useEffect(() => {
     if (fontsLoaded || fontError) {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded, fontError]);
-
-  const configureOrientation = async () => {
-    try {
-      const isTV = Platform.isTV || Device.deviceType === Device.DeviceType.TV;
-
-      if (isTV) {
-        await ScreenOrientation.lockAsync(
-          ScreenOrientation.OrientationLock.LANDSCAPE,
-        );
-      } else {
-        await ScreenOrientation.unlockAsync();
-      }
-    } catch (error) {
-      console.log("Orientation lock not supported:", error);
-    }
-  };
 
   if (!fontsLoaded && !fontError) {
     return (

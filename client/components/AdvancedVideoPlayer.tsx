@@ -39,15 +39,18 @@ import {
 } from "react-native-gesture-handler";
 import * as Haptics from "expo-haptics";
 import { useKeepAwake } from "expo-keep-awake";
+import * as ScreenOrientation from "expo-screen-orientation";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { useResponsive } from "@/hooks/useResponsive";
+import { useOrientation } from "@/hooks/useOrientation";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { parseHLSQualities, isHLSStream } from "@/lib/hls-quality-parser";
 import { parseDASHQualities, isDASHStream } from "@/lib/dash-quality-parser";
 import { parseMSSQualities, isMSSStream } from "@/lib/mss-quality-parser";
+import { setManualOrientationLock } from "@/lib/orientation";
 import { Channel } from "@/types/playlist";
 import { getChannelPlayerEngine, setChannelPlayerEngine } from "@/lib/storage";
 import {
@@ -208,6 +211,9 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   // useWindowDimensions updates immediately on rotation; Dimensions.get('screen')
   // used by useResponsive can lag or return physical screen size on Android.
   const { width, height } = useWindowDimensions();
+  // Live orientation — the rotate tool button toggles between a forced
+  // landscape lock and a forced portrait lock.
+  const { isPortrait } = useOrientation();
 
   // ── Refs ─────────────────────────────────────────────────────────────────
   const tvPlayerRef = useRef<any>(null);
@@ -1007,6 +1013,23 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
       }
     }, 3000);
   }, [isPlaying]);
+
+  // Rotate the screen between landscape and portrait. Uses an explicit lock
+  // (not unlockAsync) so it also works when system auto-rotate is disabled.
+  const handleRotate = useCallback(async () => {
+    if (!isTV) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      await ScreenOrientation.lockAsync(
+        isPortrait
+          ? ScreenOrientation.OrientationLock.LANDSCAPE
+          : ScreenOrientation.OrientationLock.PORTRAIT_UP,
+      );
+      setManualOrientationLock(!isPortrait);
+    } catch (error) {
+      console.log("Orientation lock not supported:", error);
+    }
+    scheduleHideRef.current();
+  }, [isPortrait]);
 
   // ── Channel navigation ────────────────────────────────────────────────────
   // Stop background audio before switching channels so the old stream doesn't
@@ -2040,6 +2063,32 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
                 >
                   <Ionicons name="scan-outline" size={20} color="#fff" />
                 </TVFocusablePressable>
+
+                {/* Rotate screen — phones/tablets only; TV is always landscape */}
+                {!isTV ? (
+                  <TVFocusablePressable
+                    onPress={handleRotate}
+                    baseStyle={st.toolBtn}
+                    focusedStyle={{
+                      ...st.toolBtnFocused,
+                      borderColor: theme.primary,
+                    }}
+                    focusable={controlsFocusable}
+                    accessibilityLabel={
+                      isPortrait ? "Rotate to landscape" : "Rotate to portrait"
+                    }
+                  >
+                    <Ionicons
+                      name={
+                        isPortrait
+                          ? "phone-landscape-outline"
+                          : "phone-portrait-outline"
+                      }
+                      size={20}
+                      color="#fff"
+                    />
+                  </TVFocusablePressable>
+                ) : null}
               </View>
             </View>
           </View>
