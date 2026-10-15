@@ -81,6 +81,8 @@ jobs:
             case "$apk" in
               *arm64-v8a*)   name="prysm-${VERSION}-arm64-v8a.apk" ;;
               *armeabi-v7a*) name="prysm-${VERSION}-armeabi-v7a.apk" ;;
+              *x86_64*)      name="prysm-${VERSION}-x86_64.apk" ;;
+              *x86*)         name="prysm-${VERSION}-x86.apk" ;;
               *universal*)   name="prysm-${VERSION}-universal.apk" ;;
               *)             name="prysm-${VERSION}.apk" ;;
             esac
