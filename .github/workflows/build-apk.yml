@@ -108,8 +108,36 @@ jobs:
           name: prysm-${{ github.ref_name }}
           path: renamed-apks/
 
+      - name: Prepare release notes
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          NOTES="$RUNNER_TEMP/release-notes.md"
+
+          # Pull this release's section out of CHANGELOG.md (from its
+          # "## [x.y.z]" header up to the next "## [" header).
+          awk -v ver="$VERSION" '
+            /^## \[/ {
+              if (found) exit
+              h = $0
+              sub(/^## \[/, "", h)
+              sub(/\].*/, "", h)
+              if (h == ver) { found = 1 }
+            }
+            found { print }
+          ' CHANGELOG.md > "$NOTES"
+
+          # Fall back to the whole changelog if the tag has no matching section.
+          if ! [ -s "$NOTES" ]; then
+            cp CHANGELOG.md "$NOTES"
+          fi
+
+          echo "Release notes for v$VERSION:" | tee -a "$GITHUB_STEP_SUMMARY"
+          head -n 40 "$NOTES" | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Upload to Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: renamed-apks/*.apk
+          body_path: ${{ runner.temp }}/release-notes.md
