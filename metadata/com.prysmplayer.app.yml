@@ -13,8 +13,8 @@ Repo: https://github.com/dereferencex/prysm
 Binaries: ~
 
 Builds:
-  - versionName: 1.4.2
-    versionCode: 10402
+  - versionName: 1.5.0
+    versionCode: 10500
     commit: fbd59a7f57711b4fbef216e5d48331d922fd8d83
     sudo:
       - apt-get update
@@ -31,14 +31,14 @@ Builds:
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
 UpdateCheckData: app.json|"versionCode":\s*(\d+)|app.json|"version":\s*"([^"]+)"
-CurrentVersion: 1.4.2
-CurrentVersionCode: 10402
+CurrentVersion: 1.5.0
+CurrentVersionCode: 10500
 
 MaintainerNotes: |
-  STATUS: ready — points at release v1.4.2 (commit fbd59a7), which includes
-  the PRYSM_FDROID gating, the HLS AES-128 DRM fix, the app.config.js
-  resolution fix, and android.versionCode 10402. Build from this commit
-  with the recipe below.
+  STATUS: ready — prepared for release v1.5.0 (versionCode 10500): navigation-driven
+  orientation (portrait restored on leaving the player) and an in-player rotate
+  control. Builds.commit still points at fbd59a7 (v1.4.2) — repoint it at the
+  v1.5.0 release commit when tagging. Build from that commit with the recipe below.
 
   Build recipe: npm ci installs FLOSS JS deps from npm; PRYSM_FDROID=1 makes
   app.config.js strip REQUEST_INSTALL_PACKAGES and set extra.isFdroid, which

@@ -177,7 +177,7 @@ const TV_INTERFACE_OPTIONS = [
   {
     label: "Always On (TV UI)",
     value: "tv" as const,
-    desc: "Force StreamVault/Prysm 3-column TV UI",
+    desc: "Force Prysm 3-column TV UI",
   },
   {
     label: "Standard (Mobile/Tablet)",
@@ -267,7 +267,7 @@ export default function SettingsScreen({
 
   const isTV = Platform.isTV;
   const isFdroid = Constants.expoConfig?.extra?.isFdroid === true;
-  const appVersion = Application.nativeApplicationVersion || "1.4.2";
+  const appVersion = Application.nativeApplicationVersion || "1.5.0";
   const useColumns = width > 700;
   // On TV and very wide screens show two columns of settings side by side
   const useTwoColumns = isTV || width > 900;
