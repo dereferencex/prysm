@@ -1249,47 +1249,136 @@ export default function SettingsScreen({
           <View
             style={[
               styles.modalContent,
+              isTV && styles.modalContentTv,
               { backgroundColor: theme.backgroundDefault },
             ]}
           >
             <ThemedText type="h4" style={styles.modalTitle}>
               Seed Color
             </ThemedText>
-            <FocusableOption
-              onPress={() => handleSeedSelect(null)}
-              isSelected={seedColor === null}
-              accessibilityLabel="Use wallpaper colors"
-              hasTVPreferredFocus={isTV}
-            >
-              <View style={styles.themeOption}>
-                <Ionicons name="color-palette-outline" size={20} color={theme.text} />
-                <ThemedText type="body">Wallpaper (auto)</ThemedText>
-              </View>
-              {seedColor === null ? (
-                <Ionicons name="checkmark" size={20} color={theme.primary} />
-              ) : null}
-            </FocusableOption>
-            {SEED_PRESETS.map((preset) => (
-              <FocusableOption
-                key={preset.value}
-                onPress={() => handleSeedSelect(preset.value)}
-                isSelected={seedColor?.toUpperCase() === preset.value.toUpperCase()}
-                accessibilityLabel={`${preset.name} seed color`}
-              >
-                <View style={styles.themeOption}>
-                  <View
-                    style={[
-                      styles.seedSwatch,
-                      { backgroundColor: preset.value },
-                    ]}
+            {isTV ? (
+              /* TV: compact swatch grid — one D-pad row per 4 tiles instead of
+                 a long vertical list. */
+              <View style={styles.seedGrid}>
+                <TVFocusablePressable
+                  onPress={() => handleSeedSelect(null)}
+                  accessibilityLabel="Use wallpaper colors"
+                  hasTVPreferredFocus={isTV}
+                  baseStyle={[
+                    styles.seedTile,
+                    seedColor === null && [
+                      styles.seedTileSelected,
+                      { borderColor: theme.primary },
+                    ],
+                  ]}
+                  focusedStyle={[
+                    styles.seedTileFocused,
+                    { borderColor: theme.primary },
+                  ]}
+                >
+                  <Ionicons
+                    name="color-palette-outline"
+                    size={30}
+                    color={seedColor === null ? theme.primary : theme.text}
                   />
-                  <ThemedText type="body">{preset.name}</ThemedText>
-                </View>
-                {seedColor?.toUpperCase() === preset.value.toUpperCase() ? (
-                  <Ionicons name="checkmark" size={20} color={theme.primary} />
-                ) : null}
-              </FocusableOption>
-            ))}
+                  <ThemedText type="small" style={styles.seedTileLabel}>
+                    Wallpaper
+                  </ThemedText>
+                  {seedColor === null ? (
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={18}
+                      color={theme.primary}
+                      style={styles.seedTileCheck}
+                    />
+                  ) : null}
+                </TVFocusablePressable>
+                {SEED_PRESETS.map((preset) => {
+                  const isSelected =
+                    seedColor?.toUpperCase() === preset.value.toUpperCase();
+                  return (
+                    <TVFocusablePressable
+                      key={preset.value}
+                      onPress={() => handleSeedSelect(preset.value)}
+                      accessibilityLabel={`${preset.name} seed color`}
+                      baseStyle={[
+                        styles.seedTile,
+                        isSelected && [
+                          styles.seedTileSelected,
+                          { borderColor: theme.primary },
+                        ],
+                      ]}
+                      focusedStyle={[
+                        styles.seedTileFocused,
+                        { borderColor: theme.primary },
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.seedSwatchTv,
+                          { backgroundColor: preset.value },
+                        ]}
+                      />
+                      <ThemedText type="small" style={styles.seedTileLabel}>
+                        {preset.name}
+                      </ThemedText>
+                      {isSelected ? (
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={18}
+                          color={theme.primary}
+                          style={styles.seedTileCheck}
+                        />
+                      ) : null}
+                    </TVFocusablePressable>
+                  );
+                })}
+              </View>
+            ) : (
+              <>
+                <FocusableOption
+                  onPress={() => handleSeedSelect(null)}
+                  isSelected={seedColor === null}
+                  accessibilityLabel="Use wallpaper colors"
+                  hasTVPreferredFocus={isTV}
+                >
+                  <View style={styles.themeOption}>
+                    <Ionicons
+                      name="color-palette-outline"
+                      size={20}
+                      color={theme.text}
+                    />
+                    <ThemedText type="body">Wallpaper (auto)</ThemedText>
+                  </View>
+                  {seedColor === null ? (
+                    <Ionicons name="checkmark" size={20} color={theme.primary} />
+                  ) : null}
+                </FocusableOption>
+                {SEED_PRESETS.map((preset) => (
+                  <FocusableOption
+                    key={preset.value}
+                    onPress={() => handleSeedSelect(preset.value)}
+                    isSelected={
+                      seedColor?.toUpperCase() === preset.value.toUpperCase()
+                    }
+                    accessibilityLabel={`${preset.name} seed color`}
+                  >
+                    <View style={styles.themeOption}>
+                      <View
+                        style={[
+                          styles.seedSwatch,
+                          { backgroundColor: preset.value },
+                        ]}
+                      />
+                      <ThemedText type="body">{preset.name}</ThemedText>
+                    </View>
+                    {seedColor?.toUpperCase() === preset.value.toUpperCase() ? (
+                      <Ionicons name="checkmark" size={20} color={theme.primary} />
+                    ) : null}
+                  </FocusableOption>
+                ))}
+              </>
+            )}
           </View>
         </Pressable>
       </Modal>
@@ -2066,6 +2155,47 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+  },
+  modalContentTv: {
+    maxWidth: 520,
+    padding: Spacing["2xl"],
+  },
+  seedGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: Spacing.md,
+  },
+  seedTile: {
+    width: 110,
+    paddingVertical: Spacing.md,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  seedTileSelected: {
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  seedTileFocused: {
+    transform: [{ scale: 1.05 }],
+  },
+  seedTileLabel: {
+    fontWeight: "600",
+  },
+  seedTileCheck: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+  },
+  seedSwatchTv: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.2)",
   },

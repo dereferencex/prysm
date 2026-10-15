@@ -57,6 +57,8 @@ export default function SetupScreen() {
   const [isCloseFocused, setIsCloseFocused] = useState(false);
   const [isFileFocused, setIsFileFocused] = useState(false);
   const [isCancelFocused, setIsCancelFocused] = useState(false);
+  const [nameFocused, setNameFocused] = useState(false);
+  const [urlFocused, setUrlFocused] = useState(false);
 
   const isCompact = height < 500;
   const isTVDevice = Platform.isTV;
@@ -187,6 +189,7 @@ export default function SetupScreen() {
             style={
               [
                 styles.closeButton,
+                isTVDevice && styles.closeButtonTv,
                 isCloseFocused && [
                   styles.closeButtonFocused,
                   { backgroundColor: theme.primary + "20" },
@@ -198,7 +201,11 @@ export default function SetupScreen() {
             accessibilityLabel="Close"
             accessibilityRole="button"
           >
-            <Ionicons name="close" size={28} color={theme.text} />
+            <Ionicons
+              name="close"
+              size={isTVDevice ? 32 : 28}
+              color={theme.text}
+            />
           </Pressable>
           <ThemedText type="h4" style={styles.headerTitle}>
             Add Playlist
@@ -264,11 +271,11 @@ export default function SetupScreen() {
             <View
               style={[
                 styles.inputSection,
-                { maxWidth: isLandscape ? 320 : 400 },
+                { maxWidth: isTVDevice ? 420 : isLandscape ? 320 : 400 },
               ]}
             >
               <ThemedText
-                type="h4"
+                type={isTVDevice ? "h3" : "h4"}
                 style={[
                   styles.sectionTitle,
                   isCompact && styles.sectionTitleCompact,
@@ -281,23 +288,32 @@ export default function SetupScreen() {
                   styles.inputContainer,
                   {
                     backgroundColor: theme.backgroundDefault,
-                    borderColor: theme.backgroundSecondary,
+                    borderColor: nameFocused
+                      ? theme.primary
+                      : theme.backgroundSecondary,
                   },
                   isCompact && styles.inputContainerCompact,
+                  isTVDevice && styles.inputContainerTv,
                 ]}
               >
                 <Ionicons
                   name="bookmark"
-                  size={18}
-                  color={theme.textSecondary}
+                  size={isTVDevice ? 22 : 18}
+                  color={nameFocused ? theme.primary : theme.textSecondary}
                   style={styles.inputIcon}
                 />
                 <TextInput
                   value={playlistName}
                   onChangeText={setPlaylistName}
+                  onFocus={() => setNameFocused(true)}
+                  onBlur={() => setNameFocused(false)}
                   placeholder="My Playlist"
                   placeholderTextColor={theme.textSecondary}
-                  style={[styles.input, { color: theme.text }]}
+                  style={[
+                    styles.input,
+                    { color: theme.text },
+                    isTVDevice && styles.inputTv,
+                  ]}
                   autoCapitalize="words"
                   autoCorrect={false}
                   returnKeyType="next"
@@ -308,9 +324,10 @@ export default function SetupScreen() {
               </View>
 
               <ThemedText
-                type="h4"
+                type={isTVDevice ? "h3" : "h4"}
                 style={[
                   styles.sectionTitle,
+                  isTVDevice && styles.sectionTitleTv,
                   isCompact && styles.sectionTitleCompact,
                 ]}
               >
@@ -321,23 +338,32 @@ export default function SetupScreen() {
                   styles.inputContainer,
                   {
                     backgroundColor: theme.backgroundDefault,
-                    borderColor: theme.backgroundSecondary,
+                    borderColor: urlFocused
+                      ? theme.primary
+                      : theme.backgroundSecondary,
                   },
                   isCompact && styles.inputContainerCompact,
+                  isTVDevice && styles.inputContainerTv,
                 ]}
               >
                 <Ionicons
                   name="link"
-                  size={18}
-                  color={theme.textSecondary}
+                  size={isTVDevice ? 22 : 18}
+                  color={urlFocused ? theme.primary : theme.textSecondary}
                   style={styles.inputIcon}
                 />
                 <TextInput
                   value={url}
                   onChangeText={setUrl}
+                  onFocus={() => setUrlFocused(true)}
+                  onBlur={() => setUrlFocused(false)}
                   placeholder="https://example.com/playlist"
                   placeholderTextColor={theme.textSecondary}
-                  style={[styles.input, { color: theme.text }]}
+                  style={[
+                    styles.input,
+                    { color: theme.text },
+                    isTVDevice && styles.inputTv,
+                  ]}
                   autoCapitalize="none"
                   autoCorrect={false}
                   keyboardType="url"
@@ -354,8 +380,13 @@ export default function SetupScreen() {
                 disabled={
                   isLoadingPlaylist || !url.trim() || !playlistName.trim()
                 }
-                style={[styles.button, isCompact && styles.buttonCompact]}
-                hasTVPreferredFocus={isTVDevice}
+                style={
+                  [
+                    styles.button,
+                    isCompact && styles.buttonCompact,
+                    isTVDevice && styles.buttonTv,
+                  ] as ViewStyle[]
+                }
               >
                 {loadingType === "url" ? (
                   <ActivityIndicator size="small" color={theme.buttonText} />
@@ -378,7 +409,11 @@ export default function SetupScreen() {
                 />
                 <ThemedText
                   type="small"
-                  style={[styles.dividerText, { color: theme.textSecondary }]}
+                  style={[
+                    styles.dividerText,
+                    { color: theme.textSecondary },
+                    isTVDevice && styles.dividerTextTv,
+                  ]}
                 >
                   OR
                 </ThemedText>
@@ -396,6 +431,7 @@ export default function SetupScreen() {
                 onBlur={() => setIsFileFocused(false)}
                 disabled={isLoadingPlaylist}
                 focusable={!isLoadingPlaylist}
+                hasTVPreferredFocus={isTVDevice && !isLoadingPlaylist}
                 accessibilityLabel="Choose file"
                 accessibilityRole="button"
                 style={
@@ -406,6 +442,7 @@ export default function SetupScreen() {
                       borderColor: theme.primary + "40",
                     },
                     isCompact && styles.fileButtonCompact,
+                    isTVDevice && styles.fileButtonTv,
                     isFileFocused && [
                       styles.fileButtonFocused,
                       { backgroundColor: theme.primary + "15" },
@@ -420,10 +457,16 @@ export default function SetupScreen() {
                   <>
                     <Ionicons
                       name="cloud-upload"
-                      size={22}
+                      size={isTVDevice ? 28 : 22}
                       color={theme.primary}
                     />
-                    <ThemedText type="small" style={styles.fileButtonText}>
+                    <ThemedText
+                      type={isTVDevice ? "body" : "small"}
+                      style={[
+                        styles.fileButtonText,
+                        isTVDevice && styles.fileButtonTextTv,
+                      ]}
+                    >
                       Choose File
                     </ThemedText>
                   </>
@@ -443,7 +486,11 @@ export default function SetupScreen() {
             <Ionicons name="alert-circle" size={14} color={theme.error} />
             <ThemedText
               type="small"
-              style={[styles.errorText, { color: theme.error }]}
+              style={[
+                styles.errorText,
+                { color: theme.error },
+                isTVDevice && styles.errorTextTv,
+              ]}
             >
               {error}
             </ThemedText>
@@ -457,13 +504,20 @@ export default function SetupScreen() {
             style={[
               styles.loadingContent,
               { backgroundColor: theme.backgroundDefault },
+              isTVDevice && styles.loadingContentTv,
             ]}
           >
             <ActivityIndicator size="large" color={theme.primary} />
             <ThemedText type="body" style={styles.loadingText}>
               {loadingProgress}
             </ThemedText>
-            <ThemedText type="small" style={{ color: theme.textSecondary }}>
+            <ThemedText
+              type="small"
+              style={[
+                { color: theme.textSecondary },
+                isTVDevice && styles.errorTextTv,
+              ]}
+            >
               This may take a moment for large playlists
             </ThemedText>
             <Pressable
@@ -477,6 +531,7 @@ export default function SetupScreen() {
                 [
                   styles.cancelButton,
                   { borderColor: theme.textSecondary + "40" },
+                  isTVDevice && styles.cancelButtonTv,
                   isCancelFocused && [
                     styles.cancelButtonFocused,
                     { backgroundColor: theme.primary + "20" },
@@ -692,4 +747,52 @@ const styles = StyleSheet.create({
     borderColor: "transparent",
   },
   closeButtonFocused: {},
+  // TV sizing — larger D-pad targets and text for leanback screens.
+  closeButtonTv: {
+    width: 56,
+    height: 56,
+    borderRadius: BorderRadius.sm,
+  },
+  sectionTitleTv: {
+    marginTop: Spacing.md,
+  },
+  inputContainerTv: {
+    height: 56,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.lg,
+  },
+  inputTv: {
+    fontSize: 16,
+  },
+  buttonTv: {
+    height: 52,
+    width: "100%",
+    borderRadius: BorderRadius.md,
+  },
+  dividerTextTv: {
+    fontSize: 13,
+  },
+  fileButtonTv: {
+    minHeight: 80,
+    minWidth: 220,
+    paddingVertical: Spacing.xl,
+    paddingHorizontal: Spacing["2xl"],
+    borderRadius: BorderRadius.md,
+    width: "100%",
+  },
+  fileButtonTextTv: {
+    fontSize: 16,
+  },
+  errorTextTv: {
+    fontSize: 14,
+  },
+  loadingContentTv: {
+    minWidth: 380,
+    padding: Spacing["3xl"],
+    borderRadius: BorderRadius.lg,
+  },
+  cancelButtonTv: {
+    paddingHorizontal: Spacing["2xl"],
+    paddingVertical: Spacing.md,
+  },
 });
