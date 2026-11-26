@@ -26,7 +26,30 @@ import { usePlaylist } from "@/context/PlaylistContext";
 import { useOrientation } from "@/hooks/useOrientation";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
-import { buildXtreamPlaylistUrl } from "@/lib/xtream";
+import {
+  buildXtreamApiUrl,
+  buildXtreamPlaylistUrl,
+  checkXtreamAccount,
+} from "@/lib/xtream";
+import { fetchTextSafe } from "@/lib/m3u-parser";
+import { fetchPlaylistNative } from "../../modules/tv-player/src/index";
+
+/** GET a URL as text, preferring the native OkHttp client. */
+async function fetchText(
+  target: string,
+): Promise<{ ok: boolean; text: string; error: string }> {
+  try {
+    const native = await fetchPlaylistNative(target);
+    if (native.success) return { ok: true, text: native.content, error: "" };
+    if (native.error && native.error !== "Native module not available") {
+      return { ok: false, text: "", error: native.error };
+    }
+  } catch {
+    // fall through to the JS request
+  }
+  const js = await fetchTextSafe(target, 30000);
+  return { ok: js.ok, text: js.text, error: js.error };
+}
 
 type SourceMode = "url" | "xtream";
 
@@ -87,13 +110,16 @@ export default function SetupScreen() {
 
   const handleLoadFromUrl = async () => {
     let playlistUrl = url.trim();
+    let apiUrl = "";
     if (isXtream) {
       try {
-        playlistUrl = buildXtreamPlaylistUrl({
+        const creds = {
           server: xtreamServer,
           username: xtreamUsername,
           password: xtreamPassword,
-        });
+        };
+        playlistUrl = buildXtreamPlaylistUrl(creds);
+        apiUrl = buildXtreamApiUrl(creds);
       } catch (err: any) {
         setError(err.message);
         return;
@@ -115,9 +141,20 @@ export default function SetupScreen() {
       abortRef.current = false;
       if (!isTVDevice) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-      setLoadingProgress(
-        isXtream ? "Signing in to Xtream server..." : "Fetching playlist...",
-      );
+      if (isXtream) {
+        setLoadingProgress("Signing in to Xtream server...");
+        const account = await fetchText(apiUrl);
+        if (!account.ok) {
+          throw new Error(
+            `Couldn't reach the Xtream server (${account.error || "no response"})`,
+          );
+        }
+        const accountError = checkXtreamAccount(account.text);
+        if (accountError) throw new Error(accountError);
+        setLoadingProgress("Downloading channel list...");
+      } else {
+        setLoadingProgress("Fetching playlist...");
+      }
 
       await loadPlaylistFromUrl(playlistUrl, playlistName.trim());
       if (!isTVDevice)

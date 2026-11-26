@@ -1,4 +1,42 @@
-import { buildXtreamPlaylistUrl, normalizeXtreamServer } from "../xtream";
+import {
+  buildXtreamApiUrl,
+  buildXtreamPlaylistUrl,
+  checkXtreamAccount,
+  normalizeXtreamServer,
+} from "../xtream";
+
+describe("buildXtreamApiUrl", () => {
+  it("points at player_api.php with the credentials", () => {
+    expect(
+      buildXtreamApiUrl({ server: "a.com", username: "u", password: "p" }),
+    ).toBe("http://a.com/player_api.php?username=u&password=p");
+  });
+});
+
+describe("checkXtreamAccount", () => {
+  it("accepts an active, authenticated account", () => {
+    expect(
+      checkXtreamAccount('{"user_info":{"auth":1,"status":"Active"}}'),
+    ).toBeNull();
+  });
+
+  it("reports wrong credentials", () => {
+    expect(checkXtreamAccount('{"user_info":{"auth":0}}')).toBe(
+      "Wrong username or password",
+    );
+  });
+
+  it("reports inactive accounts", () => {
+    expect(
+      checkXtreamAccount('{"user_info":{"auth":1,"status":"Expired"}}'),
+    ).toBe("Your Xtream account is expired");
+  });
+
+  it("does not block on unrecognised responses", () => {
+    expect(checkXtreamAccount("<html>nope</html>")).toBeNull();
+    expect(checkXtreamAccount("[]")).toBeNull();
+  });
+});
 
 describe("normalizeXtreamServer", () => {
   it("adds http:// when no scheme is given", () => {

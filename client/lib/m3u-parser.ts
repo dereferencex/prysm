@@ -386,6 +386,64 @@ function extractEpgUrls(content: string): string[] {
 export const PRYSM_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
+/**
+ * Plain-text GET over XMLHttpRequest.
+ *
+ * Used instead of `fetch` for the JS fallback: React Native's fetch polyfill
+ * builds a `Response` inside an XHR callback, and when the native layer
+ * reports status 0 (connection dropped, cleartext refused, aborted) that
+ * constructor throws a RangeError outside the promise chain, which crashes
+ * the app. This helper always settles its promise instead.
+ */
+export function fetchTextSafe(
+  url: string,
+  timeoutMs = 60000,
+): Promise<{ ok: boolean; status: number; text: string; error: string }> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (r: {
+      ok: boolean;
+      status: number;
+      text: string;
+      error: string;
+    }) => {
+      if (settled) return;
+      settled = true;
+      resolve(r);
+    };
+    try {
+      const xhr = new XMLHttpRequest();
+      xhr.open("GET", url);
+      xhr.setRequestHeader("User-Agent", PRYSM_USER_AGENT);
+      xhr.setRequestHeader("Accept", "*/*");
+      xhr.timeout = timeoutMs;
+      xhr.onload = () => {
+        const status = xhr.status;
+        const ok = status >= 200 && status < 300;
+        done({
+          ok,
+          status,
+          text: ok ? (xhr.responseText ?? "") : "",
+          error: ok
+            ? ""
+            : status
+              ? `HTTP ${status}`
+              : "No response from server",
+        });
+      };
+      xhr.onerror = () =>
+        done({ ok: false, status: 0, text: "", error: "Network error" });
+      xhr.ontimeout = () =>
+        done({ ok: false, status: 0, text: "", error: "Request timed out" });
+      xhr.onabort = () =>
+        done({ ok: false, status: 0, text: "", error: "Request aborted" });
+      xhr.send();
+    } catch (e: any) {
+      done({ ok: false, status: 0, text: "", error: e?.message ?? String(e) });
+    }
+  });
+}
+
 async function fetchPlaylistContent(url: string): Promise<string | null> {
   try {
     // Try native OkHttp fetch first (properly handles User-Agent on Android)
@@ -400,22 +458,13 @@ async function fetchPlaylistContent(url: string): Promise<string | null> {
     // Native fetch unavailable or failed, fall through to JS fetch
   }
 
-  // Fallback: JS fetch (may strip User-Agent on some RN versions)
-  try {
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent": PRYSM_USER_AGENT,
-        Accept: "*/*",
-      },
-    });
-    if (response.ok) {
-      const content = await response.text();
-      if (content.includes("#EXTM3U") || content.includes("#EXTINF")) {
-        return content;
-      }
-    }
-  } catch {
-    // Both fetch methods failed
+  // Fallback: JS request (may strip User-Agent on some RN versions)
+  const response = await fetchTextSafe(url);
+  if (
+    response.ok &&
+    (response.text.includes("#EXTM3U") || response.text.includes("#EXTINF"))
+  ) {
+    return response.text;
   }
   return null;
 }
@@ -706,38 +755,36 @@ export async function fetchAndParsePlaylist(
   customName?: string,
 ): Promise<Playlist> {
   let content: string | null = null;
+  let nativeError = "";
 
   // Try native OkHttp fetch first (properly handles User-Agent on Android)
   try {
     const result = await fetchPlaylistNative(url);
     if (result.success) {
       content = result.content;
+    } else {
+      nativeError = result.error;
     }
-  } catch {
-    // Native fetch unavailable, fall through to JS fetch
+  } catch (e: any) {
+    nativeError = e?.message ?? "";
   }
 
-  // Fallback: JS fetch
+  // Fallback: JS request
+  let jsError = "";
   if (!content) {
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent": PRYSM_USER_AGENT,
-        Accept: "*/*",
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        "Could not fetch playlist. The server may be blocking requests or require specific app authentication.",
-      );
+    const response = await fetchTextSafe(url);
+    if (response.ok) {
+      content = response.text;
+    } else {
+      jsError = response.error;
     }
-
-    content = await response.text();
   }
 
   if (!content) {
+    const reason = [nativeError, jsError].filter(Boolean)[0];
     throw new Error(
-      "Could not fetch playlist. The server may be blocking requests or require specific app authentication.",
+      "Could not fetch playlist. The server may be blocking requests or require specific app authentication." +
+        (reason ? ` (${reason})` : ""),
     );
   }
 

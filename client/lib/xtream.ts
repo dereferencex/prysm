@@ -30,12 +30,10 @@ export function normalizeXtreamServer(server: string): string {
   return `${scheme}://${host}${path}`;
 }
 
-/** Builds the M3U Plus playlist URL that Xtream Codes servers expose. */
-export function buildXtreamPlaylistUrl({
-  server,
-  username,
-  password,
-}: XtreamCredentials): string {
+function credentialQuery({ server, username, password }: XtreamCredentials): {
+  base: string;
+  query: string;
+} {
   const base = normalizeXtreamServer(server);
   const user = username.trim();
   if (!user) {
@@ -44,9 +42,48 @@ export function buildXtreamPlaylistUrl({
   if (!password) {
     throw new Error("Please enter your password");
   }
+  return {
+    base,
+    query:
+      `username=${encodeURIComponent(user)}` +
+      `&password=${encodeURIComponent(password)}`,
+  };
+}
 
-  return (
-    `${base}/get.php?username=${encodeURIComponent(user)}` +
-    `&password=${encodeURIComponent(password)}&type=m3u_plus&output=ts`
-  );
+/** Builds the M3U Plus playlist URL that Xtream Codes servers expose. */
+export function buildXtreamPlaylistUrl(creds: XtreamCredentials): string {
+  const { base, query } = credentialQuery(creds);
+  return `${base}/get.php?${query}&type=m3u_plus&output=ts`;
+}
+
+/** Builds the player_api.php URL used to check the account before loading. */
+export function buildXtreamApiUrl(creds: XtreamCredentials): string {
+  const { base, query } = credentialQuery(creds);
+  return `${base}/player_api.php?${query}`;
+}
+
+/**
+ * Interprets a player_api.php response. Returns a user-facing error message,
+ * or null when the account is usable. Unrecognised responses return null so
+ * the playlist download still gets a chance (some panels answer oddly).
+ */
+export function checkXtreamAccount(body: string): string | null {
+  let data: any;
+  try {
+    data = JSON.parse(body);
+  } catch {
+    return null;
+  }
+  const info = data?.user_info;
+  if (!info || typeof info !== "object") {
+    return null;
+  }
+  if (Number(info.auth) === 0) {
+    return "Wrong username or password";
+  }
+  const status = typeof info.status === "string" ? info.status.trim() : "";
+  if (status && status.toLowerCase() !== "active") {
+    return `Your Xtream account is ${status.toLowerCase()}`;
+  }
+  return null;
 }
