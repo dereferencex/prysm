@@ -31,25 +31,7 @@ import {
   buildXtreamPlaylistUrl,
   checkXtreamAccount,
 } from "@/lib/xtream";
-import { fetchTextSafe } from "@/lib/m3u-parser";
-import { fetchPlaylistNative } from "../../modules/tv-player/src/index";
-
-/** GET a URL as text, preferring the native OkHttp client. */
-async function fetchText(
-  target: string,
-): Promise<{ ok: boolean; text: string; error: string }> {
-  try {
-    const native = await fetchPlaylistNative(target);
-    if (native.success) return { ok: true, text: native.content, error: "" };
-    if (native.error && native.error !== "Native module not available") {
-      return { ok: false, text: "", error: native.error };
-    }
-  } catch {
-    // fall through to the JS request
-  }
-  const js = await fetchTextSafe(target, 30000);
-  return { ok: js.ok, text: js.text, error: js.error };
-}
+import { fetchText } from "@/lib/m3u-parser";
 
 type SourceMode = "url" | "xtream";
 

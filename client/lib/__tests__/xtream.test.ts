@@ -3,6 +3,9 @@ import {
   buildXtreamPlaylistUrl,
   checkXtreamAccount,
   normalizeXtreamServer,
+  parseXtreamGetUrl,
+  pickXtreamOutput,
+  xtreamLiveToChannels,
 } from "../xtream";
 
 describe("buildXtreamApiUrl", () => {
@@ -83,5 +86,86 @@ describe("buildXtreamPlaylistUrl", () => {
     expect(() =>
       buildXtreamPlaylistUrl({ server: "a.com", username: "u", password: "" }),
     ).toThrow("password");
+  });
+});
+
+describe("parseXtreamGetUrl", () => {
+  it("round-trips a URL built by buildXtreamPlaylistUrl", () => {
+    const url = buildXtreamPlaylistUrl({
+      server: "http://a.com:8080/iptv",
+      username: "u",
+      password: "p&q",
+    });
+    expect(parseXtreamGetUrl(url)).toEqual({
+      base: "http://a.com:8080/iptv",
+      username: "u",
+      password: "p&q",
+    });
+  });
+
+  it("ignores non-Xtream URLs", () => {
+    expect(parseXtreamGetUrl("http://a.com/list.m3u")).toBeNull();
+    expect(parseXtreamGetUrl("http://a.com/get.php?type=m3u")).toBeNull();
+  });
+});
+
+describe("pickXtreamOutput", () => {
+  it("prefers ts, then m3u8", () => {
+    expect(pickXtreamOutput({ allowed_output_formats: ["m3u8", "ts"] })).toBe(
+      "ts",
+    );
+    expect(pickXtreamOutput({ allowed_output_formats: ["m3u8"] })).toBe("m3u8");
+    expect(pickXtreamOutput(undefined)).toBe("ts");
+  });
+});
+
+describe("xtreamLiveToChannels", () => {
+  const categories = [
+    { category_id: "2", category_name: "Sports" },
+    { category_id: "1", category_name: "News" },
+    { category_id: "3", category_name: "Empty" },
+  ];
+  const streams = [
+    {
+      num: 2,
+      name: "News One",
+      stream_id: 20,
+      category_id: "1",
+      stream_icon: "http://img/n.png",
+      epg_channel_id: "news.one",
+    },
+    { num: 1, name: "Sport One", stream_id: 10, category_id: "2" },
+    { num: 3, name: "Lost", stream_id: 30, category_id: "99" },
+    { num: 4, name: "No id" },
+  ];
+
+  it("builds live stream URLs in provider order", () => {
+    const out = xtreamLiveToChannels(
+      "http://a.com",
+      "u",
+      "p",
+      categories,
+      streams,
+    );
+    expect(out.channels.map((c) => c.url)).toEqual([
+      "http://a.com/live/u/p/10.ts",
+      "http://a.com/live/u/p/20.ts",
+      "http://a.com/live/u/p/30.ts",
+    ]);
+    expect(out.channels[1]).toMatchObject({
+      name: "News One",
+      group: "News",
+      logo: "http://img/n.png",
+      tvgId: "news.one",
+    });
+    expect(out.channels[2].group).toBe("Uncategorized");
+    expect(out.categories).toEqual(["Sports", "News", "Uncategorized"]);
+  });
+
+  it("handles junk input without throwing", () => {
+    expect(xtreamLiveToChannels("http://a.com", "u", "p", null, {})).toEqual({
+      channels: [],
+      categories: [],
+    });
   });
 });

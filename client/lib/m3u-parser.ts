@@ -1,5 +1,10 @@
 import { Channel, Playlist, DRMInfo } from "@/types/playlist";
 import { fetchPlaylistNative } from "../../modules/tv-player/src/index";
+import {
+  parseXtreamGetUrl,
+  pickXtreamOutput,
+  xtreamLiveToChannels,
+} from "@/lib/xtream";
 
 function generateId(): string {
   return (
@@ -747,6 +752,80 @@ function parseJSONArray(
   };
 }
 
+/** GET a URL as text, preferring the native OkHttp client. */
+export async function fetchText(
+  target: string,
+  timeoutMs = 60000,
+): Promise<{ ok: boolean; text: string; error: string }> {
+  try {
+    const native = await fetchPlaylistNative(target);
+    if (native.success) return { ok: true, text: native.content, error: "" };
+    if (native.error && native.error !== "Native module not available") {
+      return { ok: false, text: "", error: native.error };
+    }
+  } catch {
+    // fall through to the JS request
+  }
+  const js = await fetchTextSafe(target, timeoutMs);
+  return { ok: js.ok, text: js.text, error: js.error };
+}
+
+async function fetchJson(target: string): Promise<any> {
+  const res = await fetchText(target, 120000);
+  if (!res.ok) throw new Error(res.error || "No response from server");
+  try {
+    return JSON.parse(res.text);
+  } catch {
+    throw new Error("Server did not return valid data");
+  }
+}
+
+/**
+ * Loads live channels through the Xtream Codes player API. Many providers
+ * disable the get.php M3U export (answering e.g. HTTP 884) but keep the API.
+ */
+async function fetchXtreamPlaylist(
+  xt: { base: string; username: string; password: string },
+  playlistName: string,
+): Promise<Playlist> {
+  const api =
+    `${xt.base}/player_api.php?username=${encodeURIComponent(xt.username)}` +
+    `&password=${encodeURIComponent(xt.password)}`;
+  const account = await fetchJson(api);
+  const [categories, streams] = await Promise.all([
+    fetchJson(`${api}&action=get_live_categories`),
+    fetchJson(`${api}&action=get_live_streams`),
+  ]);
+  const converted = xtreamLiveToChannels(
+    xt.base,
+    xt.username,
+    xt.password,
+    categories,
+    streams,
+    pickXtreamOutput(account?.user_info),
+  );
+  if (converted.channels.length === 0) {
+    throw new Error("The Xtream server returned no live channels");
+  }
+  const seen = new Set<string>();
+  const channels: Channel[] = converted.channels.map((c) => ({
+    ...c,
+    id: resolveChannelId(c.url, c.name, seen),
+    isLive: true,
+  }));
+  return {
+    id: generateId(),
+    name: playlistName,
+    channels,
+    categories: converted.categories,
+    lastUpdated: Date.now(),
+    epgUrls: [
+      `${xt.base}/xmltv.php?username=${encodeURIComponent(xt.username)}` +
+        `&password=${encodeURIComponent(xt.password)}`,
+    ],
+  };
+}
+
 /**
  * Fetches and parses any playlist format
  */
@@ -754,6 +833,23 @@ export async function fetchAndParsePlaylist(
   url: string,
   customName?: string,
 ): Promise<Playlist> {
+  // Xtream Codes links load through the player API first, falling back to
+  // the get.php M3U export only if the API fails.
+  const xt = parseXtreamGetUrl(url);
+  let xtreamError = "";
+  if (xt) {
+    try {
+      const playlist = await fetchXtreamPlaylist(
+        xt,
+        customName || "Xtream Playlist",
+      );
+      playlist.url = url;
+      return playlist;
+    } catch (e: any) {
+      xtreamError = e?.message ?? "";
+    }
+  }
+
   let content: string | null = null;
   let nativeError = "";
 
@@ -781,6 +877,9 @@ export async function fetchAndParsePlaylist(
   }
 
   if (!content) {
+    if (xtreamError) {
+      throw new Error(`Could not load Xtream channels (${xtreamError})`);
+    }
     const reason = [nativeError, jsError].filter(Boolean)[0];
     throw new Error(
       "Could not fetch playlist. The server may be blocking requests or require specific app authentication." +
