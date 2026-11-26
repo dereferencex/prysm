@@ -770,8 +770,16 @@ export async function fetchText(
   return { ok: js.ok, text: js.text, error: js.error };
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function fetchJson(target: string): Promise<any> {
-  const res = await fetchText(target, 120000);
+  let res = await fetchText(target, 120000);
+  // Some Xtream panels answer 404/429 to a request repeated within about a
+  // second of an identical one; a single delayed retry gets through.
+  if (!res.ok && /HTTP (404|429)/.test(res.error)) {
+    await sleep(2000);
+    res = await fetchText(target, 120000);
+  }
   if (!res.ok) throw new Error(res.error || "No response from server");
   try {
     return JSON.parse(res.text);
@@ -791,11 +799,12 @@ async function fetchXtreamPlaylist(
   const api =
     `${xt.base}/player_api.php?username=${encodeURIComponent(xt.username)}` +
     `&password=${encodeURIComponent(xt.password)}`;
-  const account = await fetchJson(api);
-  const [categories, streams] = await Promise.all([
-    fetchJson(`${api}&action=get_live_categories`),
-    fetchJson(`${api}&action=get_live_streams`),
-  ]);
+  // Sequential on purpose: accounts are often limited to one connection, and
+  // the sign-in screen has usually just requested the bare account URL, so
+  // that one goes last and is optional (it only picks the stream format).
+  const categories = await fetchJson(`${api}&action=get_live_categories`);
+  const streams = await fetchJson(`${api}&action=get_live_streams`);
+  const account = await fetchJson(api).catch(() => null);
   const converted = xtreamLiveToChannels(
     xt.base,
     xt.username,
