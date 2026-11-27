@@ -26,6 +26,14 @@ import { usePlaylist } from "@/context/PlaylistContext";
 import { useOrientation } from "@/hooks/useOrientation";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import {
+  buildXtreamApiUrl,
+  buildXtreamPlaylistUrl,
+  checkXtreamAccount,
+} from "@/lib/xtream";
+import { fetchText } from "@/lib/m3u-parser";
+
+type SourceMode = "url" | "xtream";
 
 type SetupRouteProp = RouteProp<RootStackParamList, "Setup">;
 type SetupNavigationProp = NativeStackNavigationProp<
@@ -59,6 +67,17 @@ export default function SetupScreen() {
   const [isCancelFocused, setIsCancelFocused] = useState(false);
   const [nameFocused, setNameFocused] = useState(false);
   const [urlFocused, setUrlFocused] = useState(false);
+  const [sourceMode, setSourceMode] = useState<SourceMode>("url");
+  const [xtreamServer, setXtreamServer] = useState("");
+  const [xtreamUsername, setXtreamUsername] = useState("");
+  const [xtreamPassword, setXtreamPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [focusedField, setFocusedField] = useState<string | null>(null);
+
+  const isXtream = sourceMode === "xtream";
+  const canSubmit = isXtream
+    ? !!xtreamServer.trim() && !!xtreamUsername.trim() && !!xtreamPassword
+    : !!url.trim();
 
   const isCompact = height < 500;
   const isTVDevice = Platform.isTV;
@@ -72,7 +91,22 @@ export default function SetupScreen() {
   };
 
   const handleLoadFromUrl = async () => {
-    if (!url.trim()) {
+    let playlistUrl = url.trim();
+    let apiUrl = "";
+    if (isXtream) {
+      try {
+        const creds = {
+          server: xtreamServer,
+          username: xtreamUsername,
+          password: xtreamPassword,
+        };
+        playlistUrl = buildXtreamPlaylistUrl(creds);
+        apiUrl = buildXtreamApiUrl(creds);
+      } catch (err: any) {
+        setError(err.message);
+        return;
+      }
+    } else if (!playlistUrl) {
       setError("Please enter a valid URL");
       return;
     }
@@ -89,9 +123,22 @@ export default function SetupScreen() {
       abortRef.current = false;
       if (!isTVDevice) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-      setLoadingProgress("Fetching playlist...");
+      if (isXtream) {
+        setLoadingProgress("Signing in to Xtream server...");
+        const account = await fetchText(apiUrl);
+        if (!account.ok) {
+          throw new Error(
+            `Couldn't reach the Xtream server (${account.error || "no response"})`,
+          );
+        }
+        const accountError = checkXtreamAccount(account.text);
+        if (accountError) throw new Error(accountError);
+        setLoadingProgress("Downloading channel list...");
+      } else {
+        setLoadingProgress("Fetching playlist...");
+      }
 
-      await loadPlaylistFromUrl(url.trim(), playlistName.trim());
+      await loadPlaylistFromUrl(playlistUrl, playlistName.trim());
       if (!isTVDevice)
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShowLoadingModal(false);
@@ -323,62 +370,245 @@ export default function SetupScreen() {
                 />
               </View>
 
-              <ThemedText
-                type={isTVDevice ? "h3" : "h4"}
-                style={[
-                  styles.sectionTitle,
-                  isTVDevice && styles.sectionTitleTv,
-                  isCompact && styles.sectionTitleCompact,
-                ]}
-              >
-                Enter Playlist URL
-              </ThemedText>
               <View
                 style={[
-                  styles.inputContainer,
-                  {
-                    backgroundColor: theme.backgroundDefault,
-                    borderColor: urlFocused
-                      ? theme.primary
-                      : theme.backgroundSecondary,
-                  },
-                  isCompact && styles.inputContainerCompact,
-                  isTVDevice && styles.inputContainerTv,
+                  styles.modeToggle,
+                  { backgroundColor: theme.backgroundDefault },
+                  isTVDevice && styles.sectionTitleTv,
                 ]}
+                accessibilityRole="tablist"
               >
-                <Ionicons
-                  name="link"
-                  size={isTVDevice ? 22 : 18}
-                  color={urlFocused ? theme.primary : theme.textSecondary}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  value={url}
-                  onChangeText={setUrl}
-                  onFocus={() => setUrlFocused(true)}
-                  onBlur={() => setUrlFocused(false)}
-                  placeholder="https://example.com/playlist"
-                  placeholderTextColor={theme.textSecondary}
-                  style={[
-                    styles.input,
-                    { color: theme.text },
-                    isTVDevice && styles.inputTv,
-                  ]}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="url"
-                  returnKeyType="done"
-                  onSubmitEditing={handleLoadFromUrl}
-                  editable={!isLoadingPlaylist}
-                  showSoftInputOnFocus={true}
-                  testID="url-input"
-                />
+                {(
+                  [
+                    ["url", "Playlist URL", "link"],
+                    ["xtream", "Xtream Codes", "key"],
+                  ] as const
+                ).map(([mode, label, icon]) => {
+                  const selected = sourceMode === mode;
+                  const focused = focusedField === `mode-${mode}`;
+                  return (
+                    <Pressable
+                      key={mode}
+                      onPress={() => {
+                        setSourceMode(mode);
+                        setError(null);
+                      }}
+                      onFocus={() => setFocusedField(`mode-${mode}`)}
+                      onBlur={() => setFocusedField(null)}
+                      disabled={isLoadingPlaylist}
+                      focusable={!isLoadingPlaylist}
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={label}
+                      style={[
+                        styles.modeOption,
+                        isTVDevice && styles.modeOptionTv,
+                        selected && { backgroundColor: theme.primary },
+                        focused &&
+                          !selected && {
+                            backgroundColor: theme.primary + "20",
+                          },
+                      ]}
+                      testID={`mode-${mode}`}
+                    >
+                      <Ionicons
+                        name={icon}
+                        size={isTVDevice ? 20 : 16}
+                        color={selected ? theme.buttonText : theme.text}
+                      />
+                      <ThemedText
+                        type="small"
+                        style={[
+                          styles.modeOptionText,
+                          { color: selected ? theme.buttonText : theme.text },
+                          isTVDevice && styles.fileButtonTextTv,
+                        ]}
+                      >
+                        {label}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
               </View>
+
+              {isXtream ? (
+                <>
+                  {(
+                    [
+                      {
+                        key: "server",
+                        title: "Server URL",
+                        icon: "server",
+                        value: xtreamServer,
+                        onChange: setXtreamServer,
+                        placeholder: "http://example.com:8080",
+                        keyboardType: "url",
+                      },
+                      {
+                        key: "username",
+                        title: "Username",
+                        icon: "person",
+                        value: xtreamUsername,
+                        onChange: setXtreamUsername,
+                        placeholder: "Username",
+                        keyboardType: "default",
+                      },
+                      {
+                        key: "password",
+                        title: "Password",
+                        icon: "lock-closed",
+                        value: xtreamPassword,
+                        onChange: setXtreamPassword,
+                        placeholder: "Password",
+                        keyboardType: "default",
+                      },
+                    ] as const
+                  ).map((field) => {
+                    const focused = focusedField === field.key;
+                    const isPassword = field.key === "password";
+                    return (
+                      <React.Fragment key={field.key}>
+                        <ThemedText
+                          type={isTVDevice ? "h3" : "h4"}
+                          style={[
+                            styles.sectionTitle,
+                            isCompact && styles.sectionTitleCompact,
+                          ]}
+                        >
+                          {field.title}
+                        </ThemedText>
+                        <View
+                          style={[
+                            styles.inputContainer,
+                            {
+                              backgroundColor: theme.backgroundDefault,
+                              borderColor: focused
+                                ? theme.primary
+                                : theme.backgroundSecondary,
+                            },
+                            isCompact && styles.inputContainerCompact,
+                            isTVDevice && styles.inputContainerTv,
+                          ]}
+                        >
+                          <Ionicons
+                            name={field.icon}
+                            size={isTVDevice ? 22 : 18}
+                            color={
+                              focused ? theme.primary : theme.textSecondary
+                            }
+                            style={styles.inputIcon}
+                          />
+                          <TextInput
+                            value={field.value}
+                            onChangeText={field.onChange}
+                            onFocus={() => setFocusedField(field.key)}
+                            onBlur={() => setFocusedField(null)}
+                            placeholder={field.placeholder}
+                            placeholderTextColor={theme.textSecondary}
+                            style={[
+                              styles.input,
+                              { color: theme.text },
+                              isTVDevice && styles.inputTv,
+                            ]}
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            keyboardType={field.keyboardType}
+                            secureTextEntry={isPassword && !showPassword}
+                            textContentType={
+                              isPassword
+                                ? "password"
+                                : field.key === "username"
+                                  ? "username"
+                                  : "URL"
+                            }
+                            returnKeyType={isPassword ? "done" : "next"}
+                            onSubmitEditing={
+                              isPassword ? handleLoadFromUrl : undefined
+                            }
+                            editable={!isLoadingPlaylist}
+                            showSoftInputOnFocus={true}
+                            testID={`xtream-${field.key}-input`}
+                          />
+                          {isPassword ? (
+                            <Pressable
+                              onPress={() => setShowPassword((v) => !v)}
+                              hitSlop={12}
+                              accessibilityRole="button"
+                              accessibilityLabel={
+                                showPassword ? "Hide password" : "Show password"
+                              }
+                            >
+                              <Ionicons
+                                name={showPassword ? "eye-off" : "eye"}
+                                size={isTVDevice ? 22 : 18}
+                                color={theme.textSecondary}
+                              />
+                            </Pressable>
+                          ) : null}
+                        </View>
+                      </React.Fragment>
+                    );
+                  })}
+                </>
+              ) : (
+                <>
+                  <ThemedText
+                    type={isTVDevice ? "h3" : "h4"}
+                    style={[
+                      styles.sectionTitle,
+                      isCompact && styles.sectionTitleCompact,
+                    ]}
+                  >
+                    Enter Playlist URL
+                  </ThemedText>
+                  <View
+                    style={[
+                      styles.inputContainer,
+                      {
+                        backgroundColor: theme.backgroundDefault,
+                        borderColor: urlFocused
+                          ? theme.primary
+                          : theme.backgroundSecondary,
+                      },
+                      isCompact && styles.inputContainerCompact,
+                      isTVDevice && styles.inputContainerTv,
+                    ]}
+                  >
+                    <Ionicons
+                      name="link"
+                      size={isTVDevice ? 22 : 18}
+                      color={urlFocused ? theme.primary : theme.textSecondary}
+                      style={styles.inputIcon}
+                    />
+                    <TextInput
+                      value={url}
+                      onChangeText={setUrl}
+                      onFocus={() => setUrlFocused(true)}
+                      onBlur={() => setUrlFocused(false)}
+                      placeholder="https://example.com/playlist"
+                      placeholderTextColor={theme.textSecondary}
+                      style={[
+                        styles.input,
+                        { color: theme.text },
+                        isTVDevice && styles.inputTv,
+                      ]}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      keyboardType="url"
+                      returnKeyType="done"
+                      onSubmitEditing={handleLoadFromUrl}
+                      editable={!isLoadingPlaylist}
+                      showSoftInputOnFocus={true}
+                      testID="url-input"
+                    />
+                  </View>
+                </>
+              )}
 
               <Button
                 onPress={handleLoadFromUrl}
                 disabled={
-                  isLoadingPlaylist || !url.trim() || !playlistName.trim()
+                  isLoadingPlaylist || !canSubmit || !playlistName.trim()
                 }
                 style={
                   [
@@ -390,6 +620,8 @@ export default function SetupScreen() {
               >
                 {loadingType === "url" ? (
                   <ActivityIndicator size="small" color={theme.buttonText} />
+                ) : isXtream ? (
+                  "Sign In"
                 ) : (
                   "Load Playlist"
                 )}
@@ -643,6 +875,28 @@ const styles = StyleSheet.create({
   },
   button: {
     height: 44,
+  },
+  modeToggle: {
+    flexDirection: "row",
+    borderRadius: BorderRadius.sm,
+    padding: 4,
+    gap: 4,
+    marginBottom: Spacing.md,
+  },
+  modeOption: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.xs,
+    height: 36,
+    borderRadius: BorderRadius.xs,
+  },
+  modeOptionTv: {
+    height: 48,
+  },
+  modeOptionText: {
+    fontWeight: "600",
   },
   buttonCompact: {
     height: 40,
