@@ -23,6 +23,7 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.prysmplayer.app",
       "versionCode": 10500,
+      "allowBackup": false,
       "jsEngine": "hermes",
       "permissions": [
         "REQUEST_INSTALL_PACKAGES"
