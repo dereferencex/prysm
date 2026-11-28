@@ -5,6 +5,30 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning: [S
 
 ---
 
+## [1.5.1] — 2026-11-28
+
+### Added
+- **Xtream Codes login** — add playlists with server URL, username and password,
+  then load live channels through the provider API.
+- **Responsive shared screens on TV** — adapt setup, network stream and logs
+  screens for TV layouts and remote navigation.
+
+### Changed
+- Improved performance and focus handling across TV Home, Live TV, channels,
+  favorites, search and the program guide.
+- Repeated D-pad navigation is throttled to keep focus aligned with TV lists.
+- Android release builds now use SDK 36, Build Tools 36.0.0 and NDK
+  27.1.12297006.
+
+### Fixed
+- Corrected Android video resize modes and picture-in-picture sizing.
+- Prevented playlist import crashes on empty responses and duplicate Xtream
+  API requests.
+- Made update release notes scroll on touch screens and TV remotes.
+- Disabled Android app-data backup to avoid restoring stale state on reinstall.
+
+---
+
 ## [1.5.0] — 2026-10-15
 
 ### Added
@@ -67,6 +91,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning: [S
   favorites, adaptive streaming (HLS/DASH/MSS), quality selection, and the
   Android TV remote experience.
 
+[1.5.1]: https://github.com/dereferencex/prysm/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/dereferencex/prysm/compare/v1.4.2...v1.5.0
 [1.4.2]: https://github.com/dereferencex/prysm/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/dereferencex/prysm/compare/v1.4.0...v1.4.1

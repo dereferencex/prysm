@@ -267,7 +267,7 @@ export default function SettingsScreen({
 
   const isTV = Platform.isTV;
   const isFdroid = Constants.expoConfig?.extra?.isFdroid === true;
-  const appVersion = Application.nativeApplicationVersion || "1.5.0";
+  const appVersion = Application.nativeApplicationVersion || "1.5.1";
   const useColumns = width > 700;
   // On TV and very wide screens show two columns of settings side by side
   const useTwoColumns = isTV || width > 900;

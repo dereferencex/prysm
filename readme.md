@@ -2,12 +2,12 @@
 
 # 📺 Prysm
 
-**A modern, lightweight M3U IPTV player for Android &amp; Android TV.**
+**A modern, lightweight M3U and Xtream Codes IPTV player for Android &amp; Android TV.**
 
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Android%20TV-3DDC84?logo=android&logoColor=white)](#-supported-platforms)
 [![Framework](https://img.shields.io/badge/Framework-Expo%20SDK%2054%20%7C%20React%20Native-000020?logo=expo&logoColor=white)](#-tech-stack)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](#-tech-stack)
-[![Version](https://img.shields.io/badge/version-1.5.0-blue.svg)](../../releases)
+[![Version](https://img.shields.io/badge/version-1.5.1-blue.svg)](../../releases)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](#-license)
 
 [**Download**](../../releases/latest) · [**Features**](#-features) · [**Screenshots**](#-screenshots) · [**Getting Started**](#-getting-started) · [**Contributing**](#-contributing)
@@ -18,7 +18,7 @@
 
 Prysm is an **IPTV player** with a purpose-built native playback engine and an interface that feels at home on a 10-foot screen — while staying just as polished on a phone.
 
-Every stream is yours: no content, no subscriptions, no accounts. Bring your own M3U source and go.
+Every stream is yours: Prysm includes no content or subscriptions and requires no Prysm account. Add an M3U source or sign in with your provider's Xtream Codes server.
 
 ---
 
@@ -30,6 +30,7 @@ Every stream is yours: no content, no subscriptions, no accounts. Bring your own
 
 ### 📡 Playlists
 - **M3U / M3U8 / PLS / XSPF / JSON** support
+- **Xtream Codes** — connect with a server URL, username and password; import live channels and categories
 - Load from **URL or local file**
 - **Multiple playlists** — save, switch, and manage
 - **Auto-refresh** — off, 5 min, 15 min, daily, or custom
@@ -171,6 +172,13 @@ npm install
 npm start          # Expo dev server
 npm run android    # Build & install on a connected device/emulator
 ```
+
+### 📡 Add a playlist
+
+On the setup screen, choose **Xtream Codes** and enter your provider's server URL,
+username and password. Prysm validates the account and loads its live channels
+and categories. To use an existing playlist instead, choose **Playlist URL** or
+import a local M3U file.
 
 ### 🏗️ Build a release APK
 
