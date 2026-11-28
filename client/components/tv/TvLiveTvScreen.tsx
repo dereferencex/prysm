@@ -2,13 +2,11 @@ import React, { useState, useMemo, useCallback, useEffect } from "react";
 import {
   View,
   StyleSheet,
-  TextInput,
   Platform,
-  ScrollView,
   type LayoutChangeEvent,
 } from "react-native";
-import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
+import { FlashList } from "@shopify/flash-list";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import * as Haptics from "expo-haptics";
@@ -26,8 +24,6 @@ import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { TvEpgBanner } from "./TvEpgBanner";
 
 const isTV = Platform.isTV;
-const placeholderImage = require("../../../assets/images/placeholder-channel.png");
-
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 interface TvLiveTvScreenProps {
@@ -41,21 +37,13 @@ export function TvLiveTvScreen({
   const { theme } = useTheme();
   const {
     playlist,
-    favorites,
-    favoriteCategories,
     toggleFavorite,
     toggleFavoriteCategory,
     isCategoryFavorite,
-    settings,
   } = usePlaylist();
   const epg = useEpg();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const c = useMemo(() => createTvPalette(theme), [theme]);
-
-  // Search queries
-  const [categorySearch, setCategorySearch] = useState("");
-  const [channelSearch, setChannelSearch] = useState("");
-  const [showOnlyFavCategories, setShowOnlyFavCategories] = useState(false);
 
   // Selected Category
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
@@ -78,21 +66,8 @@ export function TvLiveTvScreen({
 
   // Filtered categories (by search and favorites)
   const filteredCategories = useMemo(() => {
-    let list = allCategories;
-    if (showOnlyFavCategories) {
-      list = list.filter((c) => c === "All" || favoriteCategories.includes(c));
-    }
-    if (categorySearch.trim()) {
-      const q = categorySearch.toLowerCase().trim();
-      list = list.filter((c) => c.toLowerCase().includes(q));
-    }
-    return list;
-  }, [
-    allCategories,
-    showOnlyFavCategories,
-    categorySearch,
-    favoriteCategories,
-  ]);
+    return allCategories;
+  }, [allCategories]);
 
   // Channel counts per category
   const categoryCounts = useMemo(() => {
@@ -135,17 +110,8 @@ export function TvLiveTvScreen({
       if (channels.length === 0) channels = playlist.channels;
     }
 
-    if (channelSearch.trim()) {
-      const q = channelSearch.toLowerCase().trim();
-      channels = channels.filter(
-        (ch) =>
-          ch.name.toLowerCase().includes(q) ||
-          (ch.group && ch.group.toLowerCase().includes(q)),
-      );
-    }
-
     return channels;
-  }, [playlist, selectedCategory, categoryTypeFilter, channelSearch]);
+  }, [playlist, selectedCategory, categoryTypeFilter]);
 
   // Selected Channel for Preview
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(
@@ -213,66 +179,29 @@ export function TvLiveTvScreen({
     return epg.getNowNext(activeChannel.id);
   }, [activeChannel, epg]);
 
-  const providerName = playlist?.name || "Provider";
-
   return (
     <View style={styles.container}>
       {/* ─── COLUMN 1: CATEGORIES ─── */}
       <View style={styles.categoriesColumn}>
         <View style={styles.columnHeader}>
-          <ThemedText type="h3" style={styles.columnTitle}>
-            Categories
+          <ThemedText type="body" style={styles.columnTitle}>
+            {playlist?.channels.length || 0} channels
           </ThemedText>
-        </View>
-
-        {/* Search Categories */}
-        <SearchField
-          value={categorySearch}
-          onChangeText={setCategorySearch}
-          placeholder="Search categories..."
-        />
-
-        {/* Quick Filters */}
-        <View style={styles.quickFiltersContainer}>
-          <View style={styles.quickFiltersRow}>
-            <ThemedText type="small" style={styles.quickFiltersLabel}>
-              Quick filters
-            </ThemedText>
-            <TVFocusablePressable
-              onPress={() => setShowOnlyFavCategories((prev) => !prev)}
-              accessibilityLabel="Toggle favorite categories only"
-              baseStyle={styles.quickFiltersButton}
-              focusedStyle={styles.quickFiltersButtonFocused}
-            >
-              <ThemedText type="caption" style={styles.quickFiltersAction}>
-                {showOnlyFavCategories ? "Show All" : "Favorites"}
-              </ThemedText>
-            </TVFocusablePressable>
-          </View>
-          <ThemedText type="caption" style={styles.quickFiltersSubtext}>
-            {showOnlyFavCategories
-              ? "Showing favorite categories"
-              : "Showing all categories"}
-          </ThemedText>
+          <Ionicons name="create-outline" size={16} color={c.accent} />
         </View>
 
         {/* Categories List */}
-        <ScrollView
-          ref={categoryScroll.scrollRef}
-          style={styles.categoryScrollView}
+        <FlashList
+          data={filteredCategories}
+          keyExtractor={(cat) => cat}
           showsVerticalScrollIndicator={false}
-          onLayout={categoryScroll.onScrollViewLayout}
-          onScroll={categoryScroll.onScroll}
-          scrollEventThrottle={16}
-        >
-          {filteredCategories.map((cat) => {
+          removeClippedSubviews
+          renderItem={({ item: cat }) => {
             const isSelected = selectedCategory === cat;
             const count = categoryCounts[cat] || 0;
             const isFav = cat !== "All" && isCategoryFavorite(cat);
-
             return (
               <CategoryRow
-                key={cat}
                 category={cat}
                 count={count}
                 isSelected={isSelected}
@@ -283,8 +212,8 @@ export function TvLiveTvScreen({
                 onFocused={() => handleCategoryFocus(cat)}
               />
             );
-          })}
-        </ScrollView>
+          }}
+        />
       </View>
 
       {/* ─── COLUMN 2: CHANNELS ─── */}
@@ -298,46 +227,28 @@ export function TvLiveTvScreen({
           >
             {selectedCategory}
           </ThemedText>
-          <ThemedText type="small" style={styles.providerSubtext}>
-            Provider: {providerName} • {filteredChannels.length} channels
-          </ThemedText>
         </View>
 
-        {/* Search Channels */}
-        <SearchField
-          value={channelSearch}
-          onChangeText={setChannelSearch}
-          placeholder="Search channels..."
-        />
-
         {/* Channels List */}
-        <ScrollView
-          ref={channelScroll.scrollRef}
-          style={styles.channelScrollView}
-          showsVerticalScrollIndicator={false}
-          onLayout={channelScroll.onScrollViewLayout}
-          onScroll={channelScroll.onScroll}
-          scrollEventThrottle={16}
-        >
-          {filteredChannels.length === 0 ? (
-            <View style={styles.emptyChannelsContainer}>
-              <ThemedText type="body" style={{ color: c.text50 }}>
-                No channels found
-              </ThemedText>
-            </View>
-          ) : (
-            filteredChannels.map((channel, index) => {
+        {filteredChannels.length === 0 ? (
+          <View style={styles.emptyChannelsContainer}>
+            <ThemedText type="body" style={{ color: c.text50 }}>
+              No channels found
+            </ThemedText>
+          </View>
+        ) : (
+          <FlashList
+            data={filteredChannels}
+            keyExtractor={(channel) => channel.id}
+            showsVerticalScrollIndicator={false}
+            removeClippedSubviews
+            renderItem={({ item: channel, index }) => {
               const isSelected = selectedChannelId === channel.id;
               const isFocused = focusedChannelId === channel.id;
-              const channelEpg = epg.getNowNext(channel.id);
-              const nowTitle = channelEpg?.now?.title;
-
               return (
                 <ChannelListItem
-                  key={channel.id}
                   channel={channel}
                   index={index + 1}
-                  nowTitle={nowTitle}
                   isSelected={isSelected}
                   isFocused={isFocused}
                   hasTVPreferredFocus={isTV && index === 0}
@@ -349,9 +260,9 @@ export function TvLiveTvScreen({
                   onLongPress={() => toggleFavorite(channel.id)}
                 />
               );
-            })
-          )}
-        </ScrollView>
+            }}
+          />
+        )}
       </View>
 
       {/* ─── COLUMN 3: EPG PROGRAM BANNER ─── */}
@@ -387,49 +298,6 @@ export function TvLiveTvScreen({
 
 // ─── Subcomponents ───
 
-function SearchField({
-  value,
-  onChangeText,
-  placeholder,
-}: {
-  value: string;
-  onChangeText: (t: string) => void;
-  placeholder: string;
-}) {
-  const { theme } = useTheme();
-  const [focused, setFocused] = useState(false);
-  const styles = useMemo(() => createStyles(theme), [theme]);
-  const c = useMemo(() => createTvPalette(theme), [theme]);
-
-  return (
-    <View
-      style={[
-        styles.searchBox,
-        focused && {
-          borderColor: c.accentBorder,
-          backgroundColor: c.panelAlt,
-        },
-      ]}
-    >
-      <TextInput
-        style={styles.searchInput}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={c.text40}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-      />
-      <Ionicons
-        name="search"
-        size={18}
-        color={focused ? c.accent : c.text40}
-        style={styles.searchIcon}
-      />
-    </View>
-  );
-}
-
 function CategoryRow({
   category,
   count,
@@ -462,13 +330,20 @@ function CategoryRow({
         if (f) onFocused();
       }}
       accessibilityLabel={category}
-      baseStyle={[
-        styles.categoryRow,
-        isSelected && styles.categoryRowSelected,
-      ]}
+      baseStyle={[styles.categoryRow, isSelected && styles.categoryRowSelected]}
       focusedStyle={styles.categoryRowFocused}
     >
       <View style={styles.categoryRowLeft}>
+        <View
+          style={[
+            styles.categoryIcon,
+            isSelected && styles.categoryIconSelected,
+          ]}
+        >
+          <ThemedText type="caption" style={styles.categoryIconText}>
+            {category === "All" ? "A" : category.charAt(0).toUpperCase()}
+          </ThemedText>
+        </View>
         {isFav ? (
           <Ionicons
             name="star"
@@ -498,7 +373,6 @@ function CategoryRow({
 function ChannelListItem({
   channel,
   index,
-  nowTitle,
   isSelected,
   isFocused,
   hasTVPreferredFocus,
@@ -509,7 +383,6 @@ function ChannelListItem({
 }: {
   channel: Channel;
   index: number;
-  nowTitle?: string;
   isSelected: boolean;
   isFocused: boolean;
   hasTVPreferredFocus?: boolean;
@@ -540,18 +413,13 @@ function ChannelListItem({
       ]}
       focusedStyle={styles.channelCardFocused}
     >
-      {/* Channel Logo */}
-      <View style={styles.channelLogoContainer}>
-        <Image
-          source={channel.logo ? { uri: channel.logo } : placeholderImage}
-          style={styles.channelLogo}
-          contentFit="contain"
-          placeholder={placeholderImage}
-        />
-      </View>
-
-      {/* Info Column */}
+      {/* Channel row */}
       <View style={styles.channelInfoContainer}>
+        <View style={styles.channelIndex}>
+          <ThemedText type="small" style={styles.channelIndexText}>
+            {String(index).padStart(2, "0")}
+          </ThemedText>
+        </View>
         <ThemedText
           type="body"
           numberOfLines={1}
@@ -560,14 +428,7 @@ function ChannelListItem({
             activeFocus && styles.channelNameTextFocused,
           ]}
         >
-          {String(index).padStart(2, "0")} {channel.name}
-        </ThemedText>
-        <ThemedText
-          type="small"
-          numberOfLines={1}
-          style={styles.channelSubtitle}
-        >
-          {nowTitle || "No schedule information"}
+          {channel.name}
         </ThemedText>
       </View>
     </TVFocusablePressable>
@@ -582,28 +443,31 @@ function createStyles(theme: typeof Colors.dark) {
     container: {
       flex: 1,
       flexDirection: "row",
-      paddingHorizontal: Spacing.xl,
+      paddingHorizontal: Spacing.lg,
       paddingTop: Spacing.xs,
-      paddingBottom: Spacing.lg,
-      gap: Spacing.lg,
+      paddingBottom: Spacing.md,
+      gap: 12,
       backgroundColor: "transparent",
     },
 
     // ─── Column 1: Categories ───
     categoriesColumn: {
-      width: "27%",
+      width: "20%",
       backgroundColor: c.panel,
-      borderWidth: 1,
-      borderColor: c.borderSubtle,
-      padding: Spacing.md,
+      padding: Spacing.sm,
+      borderRadius: BorderRadius.sm,
     },
     columnHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
       marginBottom: Spacing.sm,
+      paddingHorizontal: 4,
     },
     columnTitle: {
       color: c.text,
-      fontSize: 19,
-      fontWeight: "700",
+      fontSize: 13,
+      fontWeight: "600",
     },
     searchBox: {
       flexDirection: "row",
@@ -685,6 +549,22 @@ function createStyles(theme: typeof Colors.dark) {
       alignItems: "center",
       flex: 1,
     },
+    categoryIcon: {
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+      backgroundColor: c.border,
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: 8,
+    },
+    categoryIconSelected: {
+      backgroundColor: c.accentTintStrong,
+    },
+    categoryIconText: {
+      color: c.accent,
+      fontWeight: "800",
+    },
     categoryRowText: {
       color: c.text75,
       fontSize: 13.5,
@@ -702,7 +582,7 @@ function createStyles(theme: typeof Colors.dark) {
 
     // ─── Column 2: Channels ───
     channelsColumn: {
-      width: "41%",
+      width: "38%",
       paddingRight: Spacing.xs,
     },
     channelHeader: {
@@ -731,8 +611,12 @@ function createStyles(theme: typeof Colors.dark) {
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: c.panel,
-      padding: 9,
-      marginBottom: 7,
+      minHeight: 58,
+      paddingHorizontal: 10,
+      marginBottom: 4,
+      borderRadius: BorderRadius.xs,
+      borderWidth: 1.5,
+      borderColor: "transparent",
     },
     channelCardSelected: {
       backgroundColor: c.selection,
@@ -740,6 +624,7 @@ function createStyles(theme: typeof Colors.dark) {
     // Focus = a solid fill that travels with the D-pad (square, borderless).
     channelCardFocused: {
       backgroundColor: c.focusFillStrong,
+      borderColor: c.accent,
     },
     channelLogoContainer: {
       width: 44,
@@ -757,6 +642,21 @@ function createStyles(theme: typeof Colors.dark) {
     },
     channelInfoContainer: {
       flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    channelIndex: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: c.border,
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: 10,
+    },
+    channelIndexText: {
+      color: c.text60,
+      fontWeight: "700",
     },
     channelNameText: {
       color: c.text,
@@ -776,9 +676,8 @@ function createStyles(theme: typeof Colors.dark) {
     previewColumn: {
       flex: 1,
       backgroundColor: c.panel,
-      borderWidth: 1,
-      borderColor: c.borderSubtle,
       padding: Spacing.md,
+      borderRadius: BorderRadius.sm,
     },
     previewHeaderRow: {
       flexDirection: "row",

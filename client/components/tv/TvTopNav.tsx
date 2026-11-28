@@ -4,7 +4,7 @@ import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ThemedText } from "@/components/ThemedText";
-import { Spacing, BorderRadius } from "@/constants/theme";
+import { Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { createTvPalette } from "./tvPalette";
 
@@ -172,8 +172,6 @@ function createStyles(theme: any) {
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: c.panel,
-      borderBottomWidth: 1,
-      borderBottomColor: c.borderSubtle,
       paddingHorizontal: Spacing.lg,
       paddingBottom: Spacing.sm,
       gap: Spacing.xl,
@@ -204,10 +202,11 @@ function createStyles(theme: any) {
       alignItems: "center",
       paddingVertical: 8,
       paddingHorizontal: Spacing.md,
-      borderRadius: BorderRadius.sm,
+      borderBottomWidth: 2,
+      borderBottomColor: "transparent",
     },
     activeTabButton: {
-      backgroundColor: c.focusFillStrong,
+      borderBottomColor: c.accent,
     },
     focusedTabButton: {
       borderWidth: 2,
