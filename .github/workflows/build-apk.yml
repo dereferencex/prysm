@@ -25,8 +25,9 @@ jobs:
       - name: Install SDK packages
         run: |
           sdkmanager \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;27.1.12297006"
 
       - uses: actions/setup-node@v4
         with:
@@ -87,11 +88,11 @@ jobs:
               *)             name="prysm-${VERSION}.apk" ;;
             esac
 
-            $ANDROID_HOME/build-tools/35.0.0/zipalign -f -p -v 4 \
+            $ANDROID_HOME/build-tools/36.0.0/zipalign -f -p -v 4 \
               "$apk" "$GITHUB_WORKSPACE/renamed-apks/$name"
 
             if [ "$SIGN_APK" = true ]; then
-              $ANDROID_HOME/build-tools/35.0.0/apksigner sign \
+              $ANDROID_HOME/build-tools/36.0.0/apksigner sign \
                 --ks "$GITHUB_WORKSPACE/release.keystore" \
                 --ks-key-alias "$KEY_ALIAS" \
                 --ks-pass pass:"$KEYSTORE_PASSWORD" \
