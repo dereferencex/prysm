@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   View,
   StyleSheet,
@@ -26,10 +26,7 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export function TvContainer() {
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
-  const { playlist } = usePlaylist();
-  const epg = useEpg();
 
   const [activeTab, setActiveTab] = useState<TvTabName>("Home");
 
@@ -50,17 +47,7 @@ export function TvContainer() {
       case "Series":
         return <TvLiveTvScreen categoryTypeFilter="series" />;
       case "Guide":
-        return (
-          <View style={styles.guideContainer}>
-            <EpgGuideView
-              channels={playlist?.channels || []}
-              getProgramsForChannel={epg.getProgramsForChannel}
-              onSelectChannel={(id) =>
-                navigation.navigate("Player", { channelId: id })
-              }
-            />
-          </View>
-        );
+        return <TvGuideScreen />;
       case "Search":
         return <TvSearchScreen />;
       case "Settings":
@@ -111,6 +98,27 @@ export function TvContainer() {
           {renderActiveContent()}
         </TVFocusGuideView>
       </View>
+    </View>
+  );
+}
+
+function TvGuideScreen() {
+  const navigation = useNavigation<NavigationProp>();
+  const { playlist } = usePlaylist();
+  const { getProgramsForChannel } = useEpg();
+  const channels = useMemo(() => playlist?.channels || [], [playlist]);
+  const handleSelectChannel = useCallback(
+    (id: string) => navigation.navigate("Player", { channelId: id }),
+    [navigation],
+  );
+
+  return (
+    <View style={styles.guideContainer}>
+      <EpgGuideView
+        channels={channels}
+        getProgramsForChannel={getProgramsForChannel}
+        onSelectChannel={handleSelectChannel}
+      />
     </View>
   );
 }

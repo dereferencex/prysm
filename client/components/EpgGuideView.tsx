@@ -7,11 +7,13 @@ import {
   useWindowDimensions,
   type LayoutChangeEvent,
 } from "react-native";
+import { FlashList } from "@shopify/flash-list";
 import { Commands as ViewCommands } from "react-native/Libraries/Components/View/ViewNativeComponent";
 import { ThemedText } from "@/components/ThemedText";
 import { TVFocusablePressable } from "@/components/TVFocusablePressable";
 import { useTheme } from "@/hooks/useTheme";
 import { useFocusScroll } from "@/hooks/useFocusScroll";
+import { useFlashListFocus } from "@/hooks/useFlashListFocus";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { createTvPalette } from "@/components/tv/tvPalette";
 import type { Channel } from "@/types/playlist";
@@ -99,7 +101,7 @@ interface EpgGuideViewProps {
   onSelectChannel: (channelId: string) => void;
 }
 
-export function EpgGuideView({
+export const EpgGuideView = React.memo(function EpgGuideView({
   channels,
   getProgramsForChannel,
   onSelectChannel,
@@ -123,9 +125,9 @@ export function EpgGuideView({
   // Cap rows for perf on very large playlists; ChannelsScreen filters first
   const rows = useMemo(() => channels.slice(0, 120), [channels]);
 
-  const rowsScroll = useFocusScroll<string>({ axis: "vertical" });
+  const rowsFocus = useFlashListFocus<Channel>();
   const guideHScroll = useFocusScroll<string>({ axis: "horizontal" });
-  const focusRow = (chId: string) => rowsScroll.focusOn(chId);
+  const focusRow = rowsFocus.focusOn;
   const focusCell = (programId: string) => guideHScroll.focusOn(programId);
 
   // First row's channel cell is the pinned, always-visible target. Request
@@ -146,12 +148,13 @@ export function EpgGuideView({
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={styles.horizontalScroller}
         ref={guideHScroll.scrollRef}
         onLayout={guideHScroll.onScrollViewLayout}
         onScroll={guideHScroll.onScroll}
         scrollEventThrottle={16}
       >
-        <View>
+        <View style={[styles.guideContent, { width: 110 + totalWidth }]}>
           {/* Time header */}
           <View style={[styles.row, styles.headerRow]}>
             <View
@@ -171,29 +174,27 @@ export function EpgGuideView({
               </View>
             ))}
           </View>
-          <ScrollView
-            ref={rowsScroll.scrollRef}
+          <FlashList
+            ref={rowsFocus.listRef}
+            data={rows}
+            keyExtractor={(channel) => channel.id}
+            style={styles.rowsList}
+            drawDistance={300}
             showsVerticalScrollIndicator={false}
-            onLayout={rowsScroll.onScrollViewLayout}
-            onScroll={rowsScroll.onScroll}
-            scrollEventThrottle={16}
-          >
-            {rows.map((ch, index) => {
+            onViewableItemsChanged={rowsFocus.onViewableItemsChanged}
+            renderItem={({ item: ch, index }) => {
               const progs = getProgramsForChannel(
                 ch.id,
                 windowStart,
                 windowEnd,
               );
+              const now = Date.now();
               return (
-                <View
-                  key={ch.id}
-                  style={styles.row}
-                  onLayout={(e) => rowsScroll.registerItem(ch.id, e)}
-                >
+                <View style={styles.row}>
                   <TVFocusablePressable
                     onPress={() => onSelectChannel(ch.id)}
                     onFocusChange={(f) => {
-                      if (f) focusRow(ch.id);
+                      if (f) focusRow(index);
                     }}
                     viewRef={index === 0 ? firstChColRef : undefined}
                     hasTVPreferredFocus={isTV && index === 0}
@@ -233,7 +234,6 @@ export function EpgGuideView({
                         const e = Math.min(p.end, windowEnd);
                         const w =
                           ((e - s) / (windowEnd - windowStart)) * totalWidth;
-                        const now = Date.now();
                         const isNow = p.start <= now && p.end > now;
                         return (
                           <GuideCell
@@ -243,7 +243,7 @@ export function EpgGuideView({
                             isNow={isNow}
                             onPress={() => onSelectChannel(ch.id)}
                             onFocusItem={() => {
-                              focusRow(ch.id);
+                              focusRow(index);
                               focusCell(p.id);
                             }}
                             onLayoutItem={(e) =>
@@ -256,16 +256,25 @@ export function EpgGuideView({
                   </View>
                 </View>
               );
-            })}
-          </ScrollView>
+            }}
+          />
         </View>
       </ScrollView>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  horizontalScroller: {
+    flex: 1,
+  },
+  guideContent: {
+    flex: 1,
+  },
+  rowsList: {
     flex: 1,
   },
   row: {

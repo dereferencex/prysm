@@ -1,10 +1,6 @@
-import React, { useMemo } from "react";
-import {
-  View,
-  StyleSheet,
-  ScrollView,
-  type LayoutChangeEvent,
-} from "react-native";
+import React, { useCallback, useMemo } from "react";
+import { View, StyleSheet, ScrollView } from "react-native";
+import { FlashList } from "@shopify/flash-list";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
@@ -14,7 +10,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { TVFocusablePressable } from "@/components/TVFocusablePressable";
 import { usePlaylist } from "@/context/PlaylistContext";
 import { useTheme } from "@/hooks/useTheme";
-import { useFocusScroll } from "@/hooks/useFocusScroll";
+import { useFlashListFocus } from "@/hooks/useFlashListFocus";
 import { Colors, Spacing } from "@/constants/theme";
 import { createTvPalette } from "./tvPalette";
 import { Channel } from "@/types/playlist";
@@ -35,24 +31,54 @@ export function TvHomeScreen({ onNavigateTab }: TvHomeScreenProps) {
   const { playlist, favorites, recentChannels } = usePlaylist();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
-  const recentScroll = useFocusScroll<string>({ axis: "horizontal" });
-  const favoriteScroll = useFocusScroll<string>({ axis: "horizontal" });
+  const recentFocus = useFlashListFocus<Channel>();
+  const favoriteFocus = useFlashListFocus<Channel>();
+  const channelById = useMemo(
+    () => new Map(playlist?.channels.map((channel) => [channel.id, channel])),
+    [playlist],
+  );
+  const favoriteIds = useMemo(() => new Set(favorites), [favorites]);
 
   const favoriteChannelList = useMemo(() => {
     if (!playlist) return [];
-    return playlist.channels.filter((c) => favorites.includes(c.id));
-  }, [playlist, favorites]);
+    return playlist.channels.filter((channel) => favoriteIds.has(channel.id));
+  }, [playlist, favoriteIds]);
 
   const recentChannelList = useMemo(() => {
-    if (!playlist) return [];
+    if (!playlist) return [] as Channel[];
     return recentChannels
-      .map((id) => playlist.channels.find((c) => c.id === id))
+      .map((id) => channelById.get(id))
       .filter((c): c is Channel => Boolean(c));
-  }, [playlist, recentChannels]);
+  }, [playlist, recentChannels, channelById]);
 
-  const handleChannelPress = (ch: Channel) => {
-    navigation.navigate("Player", { channelId: ch.id });
-  };
+  const handleChannelPress = useCallback(
+    (ch: Channel) => {
+      navigation.navigate("Player", { channelId: ch.id });
+    },
+    [navigation],
+  );
+  const focusRecent = recentFocus.focusOn;
+  const focusFavorite = favoriteFocus.focusOn;
+  const renderRecent = useCallback(
+    ({ item: channel, index }: { item: Channel; index: number }) => (
+      <ChannelCardTv
+        channel={channel}
+        onPress={() => handleChannelPress(channel)}
+        onFocused={() => focusRecent(index)}
+      />
+    ),
+    [focusRecent, handleChannelPress],
+  );
+  const renderFavorite = useCallback(
+    ({ item: channel, index }: { item: Channel; index: number }) => (
+      <ChannelCardTv
+        channel={channel}
+        onPress={() => handleChannelPress(channel)}
+        onFocused={() => focusFavorite(index)}
+      />
+    ),
+    [focusFavorite, handleChannelPress],
+  );
 
   return (
     <ScrollView
@@ -94,25 +120,17 @@ export function TvHomeScreen({ onNavigateTab }: TvHomeScreenProps) {
           <ThemedText type="h4" style={styles.sectionTitle}>
             Recently Watched
           </ThemedText>
-          <ScrollView
-            ref={recentScroll.scrollRef}
+          <FlashList
+            ref={recentFocus.listRef}
+            data={recentChannelList}
+            keyExtractor={(channel) => channel.id}
             horizontal
-            showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.channelRow}
-            onLayout={recentScroll.onScrollViewLayout}
-            onScroll={recentScroll.onScroll}
-            scrollEventThrottle={16}
-          >
-            {recentChannelList.map((channel) => (
-              <ChannelCardTv
-                key={channel.id}
-                channel={channel}
-                onPress={() => handleChannelPress(channel)}
-                onLayoutItem={(e) => recentScroll.registerItem(channel.id, e)}
-                onFocused={() => recentScroll.focusOn(channel.id)}
-              />
-            ))}
-          </ScrollView>
+            showsHorizontalScrollIndicator={false}
+            drawDistance={400}
+            onViewableItemsChanged={recentFocus.onViewableItemsChanged}
+            renderItem={renderRecent}
+          />
         </View>
       )}
 
@@ -127,25 +145,17 @@ export function TvHomeScreen({ onNavigateTab }: TvHomeScreenProps) {
             it.
           </ThemedText>
         ) : (
-          <ScrollView
-            ref={favoriteScroll.scrollRef}
+          <FlashList
+            ref={favoriteFocus.listRef}
+            data={favoriteChannelList}
+            keyExtractor={(channel) => channel.id}
             horizontal
-            showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.channelRow}
-            onLayout={favoriteScroll.onScrollViewLayout}
-            onScroll={favoriteScroll.onScroll}
-            scrollEventThrottle={16}
-          >
-            {favoriteChannelList.map((channel) => (
-              <ChannelCardTv
-                key={channel.id}
-                channel={channel}
-                onPress={() => handleChannelPress(channel)}
-                onLayoutItem={(e) => favoriteScroll.registerItem(channel.id, e)}
-                onFocused={() => favoriteScroll.focusOn(channel.id)}
-              />
-            ))}
-          </ScrollView>
+            showsHorizontalScrollIndicator={false}
+            drawDistance={400}
+            onViewableItemsChanged={favoriteFocus.onViewableItemsChanged}
+            renderItem={renderFavorite}
+          />
         )}
       </View>
     </ScrollView>
@@ -187,15 +197,13 @@ function QuickTile({
   );
 }
 
-function ChannelCardTv({
+const ChannelCardTv = React.memo(function ChannelCardTv({
   channel,
   onPress,
-  onLayoutItem,
   onFocused,
 }: {
   channel: Channel;
   onPress: () => void;
-  onLayoutItem: (e: LayoutChangeEvent) => void;
   onFocused: () => void;
 }) {
   const { theme } = useTheme();
@@ -204,7 +212,6 @@ function ChannelCardTv({
   return (
     <TVFocusablePressable
       onPress={onPress}
-      onLayout={onLayoutItem}
       onFocusChange={(f) => {
         if (f) onFocused();
       }}
@@ -228,7 +235,7 @@ function ChannelCardTv({
       </ThemedText>
     </TVFocusablePressable>
   );
-}
+});
 
 function createStyles(theme: typeof Colors.dark) {
   const c = createTvPalette(theme);

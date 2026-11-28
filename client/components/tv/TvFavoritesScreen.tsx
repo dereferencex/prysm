@@ -1,10 +1,6 @@
-import React, { useMemo } from "react";
-import {
-  View,
-  StyleSheet,
-  ScrollView,
-  type LayoutChangeEvent,
-} from "react-native";
+import React, { useMemo, useCallback } from "react";
+import { View, StyleSheet, useWindowDimensions } from "react-native";
+import { FlashList } from "@shopify/flash-list";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
@@ -14,7 +10,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { TVFocusablePressable } from "@/components/TVFocusablePressable";
 import { usePlaylist } from "@/context/PlaylistContext";
 import { useTheme } from "@/hooks/useTheme";
-import { useFocusScroll } from "@/hooks/useFocusScroll";
+import { useFlashListFocus } from "@/hooks/useFlashListFocus";
 import { Colors, Spacing } from "@/constants/theme";
 import { createTvPalette } from "./tvPalette";
 import { Channel } from "@/types/playlist";
@@ -28,14 +24,40 @@ export function TvFavoritesScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
   const { playlist, favorites, toggleFavorite } = usePlaylist();
+  const { width } = useWindowDimensions();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const c = useMemo(() => createTvPalette(theme), [theme]);
-  const resultsScroll = useFocusScroll<string>({ axis: "vertical" });
+  const resultsFocus = useFlashListFocus<Channel>();
+  const columnCount = Math.min(4, Math.max(2, Math.floor(width / 300)));
+  const favoriteIds = useMemo(() => new Set(favorites), [favorites]);
 
   const favoriteChannels = useMemo(() => {
     if (!playlist) return [];
-    return playlist.channels.filter((ch) => favorites.includes(ch.id));
-  }, [playlist, favorites]);
+    return playlist.channels.filter((ch) => favoriteIds.has(ch.id));
+  }, [playlist, favoriteIds]);
+  const focusFavorite = resultsFocus.focusOn;
+  const handleChannelPress = useCallback(
+    (channel: Channel) =>
+      navigation.navigate("Player", { channelId: channel.id }),
+    [navigation],
+  );
+  const handleFavoriteToggle = useCallback(
+    (channelId: string) => {
+      void toggleFavorite(channelId);
+    },
+    [toggleFavorite],
+  );
+  const renderFavorite = useCallback(
+    ({ item: channel, index }: { item: Channel; index: number }) => (
+      <FavoriteChannelCard
+        channel={channel}
+        onPress={() => handleChannelPress(channel)}
+        onLongPress={() => handleFavoriteToggle(channel.id)}
+        onFocused={() => focusFavorite(index)}
+      />
+    ),
+    [focusFavorite, handleChannelPress, handleFavoriteToggle],
+  );
 
   return (
     <View style={styles.container}>
@@ -50,53 +72,40 @@ export function TvFavoritesScreen() {
         </ThemedText>
       </View>
 
-      <ScrollView
-        ref={resultsScroll.scrollRef}
+      <FlashList
+        ref={resultsFocus.listRef}
+        data={favoriteChannels}
+        keyExtractor={(channel) => channel.id}
+        numColumns={columnCount}
         style={styles.resultsScroll}
         contentContainerStyle={styles.resultsGrid}
         showsVerticalScrollIndicator={false}
-        onLayout={resultsScroll.onScrollViewLayout}
-        onScroll={resultsScroll.onScroll}
-        scrollEventThrottle={16}
-      >
-        {favoriteChannels.length === 0 ? (
+        drawDistance={400}
+        onViewableItemsChanged={resultsFocus.onViewableItemsChanged}
+        ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="star-outline" size={48} color={c.text40} />
             <ThemedText type="body" style={styles.emptyText}>
-              No favorite channels yet. Open Live TV and long-press a channel
-              to add it here.
+              No favorite channels yet. Open Live TV and long-press a channel to
+              add it here.
             </ThemedText>
           </View>
-        ) : (
-          favoriteChannels.map((channel) => (
-            <FavoriteChannelCard
-              key={channel.id}
-              channel={channel}
-              onPress={() =>
-                navigation.navigate("Player", { channelId: channel.id })
-              }
-              onLongPress={() => toggleFavorite(channel.id)}
-              onLayoutItem={(e) => resultsScroll.registerItem(channel.id, e)}
-              onFocused={() => resultsScroll.focusOn(channel.id)}
-            />
-          ))
-        )}
-      </ScrollView>
+        }
+        renderItem={renderFavorite}
+      />
     </View>
   );
 }
 
-function FavoriteChannelCard({
+const FavoriteChannelCard = React.memo(function FavoriteChannelCard({
   channel,
   onPress,
   onLongPress,
-  onLayoutItem,
   onFocused,
 }: {
   channel: Channel;
   onPress: () => void;
   onLongPress: () => void;
-  onLayoutItem: (e: LayoutChangeEvent) => void;
   onFocused: () => void;
 }) {
   const { theme } = useTheme();
@@ -107,7 +116,6 @@ function FavoriteChannelCard({
       onPress={onPress}
       onLongPress={onLongPress}
       delayLongPress={600}
-      onLayout={onLayoutItem}
       onFocusChange={(f) => {
         if (f) onFocused();
       }}
@@ -132,7 +140,7 @@ function FavoriteChannelCard({
       </View>
     </TVFocusablePressable>
   );
-}
+});
 
 function createStyles(theme: typeof Colors.dark) {
   const c = createTvPalette(theme);
@@ -158,13 +166,12 @@ function createStyles(theme: typeof Colors.dark) {
       flex: 1,
     },
     resultsGrid: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: Spacing.md,
       paddingBottom: Spacing["3xl"],
+      paddingHorizontal: Spacing.sm,
     },
     resultCard: {
-      width: "23%",
+      width: "100%",
+      minHeight: 68,
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: c.panel,

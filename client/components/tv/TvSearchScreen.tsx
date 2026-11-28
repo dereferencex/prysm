@@ -1,12 +1,12 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
   View,
   StyleSheet,
   TextInput,
-  ScrollView,
   Platform,
-  type LayoutChangeEvent,
+  useWindowDimensions,
 } from "react-native";
+import { FlashList } from "@shopify/flash-list";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
@@ -16,7 +16,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { TVFocusablePressable } from "@/components/TVFocusablePressable";
 import { usePlaylist } from "@/context/PlaylistContext";
 import { useTheme } from "@/hooks/useTheme";
-import { useFocusScroll } from "@/hooks/useFocusScroll";
+import { useFlashListFocus } from "@/hooks/useFlashListFocus";
 import { Colors, Spacing } from "@/constants/theme";
 import { createTvPalette } from "./tvPalette";
 import { Channel } from "@/types/playlist";
@@ -30,20 +30,52 @@ export function TvSearchScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
   const { playlist } = usePlaylist();
+  const { width } = useWindowDimensions();
   const [searchQuery, setSearchQuery] = useState("");
-  const resultsScroll = useFocusScroll<string>({ axis: "vertical" });
+  const [submittedQuery, setSubmittedQuery] = useState("");
+  const resultsFocus = useFlashListFocus<Channel>();
+  const columnCount = Math.min(4, Math.max(2, Math.floor(width / 300)));
   const styles = useMemo(() => createStyles(theme), [theme]);
   const c = useMemo(() => createTvPalette(theme), [theme]);
+  const focusResult = resultsFocus.focusOn;
+
+  useEffect(() => {
+    const timer = setTimeout(() => setSubmittedQuery(searchQuery), 180);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const searchableChannels = useMemo(
+    () =>
+      (playlist?.channels || []).map((channel) => ({
+        channel,
+        name: channel.name.toLowerCase(),
+        group: (channel.group || "").toLowerCase(),
+      })),
+    [playlist],
+  );
 
   const results = useMemo(() => {
-    if (!playlist || !searchQuery.trim()) return [];
-    const q = searchQuery.toLowerCase().trim();
-    return playlist.channels.filter(
-      (c) =>
-        c.name.toLowerCase().includes(q) ||
-        (c.group && c.group.toLowerCase().includes(q)),
-    );
-  }, [playlist, searchQuery]);
+    if (!playlist || !submittedQuery.trim()) return [];
+    const q = submittedQuery.toLowerCase().trim();
+    return searchableChannels
+      .filter(({ name, group }) => name.includes(q) || group.includes(q))
+      .map(({ channel }) => channel);
+  }, [playlist, searchableChannels, submittedQuery]);
+  const handleResultPress = useCallback(
+    (channel: Channel) =>
+      navigation.navigate("Player", { channelId: channel.id }),
+    [navigation],
+  );
+  const renderResult = useCallback(
+    ({ item: channel, index }: { item: Channel; index: number }) => (
+      <ChannelResultCard
+        channel={channel}
+        onPress={() => handleResultPress(channel)}
+        onFocused={() => focusResult(index)}
+      />
+    ),
+    [focusResult, handleResultPress],
+  );
 
   return (
     <View style={styles.container}>
@@ -76,54 +108,40 @@ export function TvSearchScreen() {
       </View>
 
       {/* Results */}
-      <ScrollView
-        ref={resultsScroll.scrollRef}
+      <FlashList
+        ref={resultsFocus.listRef}
+        data={results}
+        keyExtractor={(channel) => channel.id}
+        numColumns={columnCount}
         style={styles.resultsScroll}
         contentContainerStyle={styles.resultsGrid}
         showsVerticalScrollIndicator={false}
-        onLayout={resultsScroll.onScrollViewLayout}
-        onScroll={resultsScroll.onScroll}
-        scrollEventThrottle={16}
-      >
-        {searchQuery.trim() === "" ? (
+        drawDistance={400}
+        onViewableItemsChanged={resultsFocus.onViewableItemsChanged}
+        ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <ThemedText type="body" style={styles.emptyText}>
-              Type on the keyboard to search channels
+              {searchQuery.trim() === ""
+                ? "Type on the keyboard to search channels"
+                : submittedQuery !== searchQuery
+                  ? "Searching..."
+                  : `No channels found matching "${searchQuery}"`}
             </ThemedText>
           </View>
-        ) : results.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <ThemedText type="body" style={styles.emptyText}>
-              {`No channels found matching "${searchQuery}"`}
-            </ThemedText>
-          </View>
-        ) : (
-          results.map((channel) => (
-            <ChannelResultCard
-              key={channel.id}
-              channel={channel}
-              onPress={() =>
-                navigation.navigate("Player", { channelId: channel.id })
-              }
-              onLayoutItem={(e) => resultsScroll.registerItem(channel.id, e)}
-              onFocused={() => resultsScroll.focusOn(channel.id)}
-            />
-          ))
-        )}
-      </ScrollView>
+        }
+        renderItem={renderResult}
+      />
     </View>
   );
 }
 
-function ChannelResultCard({
+const ChannelResultCard = React.memo(function ChannelResultCard({
   channel,
   onPress,
-  onLayoutItem,
   onFocused,
 }: {
   channel: Channel;
   onPress: () => void;
-  onLayoutItem: (e: LayoutChangeEvent) => void;
   onFocused: () => void;
 }) {
   const { theme } = useTheme();
@@ -132,7 +150,6 @@ function ChannelResultCard({
   return (
     <TVFocusablePressable
       onPress={onPress}
-      onLayout={onLayoutItem}
       onFocusChange={(f) => {
         if (f) onFocused();
       }}
@@ -157,7 +174,7 @@ function ChannelResultCard({
       </View>
     </TVFocusablePressable>
   );
-}
+});
 
 function createStyles(theme: typeof Colors.dark) {
   const c = createTvPalette(theme);
@@ -198,13 +215,12 @@ function createStyles(theme: typeof Colors.dark) {
       flex: 1,
     },
     resultsGrid: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: Spacing.md,
       paddingBottom: Spacing["3xl"],
+      paddingHorizontal: Spacing.sm,
     },
     resultCard: {
-      width: "23%",
+      width: "100%",
+      minHeight: 68,
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: c.panel,

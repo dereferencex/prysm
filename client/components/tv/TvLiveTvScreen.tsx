@@ -1,10 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from "react";
-import {
-  View,
-  StyleSheet,
-  Platform,
-  type LayoutChangeEvent,
-} from "react-native";
+import { View, StyleSheet, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { FlashList } from "@shopify/flash-list";
 import { useNavigation } from "@react-navigation/native";
@@ -16,7 +11,7 @@ import { TVFocusablePressable } from "@/components/TVFocusablePressable";
 import { usePlaylist } from "@/context/PlaylistContext";
 import { useEpg } from "@/context/EpgContext";
 import { useTheme } from "@/hooks/useTheme";
-import { useFocusScroll } from "@/hooks/useFocusScroll";
+import { useFlashListFocus } from "@/hooks/useFlashListFocus";
 import { Colors, Spacing, BorderRadius } from "@/constants/theme";
 import { createTvPalette } from "./tvPalette";
 import { Channel } from "@/types/playlist";
@@ -37,11 +32,11 @@ export function TvLiveTvScreen({
   const { theme } = useTheme();
   const {
     playlist,
+    getChannelsByCategory,
     toggleFavorite,
     toggleFavoriteCategory,
     isCategoryFavorite,
   } = usePlaylist();
-  const epg = useEpg();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const c = useMemo(() => createTvPalette(theme), [theme]);
 
@@ -63,11 +58,6 @@ export function TvLiveTvScreen({
 
     return ["All", ...cats];
   }, [playlist, categoryTypeFilter]);
-
-  // Filtered categories (by search and favorites)
-  const filteredCategories = useMemo(() => {
-    return allCategories;
-  }, [allCategories]);
 
   // Channel counts per category
   const categoryCounts = useMemo(() => {
@@ -94,16 +84,17 @@ export function TvLiveTvScreen({
   // Filtered Channels
   const filteredChannels = useMemo(() => {
     if (!playlist) return [];
-    let channels = playlist.channels;
+    let channels =
+      selectedCategory === "All"
+        ? playlist.channels
+        : getChannelsByCategory(selectedCategory);
 
-    if (selectedCategory !== "All") {
-      channels = channels.filter((ch) => ch.group === selectedCategory);
-    } else if (categoryTypeFilter === "movies") {
+    if (selectedCategory === "All" && categoryTypeFilter === "movies") {
       channels = channels.filter((ch) =>
         /movie|cinema|film|vod/i.test(ch.group || ""),
       );
       if (channels.length === 0) channels = playlist.channels;
-    } else if (categoryTypeFilter === "series") {
+    } else if (selectedCategory === "All" && categoryTypeFilter === "series") {
       channels = channels.filter((ch) =>
         /series|serie|show|season/i.test(ch.group || ""),
       );
@@ -111,57 +102,55 @@ export function TvLiveTvScreen({
     }
 
     return channels;
-  }, [playlist, selectedCategory, categoryTypeFilter]);
+  }, [playlist, selectedCategory, categoryTypeFilter, getChannelsByCategory]);
+
+  const filteredChannelById = useMemo(
+    () => new Map(filteredChannels.map((channel) => [channel.id, channel])),
+    [filteredChannels],
+  );
 
   // Selected Channel for Preview
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(
     null,
   );
-  const [focusedChannelId, setFocusedChannelId] = useState<string | null>(null);
-
   // Sync selected channel with filtered list
   useEffect(() => {
     if (filteredChannels.length > 0) {
-      if (
-        !selectedChannelId ||
-        !filteredChannels.some((ch) => ch.id === selectedChannelId)
-      ) {
+      if (!selectedChannelId || !filteredChannelById.has(selectedChannelId)) {
         setSelectedChannelId(filteredChannels[0].id);
       }
     } else {
       setSelectedChannelId(null);
     }
-  }, [filteredChannels, selectedChannelId]);
+  }, [filteredChannels, filteredChannelById, selectedChannelId]);
 
   const activeChannel = useMemo(() => {
-    if (!playlist) return null;
     return (
-      filteredChannels.find((ch) => ch.id === selectedChannelId) ||
-      playlist.channels.find((ch) => ch.id === selectedChannelId) ||
+      filteredChannelById.get(selectedChannelId || "") ||
       filteredChannels[0] ||
       null
     );
-  }, [playlist, filteredChannels, selectedChannelId]);
+  }, [filteredChannelById, filteredChannels, selectedChannelId]);
 
-  // Focus auto-scroll for the two vertical lists
-  const categoryScroll = useFocusScroll<string>({ axis: "vertical" });
-  const channelScroll = useFocusScroll<string>({ axis: "vertical" });
+  const categoryFocus = useFlashListFocus<string>();
+  const channelFocus = useFlashListFocus<Channel>();
+  const focusCategoryOn = categoryFocus.focusOn;
+  const focusChannelOn = channelFocus.focusOn;
 
   // Channel focus handler (keep focused row in view + update banner)
   const handleChannelFocus = useCallback(
-    (ch: Channel) => {
-      setFocusedChannelId(ch.id);
-      setSelectedChannelId(ch.id);
-      channelScroll.focusOn(ch.id);
+    (ch: Channel, index: number) => {
+      setSelectedChannelId((current) => (current === ch.id ? current : ch.id));
+      focusChannelOn(index);
     },
-    [channelScroll],
+    [focusChannelOn],
   );
 
   const handleCategoryFocus = useCallback(
-    (cat: string) => {
-      categoryScroll.focusOn(cat);
+    (index: number) => {
+      focusCategoryOn(index);
     },
-    [categoryScroll],
+    [focusCategoryOn],
   );
 
   // Channel press handler: opens full player
@@ -172,12 +161,25 @@ export function TvLiveTvScreen({
     },
     [navigation],
   );
-
-  // EPG details for the active banner channel
-  const activeEpg = useMemo(() => {
-    if (!activeChannel) return null;
-    return epg.getNowNext(activeChannel.id);
-  }, [activeChannel, epg]);
+  const handleFavoriteToggle = useCallback(
+    (channelId: string) => {
+      void toggleFavorite(channelId);
+    },
+    [toggleFavorite],
+  );
+  const renderChannelItem = useCallback(
+    ({ item: channel, index }: { item: Channel; index: number }) => (
+      <ChannelListItem
+        channel={channel}
+        index={index + 1}
+        hasTVPreferredFocus={isTV && index === 0}
+        onFocusChannel={handleChannelFocus}
+        onPressChannel={handleChannelPress}
+        onFavoriteToggle={handleFavoriteToggle}
+      />
+    ),
+    [handleChannelFocus, handleChannelPress, handleFavoriteToggle],
+  );
 
   return (
     <View style={styles.container}>
@@ -192,11 +194,14 @@ export function TvLiveTvScreen({
 
         {/* Categories List */}
         <FlashList
-          data={filteredCategories}
+          ref={categoryFocus.listRef}
+          data={allCategories}
           keyExtractor={(cat) => cat}
           showsVerticalScrollIndicator={false}
           removeClippedSubviews
-          renderItem={({ item: cat }) => {
+          drawDistance={400}
+          onViewableItemsChanged={categoryFocus.onViewableItemsChanged}
+          renderItem={({ item: cat, index }) => {
             const isSelected = selectedCategory === cat;
             const count = categoryCounts[cat] || 0;
             const isFav = cat !== "All" && isCategoryFavorite(cat);
@@ -208,8 +213,7 @@ export function TvLiveTvScreen({
                 isFav={isFav}
                 onSelect={() => setSelectedCategory(cat)}
                 onToggleFav={() => toggleFavoriteCategory(cat)}
-                onLayoutItem={(e) => categoryScroll.registerItem(cat, e)}
-                onFocused={() => handleCategoryFocus(cat)}
+                onFocused={() => handleCategoryFocus(index)}
               />
             );
           }}
@@ -238,60 +242,62 @@ export function TvLiveTvScreen({
           </View>
         ) : (
           <FlashList
+            ref={channelFocus.listRef}
             data={filteredChannels}
             keyExtractor={(channel) => channel.id}
             showsVerticalScrollIndicator={false}
             removeClippedSubviews
-            renderItem={({ item: channel, index }) => {
-              const isSelected = selectedChannelId === channel.id;
-              const isFocused = focusedChannelId === channel.id;
-              return (
-                <ChannelListItem
-                  channel={channel}
-                  index={index + 1}
-                  isSelected={isSelected}
-                  isFocused={isFocused}
-                  hasTVPreferredFocus={isTV && index === 0}
-                  onLayoutItem={(e) =>
-                    channelScroll.registerItem(channel.id, e)
-                  }
-                  onFocus={() => handleChannelFocus(channel)}
-                  onPress={() => handleChannelPress(channel)}
-                  onLongPress={() => toggleFavorite(channel.id)}
-                />
-              );
-            }}
+            drawDistance={500}
+            onViewableItemsChanged={channelFocus.onViewableItemsChanged}
+            renderItem={renderChannelItem}
           />
         )}
       </View>
 
       {/* ─── COLUMN 3: EPG PROGRAM BANNER ─── */}
-      <View style={styles.previewColumn}>
-        <View style={styles.previewHeaderRow}>
-          <ThemedText type="body" style={styles.previewTitle}>
-            Now Showing
-          </ThemedText>
-          {epg.isLoading ? (
-            <ThemedText type="caption" style={styles.previewEpgStatus}>
-              Updating guide…
-            </ThemedText>
-          ) : null}
-        </View>
+      <TvProgramPreview channel={activeChannel} />
+    </View>
+  );
+}
 
-        {activeChannel ? (
-          <TvEpgBanner
-            channel={activeChannel}
-            now={activeEpg?.now}
-            next={activeEpg?.next}
-          />
-        ) : (
-          <View style={styles.noPreviewContainer}>
-            <ThemedText type="body" style={{ color: c.text40 }}>
-              Select a channel to view its program guide
-            </ThemedText>
-          </View>
-        )}
+function TvProgramPreview({ channel }: { channel: Channel | null }) {
+  const { theme } = useTheme();
+  const { getNowNext, isLoading } = useEpg();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const activeEpg = useMemo(
+    () => (channel ? getNowNext(channel.id) : null),
+    [channel, getNowNext],
+  );
+
+  return (
+    <View style={styles.previewColumn}>
+      <View style={styles.previewHeaderRow}>
+        <ThemedText type="body" style={styles.previewTitle}>
+          Now Showing
+        </ThemedText>
+        {isLoading ? (
+          <ThemedText type="caption" style={styles.previewEpgStatus}>
+            Updating guide…
+          </ThemedText>
+        ) : null}
       </View>
+
+      {channel ? (
+        <TvEpgBanner
+          channel={channel}
+          now={activeEpg?.now}
+          next={activeEpg?.next}
+        />
+      ) : (
+        <View style={styles.noPreviewContainer}>
+          <ThemedText
+            type="body"
+            style={{ color: createTvPalette(theme).text40 }}
+          >
+            Select a channel to view its program guide
+          </ThemedText>
+        </View>
+      )}
     </View>
   );
 }
@@ -305,7 +311,6 @@ function CategoryRow({
   isFav,
   onSelect,
   onToggleFav,
-  onLayoutItem,
   onFocused,
 }: {
   category: string;
@@ -314,7 +319,6 @@ function CategoryRow({
   isFav: boolean;
   onSelect: () => void;
   onToggleFav: () => void;
-  onLayoutItem: (e: LayoutChangeEvent) => void;
   onFocused: () => void;
 }) {
   const { theme } = useTheme();
@@ -325,7 +329,6 @@ function CategoryRow({
     <TVFocusablePressable
       onPress={onSelect}
       onLongPress={onToggleFav}
-      onLayout={onLayoutItem}
       onFocusChange={(f) => {
         if (f) onFocused();
       }}
@@ -370,47 +373,34 @@ function CategoryRow({
   );
 }
 
-function ChannelListItem({
+const ChannelListItem = React.memo(function ChannelListItem({
   channel,
   index,
-  isSelected,
-  isFocused,
   hasTVPreferredFocus,
-  onLayoutItem,
-  onFocus,
-  onPress,
-  onLongPress,
+  onFocusChannel,
+  onPressChannel,
+  onFavoriteToggle,
 }: {
   channel: Channel;
   index: number;
-  isSelected: boolean;
-  isFocused: boolean;
   hasTVPreferredFocus?: boolean;
-  onLayoutItem: (e: LayoutChangeEvent) => void;
-  onFocus: () => void;
-  onPress: () => void;
-  onLongPress: () => void;
+  onFocusChannel: (channel: Channel, index: number) => void;
+  onPressChannel: (channel: Channel) => void;
+  onFavoriteToggle: (channelId: string) => void;
 }) {
   const { theme } = useTheme();
-  const [internalFocused, setInternalFocused] = useState(false);
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const activeFocus = isFocused || internalFocused;
 
   return (
     <TVFocusablePressable
-      onPress={onPress}
-      onLongPress={onLongPress}
-      onLayout={onLayoutItem}
+      onPress={() => onPressChannel(channel)}
+      onLongPress={() => onFavoriteToggle(channel.id)}
       onFocusChange={(f) => {
-        setInternalFocused(f);
-        if (f) onFocus();
+        if (f) onFocusChannel(channel, index - 1);
       }}
       hasTVPreferredFocus={hasTVPreferredFocus}
       accessibilityLabel={channel.name}
-      baseStyle={[
-        styles.channelCard,
-        !activeFocus && isSelected && styles.channelCardSelected,
-      ]}
+      baseStyle={styles.channelCard}
       focusedStyle={styles.channelCardFocused}
     >
       {/* Channel row */}
@@ -423,17 +413,14 @@ function ChannelListItem({
         <ThemedText
           type="body"
           numberOfLines={1}
-          style={[
-            styles.channelNameText,
-            activeFocus && styles.channelNameTextFocused,
-          ]}
+          style={styles.channelNameText}
         >
           {channel.name}
         </ThemedText>
       </View>
     </TVFocusablePressable>
   );
-}
+});
 
 // ─── Styles ───
 
@@ -468,62 +455,6 @@ function createStyles(theme: typeof Colors.dark) {
       color: c.text,
       fontSize: 13,
       fontWeight: "600",
-    },
-    searchBox: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: c.inset,
-      borderRadius: BorderRadius.sm,
-      borderWidth: 1,
-      borderColor: c.border,
-      paddingHorizontal: Spacing.sm,
-      height: 38,
-      marginBottom: Spacing.sm,
-    },
-    searchInput: {
-      flex: 1,
-      color: c.text,
-      fontSize: 13,
-      paddingVertical: 0,
-    },
-    searchIcon: {
-      marginLeft: Spacing.xs,
-    },
-    quickFiltersContainer: {
-      marginBottom: Spacing.sm,
-      paddingBottom: Spacing.xs,
-      borderBottomWidth: 1,
-      borderBottomColor: c.borderFaint,
-    },
-    quickFiltersRow: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-    },
-    quickFiltersLabel: {
-      color: c.text,
-      fontWeight: "600",
-      fontSize: 13,
-    },
-    quickFiltersButton: {
-      paddingHorizontal: 6,
-      paddingVertical: 2,
-      borderRadius: BorderRadius.xs,
-    },
-    quickFiltersButtonFocused: {
-      backgroundColor: c.focusFillStrong,
-    },
-    quickFiltersAction: {
-      color: c.accent,
-      fontWeight: "600",
-    },
-    quickFiltersSubtext: {
-      color: c.text40,
-      fontSize: 11,
-      marginTop: 2,
-    },
-    categoryScrollView: {
-      flex: 1,
     },
     categoryRow: {
       flexDirection: "row",
@@ -594,15 +525,6 @@ function createStyles(theme: typeof Colors.dark) {
       fontWeight: "800",
       letterSpacing: 0.2,
     },
-    providerSubtext: {
-      color: c.text50,
-      fontSize: 12,
-      marginTop: 2,
-      marginBottom: Spacing.xs,
-    },
-    channelScrollView: {
-      flex: 1,
-    },
     emptyChannelsContainer: {
       padding: Spacing.xl,
       alignItems: "center",
@@ -618,27 +540,10 @@ function createStyles(theme: typeof Colors.dark) {
       borderWidth: 1.5,
       borderColor: "transparent",
     },
-    channelCardSelected: {
-      backgroundColor: c.selection,
-    },
     // Focus = a solid fill that travels with the D-pad (square, borderless).
     channelCardFocused: {
       backgroundColor: c.focusFillStrong,
       borderColor: c.accent,
-    },
-    channelLogoContainer: {
-      width: 44,
-      height: 44,
-      borderRadius: 10,
-      backgroundColor: c.inset,
-      alignItems: "center",
-      justifyContent: "center",
-      marginRight: Spacing.md,
-      padding: 3,
-    },
-    channelLogo: {
-      width: "100%",
-      height: "100%",
     },
     channelInfoContainer: {
       flex: 1,
@@ -662,14 +567,6 @@ function createStyles(theme: typeof Colors.dark) {
       color: c.text,
       fontSize: 14.5,
       fontWeight: "700",
-    },
-    channelNameTextFocused: {
-      color: c.text,
-    },
-    channelSubtitle: {
-      color: c.text50,
-      fontSize: 12,
-      marginTop: 3,
     },
 
     // ─── Column 3: EPG Program Banner ───

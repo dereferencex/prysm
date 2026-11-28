@@ -31,7 +31,7 @@ import { TVFocusablePressable } from "@/components/TVFocusablePressable";
 import { Button } from "@/components/Button";
 import { useTheme } from "@/hooks/useTheme";
 import { usePlaylist } from "@/context/PlaylistContext";
-import { useEpg } from "@/context/EpgContext";
+import { useEpgStatus } from "@/context/EpgContext";
 import { useResponsive } from "@/hooks/useResponsive";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
@@ -243,7 +243,7 @@ export default function SettingsScreen({
   const [editPlaylistUrl, setEditPlaylistUrl] = useState("");
   const [showEpgUrlModal, setShowEpgUrlModal] = useState(false);
   const [epgUrlText, setEpgUrlText] = useState("");
-  const epgState = useEpg();
+  const epgState = useEpgStatus();
   const epg = epgState;
 
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
@@ -850,7 +850,13 @@ export default function SettingsScreen({
             </ThemedText>
             <View style={styles.section}>
               <SettingsRow
-                icon={themeMode === "pitchblack" ? "contrast" : isDark ? "moon" : "sunny"}
+                icon={
+                  themeMode === "pitchblack"
+                    ? "contrast"
+                    : isDark
+                      ? "moon"
+                      : "sunny"
+                }
                 title="Theme"
                 subtitle="Choose light, dark, or pitch black appearance"
                 value={getThemeLabel()}
@@ -1351,7 +1357,11 @@ export default function SettingsScreen({
                     <ThemedText type="body">Wallpaper (auto)</ThemedText>
                   </View>
                   {seedColor === null ? (
-                    <Ionicons name="checkmark" size={20} color={theme.primary} />
+                    <Ionicons
+                      name="checkmark"
+                      size={20}
+                      color={theme.primary}
+                    />
                   ) : null}
                 </FocusableOption>
                 {SEED_PRESETS.map((preset) => (
@@ -1373,7 +1383,11 @@ export default function SettingsScreen({
                       <ThemedText type="body">{preset.name}</ThemedText>
                     </View>
                     {seedColor?.toUpperCase() === preset.value.toUpperCase() ? (
-                      <Ionicons name="checkmark" size={20} color={theme.primary} />
+                      <Ionicons
+                        name="checkmark"
+                        size={20}
+                        color={theme.primary}
+                      />
                     ) : null}
                   </FocusableOption>
                 ))}

@@ -36,7 +36,23 @@ interface EpgContextType {
   clearCache: () => Promise<void>;
 }
 
+type EpgStatusContextType = Pick<
+  EpgContextType,
+  | "effectiveUrl"
+  | "autoDetectedUrls"
+  | "isManualOverride"
+  | "isLoading"
+  | "error"
+  | "lastUpdated"
+  | "programCount"
+  | "refreshEpg"
+  | "clearCache"
+>;
+
 const EpgContext = createContext<EpgContextType | undefined>(undefined);
+const EpgStatusContext = createContext<EpgStatusContextType | undefined>(
+  undefined,
+);
 
 function buildChannelMatcher(
   channels: Channel[],
@@ -291,27 +307,56 @@ export function EpgProvider({ children }: { children: ReactNode }) {
     setLastUpdated(null);
   }, [playlistId]);
 
-  const value: EpgContextType = {
-    effectiveUrl,
-    autoDetectedUrls,
-    isManualOverride,
-    programs,
-    nowNextMap,
-    isLoading,
-    error,
-    lastUpdated,
-    programCount: programs.length,
-    getNowNext,
-    getProgramsForChannel,
-    refreshEpg,
-    clearCache,
-  };
+  const statusValue = useMemo<EpgStatusContextType>(
+    () => ({
+      effectiveUrl,
+      autoDetectedUrls,
+      isManualOverride,
+      isLoading,
+      error,
+      lastUpdated,
+      programCount: programs.length,
+      refreshEpg,
+      clearCache,
+    }),
+    [
+      effectiveUrl,
+      autoDetectedUrls,
+      isManualOverride,
+      isLoading,
+      error,
+      lastUpdated,
+      programs.length,
+      refreshEpg,
+      clearCache,
+    ],
+  );
+  const value = useMemo<EpgContextType>(
+    () => ({
+      ...statusValue,
+      programs,
+      nowNextMap,
+      getNowNext,
+      getProgramsForChannel,
+    }),
+    [statusValue, programs, nowNextMap, getNowNext, getProgramsForChannel],
+  );
 
-  return <EpgContext.Provider value={value}>{children}</EpgContext.Provider>;
+  return (
+    <EpgStatusContext.Provider value={statusValue}>
+      <EpgContext.Provider value={value}>{children}</EpgContext.Provider>
+    </EpgStatusContext.Provider>
+  );
 }
 
 export function useEpg() {
   const ctx = useContext(EpgContext);
   if (!ctx) throw new Error("useEpg must be used within EpgProvider");
+  return ctx;
+}
+
+export function useEpgStatus() {
+  const ctx = useContext(EpgStatusContext);
+  if (!ctx) throw new Error("useEpgStatus must be used within EpgProvider");
   return ctx;
 }

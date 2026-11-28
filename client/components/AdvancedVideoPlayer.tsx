@@ -302,6 +302,9 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
   const [error, setError] = useState<string | null>(null);
   const [positionMs, setPositionMs] = useState(0);
   const [durationMs, setDurationMs] = useState(0);
+  const positionMsRef = useRef(0);
+  const durationMsRef = useRef(0);
+  const lastPositionUiUpdateRef = useRef(0);
 
   // Runtime live/VOD detection: if ExoPlayer reports a finite, positive duration
   // we override the isLive prop and treat the stream as VOD. This handles the
@@ -455,6 +458,10 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
       if (visible && isInPiPRef.current) return;
       showControlsRef.current = visible;
       setShowControlsState(visible);
+      if (visible && isTV) {
+        setPositionMs(positionMsRef.current);
+        setDurationMs(durationMsRef.current);
+      }
       controlsOpacity.value = withTiming(visible ? 1 : 0, { duration: 200 });
     },
     [controlsOpacity],
@@ -901,10 +908,7 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
         }
       } else if (eventType === "menu" || eventType === "back") {
         handleBackLadder();
-      } else if (
-        eventType === "channelUp" ||
-        eventType === "channelDown"
-      ) {
+      } else if (eventType === "channelUp" || eventType === "channelDown") {
         // Channel +/- keys skip to the next/previous channel like a
         // traditional TV. Stop background audio first so the old stream
         // doesn't keep playing over the new one.
@@ -1322,8 +1326,22 @@ export const AdvancedVideoPlayer = React.memo(function AdvancedVideoPlayer({
               setIsBackgroundPlaying(e.nativeEvent.enabled);
             }}
             onPositionChange={(e) => {
-              setPositionMs(e.nativeEvent.position);
-              setDurationMs(e.nativeEvent.duration);
+              const { position, duration } = e.nativeEvent;
+              const durationBecameKnown =
+                durationMsRef.current === 0 && duration > 0;
+              positionMsRef.current = position;
+              durationMsRef.current = duration;
+              const now = Date.now();
+              if (
+                !isTV ||
+                showControlsRef.current ||
+                durationBecameKnown ||
+                now - lastPositionUiUpdateRef.current >= 5000
+              ) {
+                lastPositionUiUpdateRef.current = now;
+                setPositionMs(position);
+                setDurationMs(duration);
+              }
             }}
             onTracksChange={(e) => {
               setNativeAudioTracks(e.nativeEvent.audioTracks);
