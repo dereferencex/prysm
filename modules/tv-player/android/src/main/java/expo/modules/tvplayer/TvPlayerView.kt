@@ -302,6 +302,7 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
         if (playerEngine == PlayerEngine.VLC) return false
         val activity = appContext.currentActivity ?: return false
 
+        forcePipFit()
         PipRegistry.isEnteringPip = true
         try {
             val ratio = PipRegistry.aspectRatio
@@ -324,16 +325,28 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
                 val w = hintView?.width ?: 0
                 val h = hintView?.height ?: 0
                 if (w > 0 && h > 0) {
-                    builder.setSourceRectHint(
-                        Rect(loc[0], loc[1], loc[0] + w, loc[1] + h),
-                    )
+                    val contentRect = Rect(loc[0], loc[1], loc[0] + w, loc[1] + h)
+                    val videoRatio =
+                        ratio.numerator.toFloat() / ratio.denominator.toFloat()
+                    val viewRatio = w.toFloat() / h
+                    if (videoRatio > 0f && viewRatio > videoRatio) {
+                        val inset = (w - h * videoRatio).toInt() / 2
+                        contentRect.inset(inset, 0)
+                    } else if (videoRatio > 0f && viewRatio < videoRatio) {
+                        val inset = (h - w / videoRatio).toInt() / 2
+                        contentRect.inset(0, inset)
+                    }
+                    builder.setSourceRectHint(contentRect)
                 }
                 builder.setTitle(context.applicationInfo.loadLabel(activity.packageManager))
             }
-            activity.enterPictureInPictureMode(builder.build())
-            return true
+            if (activity.enterPictureInPictureMode(builder.build())) return true
+            PipRegistry.isEnteringPip = false
+            applyResizeMode(userResizeMode)
+            return false
         } catch (e: Exception) {
             PipRegistry.isEnteringPip = false
+            applyResizeMode(userResizeMode)
             Log.w(TAG, "enterPip failed: ${e.message}")
             return false
         }
