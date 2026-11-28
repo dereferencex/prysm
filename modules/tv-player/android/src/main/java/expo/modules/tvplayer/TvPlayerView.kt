@@ -534,6 +534,7 @@ class TvPlayerView(context: Context, appContext: AppContext) : ExpoView(context,
                 playerView?.findViewById<AspectRatioFrameLayout>(
                     androidx.media3.ui.R.id.exo_content_frame,
                 )?.setAspectRatio(ratio)
+                applyResizeMode(userResizeMode)
             }
             requestLayout()
             if (!isTV && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

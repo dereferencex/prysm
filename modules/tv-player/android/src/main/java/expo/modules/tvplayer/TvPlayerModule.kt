@@ -123,9 +123,9 @@ class TvPlayerModule : Module() {
 
             // ── Background audio ───────────────────────────────────────────
 
-            // "contain" → RESIZE_MODE_FIT (0)
-            // "cover"   → RESIZE_MODE_ZOOM (3)
-            // "fill"    → RESIZE_MODE_FILL (1)
+            // "contain" → RESIZE_MODE_FIT
+            // "cover"   → RESIZE_MODE_ZOOM
+            // "fill"    → RESIZE_MODE_FILL
             AsyncFunction("setResizeMode") { view: TvPlayerView, mode: String ->
                 val resizeMode = when (mode) {
                     "cover"   -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM

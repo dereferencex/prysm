@@ -10,6 +10,8 @@ import android.view.TextureView
 import android.view.View
 import android.view.ViewTreeObserver
 import android.view.ViewGroup
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.ui.AspectRatioFrameLayout
 import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.interfaces.IMedia
@@ -65,6 +67,7 @@ import org.videolan.libvlc.util.VLCVideoLayout
  *    Runnable may still execute from the message queue → accesses released MediaPlayer.
  *    **Fix**: Guard with released + mediaPlayer null check.
  */
+@UnstableApi
 class VlcPlayerController(
     private val context: Context,
 ) : PlayerController {
@@ -81,7 +84,7 @@ class VlcPlayerController(
     private var isPrepared = false
     private var isPlayingState = false
     private var durationMs: Long = 0L
-    private var currentResizeMode: Int = 0 // 0 = FIT, 1 = FILL, 3 = ZOOM
+    private var currentResizeMode: Int = AspectRatioFrameLayout.RESIZE_MODE_FIT
 
     /**
      * Volatile flag checked by EVERY callback that accesses native VLC resources.
@@ -739,11 +742,11 @@ class VlcPlayerController(
         if (released) return
         val player = mediaPlayer ?: return
         when (currentResizeMode) {
-            0 -> { // FIT - maintain aspect ratio, fit within window
+            AspectRatioFrameLayout.RESIZE_MODE_FIT -> {
                 player.setScale(0f)
                 player.setAspectRatio(null)
             }
-            1 -> { // FILL - stretch to fill window (ignore aspect ratio)
+            AspectRatioFrameLayout.RESIZE_MODE_FILL -> {
                 player.setScale(0f)
                 val view = surfaceView ?: textureView
                 val w = view?.width ?: 0
@@ -752,7 +755,9 @@ class VlcPlayerController(
                     player.setAspectRatio("${w}:${h}")
                 }
             }
-            3 -> { // ZOOM - fill window while maintaining aspect ratio (may crop)
+            AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> {
+                // PlayerView's AspectRatioFrameLayout performs the crop by
+                // sizing the surface beyond the visible bounds.
                 player.setScale(0f)
                 player.setAspectRatio(null)
             }
