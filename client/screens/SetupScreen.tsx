@@ -46,8 +46,8 @@ export default function SetupScreen() {
   const navigation = useNavigation<SetupNavigationProp>();
   const route = useRoute<SetupRouteProp>();
   const fromSettings = route.params?.fromSettings ?? false;
-  const { theme, isDark } = useTheme();
-  const { isPortrait, isLandscape, width, height } = useOrientation();
+  const { theme } = useTheme();
+  const { isLandscape, width, height } = useOrientation();
   const {
     loadPlaylistFromUrl,
     loadPlaylistFromFile,
@@ -81,6 +81,10 @@ export default function SetupScreen() {
 
   const isCompact = height < 500;
   const isTVDevice = Platform.isTV;
+  const tvFormWidth = Math.min(
+    width - Spacing["4xl"] * 2,
+    fromSettings ? 720 : 640,
+  );
 
   const handleCancelLoading = () => {
     abortRef.current = true;
@@ -266,8 +270,10 @@ export default function SetupScreen() {
           {
             paddingTop: fromSettings ? Spacing.md : insets.top + Spacing.lg,
             paddingBottom: insets.bottom + Spacing.lg,
-            paddingLeft: insets.left + Spacing.lg,
-            paddingRight: insets.right + Spacing.lg,
+            paddingLeft:
+              insets.left + (isTVDevice ? Spacing["4xl"] : Spacing.lg),
+            paddingRight:
+              insets.right + (isTVDevice ? Spacing["4xl"] : Spacing.lg),
           },
         ]}
         showsVerticalScrollIndicator={false}
@@ -318,7 +324,10 @@ export default function SetupScreen() {
             <View
               style={[
                 styles.inputSection,
-                { maxWidth: isTVDevice ? 420 : isLandscape ? 320 : 400 },
+                {
+                  width: isTVDevice ? tvFormWidth : undefined,
+                  maxWidth: isTVDevice ? tvFormWidth : isLandscape ? 320 : 400,
+                },
               ]}
             >
               <ThemedText
@@ -366,6 +375,7 @@ export default function SetupScreen() {
                   returnKeyType="next"
                   editable={!isLoadingPlaylist}
                   showSoftInputOnFocus={true}
+                  hasTVPreferredFocus={isTVDevice}
                   testID="name-input"
                 />
               </View>
@@ -663,7 +673,7 @@ export default function SetupScreen() {
                 onBlur={() => setIsFileFocused(false)}
                 disabled={isLoadingPlaylist}
                 focusable={!isLoadingPlaylist}
-                hasTVPreferredFocus={isTVDevice && !isLoadingPlaylist}
+                hasTVPreferredFocus={false}
                 accessibilityLabel="Choose file"
                 accessibilityRole="button"
                 style={

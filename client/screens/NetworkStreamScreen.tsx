@@ -97,8 +97,12 @@ function SectionLabel({ children }: { children: string }) {
   const { theme } = useTheme();
   return (
     <ThemedText
-      type="small"
-      style={[styles.sectionLabel, { color: theme.textSecondary }]}
+      type={isTV ? "h4" : "small"}
+      style={[
+        styles.sectionLabel,
+        isTV && styles.sectionLabelTv,
+        { color: theme.textSecondary },
+      ]}
     >
       {children}
     </ThemedText>
@@ -114,6 +118,7 @@ function Field({
   autoCapitalize = "none",
   multiline = false,
   secureTextEntry = false,
+  hasTVPreferredFocus = false,
 }: {
   label: string;
   value: string;
@@ -123,19 +128,27 @@ function Field({
   autoCapitalize?: "none" | "sentences";
   multiline?: boolean;
   secureTextEntry?: boolean;
+  hasTVPreferredFocus?: boolean;
 }) {
   const { theme } = useTheme();
+  const [isFocused, setIsFocused] = useState(false);
   return (
     <View style={styles.fieldContainer}>
       <ThemedText
-        type="small"
-        style={[styles.fieldLabel, { color: theme.textSecondary }]}
+        type={isTV ? "body" : "small"}
+        style={[
+          styles.fieldLabel,
+          isTV && styles.fieldLabelTv,
+          { color: theme.textSecondary },
+        ]}
       >
         {label}
       </ThemedText>
       <TextInput
         value={value}
         onChangeText={onChangeText}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
         placeholder={placeholder}
         placeholderTextColor={theme.textSecondary}
         keyboardType={keyboardType}
@@ -143,13 +156,15 @@ function Field({
         autoCorrect={false}
         multiline={multiline}
         secureTextEntry={secureTextEntry}
+        hasTVPreferredFocus={isTV && hasTVPreferredFocus}
         style={[
           styles.input,
+          isTV && styles.inputTv,
           multiline && styles.inputMultiline,
           {
             color: theme.text,
             backgroundColor: theme.backgroundSecondary,
-            borderColor: theme.backgroundSecondary,
+            borderColor: isFocused ? theme.primary : theme.backgroundSecondary,
           },
         ]}
       />
@@ -171,8 +186,12 @@ function PickerRow({
   return (
     <View style={styles.fieldContainer}>
       <ThemedText
-        type="small"
-        style={[styles.fieldLabel, { color: theme.textSecondary }]}
+        type={isTV ? "body" : "small"}
+        style={[
+          styles.fieldLabel,
+          isTV && styles.fieldLabelTv,
+          { color: theme.textSecondary },
+        ]}
       >
         {label}
       </ThemedText>
@@ -183,6 +202,7 @@ function PickerRow({
         focusable={true}
         style={[
           styles.pickerRow,
+          isTV && styles.pickerRowTv,
           {
             backgroundColor: theme.backgroundSecondary,
             borderColor: isFocused ? theme.primary : "transparent",
@@ -194,7 +214,7 @@ function PickerRow({
         </ThemedText>
         <Ionicons
           name="chevron-down"
-          size={16}
+          size={isTV ? 22 : 16}
           color={isFocused ? theme.primary : theme.textSecondary}
         />
       </Pressable>
@@ -255,20 +275,25 @@ export default function NetworkStreamScreen() {
           styles.header,
           {
             paddingTop: insets.top + Spacing.sm,
-            paddingLeft: insets.left + Spacing.md,
-            paddingRight: insets.right + Spacing.md,
+            paddingLeft: insets.left + (isTV ? Spacing["3xl"] : Spacing.md),
+            paddingRight: insets.right + (isTV ? Spacing["3xl"] : Spacing.md),
             borderBottomColor: theme.backgroundSecondary,
+            minHeight: isTV ? 84 : undefined,
           },
         ]}
       >
         <FocusablePressable
           onPress={() => navigation.goBack()}
-          style={styles.backButton}
+          style={[styles.backButton, isTV ? styles.backButtonTv : {}]}
           accessibilityLabel="Go back"
         >
-          <Ionicons name="arrow-back" size={22} color={theme.text} />
+          <Ionicons
+            name="arrow-back"
+            size={isTV ? 30 : 22}
+            color={theme.text}
+          />
         </FocusablePressable>
-        <ThemedText type="h4" style={styles.headerTitle}>
+        <ThemedText type={isTV ? "h3" : "h4"} style={styles.headerTitle}>
           Network Stream
         </ThemedText>
         <View style={styles.headerRight} />
@@ -277,10 +302,14 @@ export default function NetworkStreamScreen() {
       <KeyboardAwareScrollView
         contentContainerStyle={[
           styles.content,
+          isTV && styles.contentTv,
           {
             paddingBottom: insets.bottom + Spacing["2xl"],
-            paddingLeft: insets.left + Spacing.md,
-            paddingRight: insets.right + Spacing.md,
+            paddingLeft: insets.left + (isTV ? Spacing["3xl"] : Spacing.md),
+            paddingRight: insets.right + (isTV ? Spacing["3xl"] : Spacing.md),
+            width: isTV ? "100%" : undefined,
+            maxWidth: isTV ? 1080 : undefined,
+            alignSelf: isTV ? "center" : undefined,
           },
         ]}
         showsVerticalScrollIndicator={false}
@@ -289,19 +318,32 @@ export default function NetworkStreamScreen() {
       >
         {/* Stream */}
         <SectionLabel>STREAM</SectionLabel>
-        <View style={styles.section}>
+        <View
+          style={[
+            styles.section,
+            isTV && styles.sectionTv,
+            isTV && { backgroundColor: theme.backgroundDefault },
+          ]}
+        >
           <Field
             label="Media Stream URL"
             value={config.url}
             onChangeText={(v) => update({ url: v })}
             placeholder="https://example.com/stream.m3u8"
             keyboardType="url"
+            hasTVPreferredFocus
           />
         </View>
 
         {/* HTTP Headers */}
         <SectionLabel>HTTP HEADERS</SectionLabel>
-        <View style={styles.section}>
+        <View
+          style={[
+            styles.section,
+            isTV && styles.sectionTv,
+            isTV && { backgroundColor: theme.backgroundDefault },
+          ]}
+        >
           <Field
             label="Cookie"
             value={config.cookie}
@@ -326,7 +368,13 @@ export default function NetworkStreamScreen() {
 
         {/* User Agent */}
         <SectionLabel>USER AGENT</SectionLabel>
-        <View style={styles.section}>
+        <View
+          style={[
+            styles.section,
+            isTV && styles.sectionTv,
+            isTV && { backgroundColor: theme.backgroundDefault },
+          ]}
+        >
           <PickerRow
             label="User Agent Preset"
             value={getUserAgentLabel()}
@@ -355,7 +403,13 @@ export default function NetworkStreamScreen() {
 
         {/* DRM */}
         <SectionLabel>DRM</SectionLabel>
-        <View style={styles.section}>
+        <View
+          style={[
+            styles.section,
+            isTV && styles.sectionTv,
+            isTV && { backgroundColor: theme.backgroundDefault },
+          ]}
+        >
           <PickerRow
             label="DRM Scheme"
             value={getDrmSchemeLabel()}
@@ -397,6 +451,7 @@ export default function NetworkStreamScreen() {
             onPress={handleClear}
             style={[
               styles.actionButton,
+              isTV && styles.actionButtonTv,
               { backgroundColor: theme.backgroundSecondary },
             ]}
             textStyle={{ color: theme.text }}
@@ -405,7 +460,7 @@ export default function NetworkStreamScreen() {
           </Button>
           <Button
             onPress={handlePlay}
-            style={styles.actionButton}
+            style={[styles.actionButton, isTV && styles.actionButtonTv]}
             disabled={!config.url.trim()}
           >
             Play
@@ -427,6 +482,7 @@ export default function NetworkStreamScreen() {
           <View
             style={[
               styles.modalContent,
+              isTV && styles.modalContentTv,
               { backgroundColor: theme.backgroundDefault },
             ]}
             onStartShouldSetResponder={() => true}
@@ -482,6 +538,7 @@ export default function NetworkStreamScreen() {
           <View
             style={[
               styles.modalContent,
+              isTV && styles.modalContentTv,
               { backgroundColor: theme.backgroundDefault },
             ]}
             onStartShouldSetResponder={() => true}
@@ -558,9 +615,15 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "transparent",
   },
+  backButtonTv: {
+    width: 60,
+    height: 60,
+    borderRadius: BorderRadius.md,
+  },
 
   // Content
   content: { paddingTop: Spacing.md },
+  contentTv: { paddingTop: Spacing["2xl"] },
   sectionLabel: {
     marginTop: Spacing.xl,
     marginBottom: Spacing.sm,
@@ -569,9 +632,18 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     fontSize: 11,
   },
+  sectionLabelTv: {
+    marginTop: Spacing["2xl"],
+    fontSize: 18,
+  },
   section: {
     borderRadius: BorderRadius.md,
     overflow: "hidden",
+  },
+  sectionTv: {
+    padding: Spacing.lg,
+    marginBottom: Spacing.sm,
+    borderRadius: BorderRadius.lg,
   },
 
   // Field
@@ -582,11 +654,21 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
     marginLeft: Spacing.xs,
   },
+  fieldLabelTv: {
+    fontSize: 16,
+    marginBottom: Spacing.sm,
+  },
   input: {
     padding: Spacing.md,
     borderRadius: BorderRadius.sm,
     borderWidth: 1,
     fontSize: 14,
+  },
+  inputTv: {
+    minHeight: 58,
+    fontSize: 17,
+    borderWidth: 2,
+    paddingHorizontal: Spacing.lg,
   },
   inputMultiline: {
     minHeight: 72,
@@ -600,6 +682,10 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     borderRadius: BorderRadius.sm,
     borderWidth: 2,
+  },
+  pickerRowTv: {
+    minHeight: 58,
+    paddingHorizontal: Spacing.lg,
   },
 
   // UA preview
@@ -629,6 +715,7 @@ const styles = StyleSheet.create({
     marginTop: Spacing["2xl"],
   },
   actionButton: { flex: 1 },
+  actionButtonTv: { minHeight: 60, borderRadius: BorderRadius.md },
 
   // Modals
   modalOverlay: {
@@ -643,6 +730,10 @@ const styles = StyleSheet.create({
     maxWidth: 380,
     borderRadius: BorderRadius.lg,
     padding: Spacing.xl,
+  },
+  modalContentTv: {
+    maxWidth: 560,
+    padding: Spacing["2xl"],
   },
   modalTitle: { textAlign: "center", marginBottom: Spacing.md },
   modalOption: {

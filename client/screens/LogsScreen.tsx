@@ -1,12 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  StyleSheet,
-  View,
-  FlatList,
-  Share,
-  Platform,
-  useWindowDimensions,
-} from "react-native";
+import { StyleSheet, View, FlatList, Share, Platform } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import * as FileSystemLegacy from "expo-file-system/legacy";
@@ -81,7 +74,6 @@ function buildPlainText(entries: LogEntry[]): string {
 
 export default function LogsScreen() {
   const { theme } = useTheme();
-  const { width } = useWindowDimensions();
   const navigation = useNavigation<any>();
 
   // Selector for "show this level and above". Starts with "debug" (all).
@@ -245,10 +237,6 @@ export default function LogsScreen() {
     });
   }, [navigation, headerRight]);
 
-  // A user-only toggle (phone); on TV the level rows themselves are focusable.
-  // The standard filter row works on both — render the same row for simplicity.
-  const maxLineWidth = width - 24;
-
   return (
     <View style={[styles.root, { backgroundColor: theme.backgroundRoot }]}>
       {/* Filter bar */}
@@ -259,6 +247,7 @@ export default function LogsScreen() {
             backgroundColor: theme.backgroundDefault,
             borderBottomColor: theme.backgroundSecondary,
           },
+          isTV && styles.filterBarTv,
         ]}
       >
         {LEVEL_ORDER.map((lvl) => {
@@ -273,12 +262,17 @@ export default function LogsScreen() {
               onPress={() => setMinLevel(lvl)}
               selected={minLevel === lvl}
               theme={theme}
+              hasTVPreferredFocus={isTV && lvl === "debug"}
             />
           );
         })}
         <View style={styles.countWrap}>
           <ThemedText
-            style={[styles.countText, { color: theme.textSecondary }]}
+            style={[
+              styles.countText,
+              isTV && styles.countTextTv,
+              { color: theme.textSecondary },
+            ]}
           >
             {filteredEntries.length}/{MAX_ENTRIES}
           </ThemedText>
@@ -288,7 +282,10 @@ export default function LogsScreen() {
       {/* Log list */}
       <FlatList
         style={styles.list}
-        contentContainerStyle={{ paddingBottom: 24 }}
+        contentContainerStyle={[
+          styles.listContent,
+          isTV && styles.listContentTv,
+        ]}
         data={displayEntries}
         keyExtractor={(item, idx) => `${item.ts}-${idx}`}
         initialNumToRender={20}
@@ -296,24 +293,34 @@ export default function LogsScreen() {
         windowSize={6}
         renderItem={({ item }) => (
           <View
-            style={[styles.entry, { backgroundColor: theme.backgroundDefault }]}
+            style={[
+              styles.entry,
+              isTV && styles.entryTv,
+              { backgroundColor: theme.backgroundDefault },
+            ]}
           >
             <View
               style={[
                 styles.levelBar,
+                isTV && styles.levelBarTv,
                 { backgroundColor: LEVEL_COLORS[item.level] },
               ]}
             />
             <View style={styles.entryBody}>
-              <View style={styles.entryHead}>
+              <View style={[styles.entryHead, isTV && styles.entryHeadTv]}>
                 <ThemedText
-                  style={[styles.ts, { color: LEVEL_COLORS[item.level] }]}
+                  style={[
+                    styles.ts,
+                    isTV && styles.tsTv,
+                    { color: LEVEL_COLORS[item.level] },
+                  ]}
                 >
                   {formatTs(item.ts)}
                 </ThemedText>
                 <ThemedText
                   style={[
                     styles.levelChip,
+                    isTV && styles.levelChipTv,
                     {
                       color: LEVEL_COLORS[item.level],
                       backgroundColor: LEVEL_FILL[item.level],
@@ -325,6 +332,7 @@ export default function LogsScreen() {
                 <ThemedText
                   style={[
                     styles.sourceChip,
+                    isTV && styles.sourceChipTv,
                     {
                       color: SOURCE_COLORS[item.source] ?? theme.textSecondary,
                     },
@@ -335,7 +343,11 @@ export default function LogsScreen() {
                 </ThemedText>
               </View>
               <ThemedText
-                style={[styles.entryText, { color: theme.text }]}
+                style={[
+                  styles.entryText,
+                  isTV && styles.entryTextTv,
+                  { color: theme.text },
+                ]}
                 selectable
               >
                 {item.message}
@@ -351,7 +363,12 @@ export default function LogsScreen() {
               color={theme.textSecondary}
             />
             <ThemedText
-              style={[styles.emptyText, { color: theme.textSecondary }]}
+              style={[
+                styles.emptyText,
+                isTV && styles.emptyTextTv,
+                { color: theme.textSecondary },
+              ]}
+              numberOfLines={isTV ? 3 : undefined}
             >
               No log entries yet. Reproduce a bug with the app open and they
               will show up here.
@@ -374,8 +391,6 @@ export default function LogsScreen() {
           </View>
         </View>
       )}
-
-      {void maxLineWidth}
     </View>
   );
 }
@@ -402,14 +417,14 @@ function HeaderButton({
   return (
     <TVFocusablePressable
       onPress={onPress}
-      baseStyle={styles.headerBtn}
+      baseStyle={[styles.headerBtn, isTV && styles.headerBtnTv]}
       focusedStyle={{
         ...styles.headerBtnFocused,
         backgroundColor: theme.backgroundSecondary,
       }}
       accessibilityLabel={label}
     >
-      <Ionicons name={icon as any} size={18} color={color} />
+      <Ionicons name={icon as any} size={isTV ? 24 : 18} color={color} />
       {!isTV && (
         <ThemedText style={[styles.headerBtnLabel, { color }]}>
           {label}
@@ -427,6 +442,7 @@ function FilterChip({
   onPress,
   selected,
   theme,
+  hasTVPreferredFocus,
 }: {
   label: string;
   active: boolean;
@@ -435,12 +451,14 @@ function FilterChip({
   onPress: () => void;
   selected: boolean;
   theme: any;
+  hasTVPreferredFocus?: boolean;
 }) {
   return (
     <TVFocusablePressable
       onPress={onPress}
       baseStyle={[
         styles.filterChip,
+        isTV && styles.filterChipTv,
         {
           backgroundColor: selected ? fill : "transparent",
           borderColor: selected ? color : theme.backgroundTertiary,
@@ -448,11 +466,19 @@ function FilterChip({
       ]}
       focusedStyle={{ ...styles.filterChipFocused, borderColor: color }}
       accessibilityLabel={`Filter ${label}`}
+      hasTVPreferredFocus={hasTVPreferredFocus}
     >
-      <View style={[styles.filterDot, { backgroundColor: color }]} />
+      <View
+        style={[
+          styles.filterDot,
+          isTV && styles.filterDotTv,
+          { backgroundColor: color },
+        ]}
+      />
       <ThemedText
         style={[
           styles.filterLabel,
+          isTV && styles.filterLabelTv,
           {
             color: selected ? color : theme.textSecondary,
             fontWeight: selected ? "700" : "500",
@@ -480,6 +506,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexWrap: "wrap",
   },
+  filterBarTv: {
+    paddingHorizontal: Spacing["2xl"],
+    paddingVertical: Spacing.lg,
+    gap: Spacing.md,
+  },
   filterChip: {
     flexDirection: "row",
     alignItems: "center",
@@ -489,6 +520,12 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
     borderWidth: 1,
   },
+  filterChipTv: {
+    minHeight: 52,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    borderWidth: 2,
+  },
   filterChipFocused: {
     transform: [{ scale: 1.05 }],
   },
@@ -497,10 +534,12 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
   },
+  filterDotTv: { width: 10, height: 10, borderRadius: 5 },
   filterLabel: {
     fontSize: 12,
     letterSpacing: 0.3,
   },
+  filterLabelTv: { fontSize: 16 },
   countWrap: {
     marginLeft: "auto",
   },
@@ -509,9 +548,12 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontVariant: ["tabular-nums"],
   },
+  countTextTv: { fontSize: 14 },
   list: {
     flex: 1,
   },
+  listContent: { paddingBottom: 24 },
+  listContentTv: { paddingHorizontal: Spacing["2xl"] },
   entry: {
     flexDirection: "row",
     paddingVertical: 8,
@@ -519,12 +561,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "rgba(255,255,255,0.04)",
   },
+  entryTv: { paddingVertical: Spacing.md, paddingHorizontal: Spacing.lg },
   levelBar: {
     width: 3,
     marginRight: 10,
     borderRadius: 2,
     alignSelf: "stretch",
   },
+  levelBarTv: { width: 4, marginRight: Spacing.md },
   entryBody: {
     flex: 1,
   },
@@ -534,12 +578,14 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     marginBottom: 2,
   },
+  entryHeadTv: { marginBottom: Spacing.xs },
   ts: {
     fontSize: 11,
     fontWeight: "600",
     fontVariant: ["tabular-nums"],
     fontFamily: "monospace",
   },
+  tsTv: { fontSize: 14 },
   levelChip: {
     fontSize: 10,
     fontWeight: "800",
@@ -549,16 +595,19 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.xs,
     overflow: "hidden",
   },
+  levelChipTv: { fontSize: 12, paddingHorizontal: 8, paddingVertical: 3 },
   sourceChip: {
     fontSize: 10,
     fontWeight: "500",
     fontFamily: "monospace",
   },
+  sourceChipTv: { fontSize: 13 },
   entryText: {
     fontSize: 11,
     lineHeight: 16,
     fontFamily: "monospace",
   },
+  entryTextTv: { fontSize: 15, lineHeight: 22 },
   empty: {
     paddingTop: 60,
     alignItems: "center",
@@ -570,6 +619,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
+  emptyTextTv: { fontSize: 17, lineHeight: 24 },
   headerActions: {
     flexDirection: "row",
     alignItems: "center",
@@ -582,6 +632,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: BorderRadius.sm,
+  },
+  headerBtnTv: {
+    width: 56,
+    height: 56,
+    justifyContent: "center",
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
   },
   headerBtnFocused: {
     transform: [{ scale: 1.06 }],
