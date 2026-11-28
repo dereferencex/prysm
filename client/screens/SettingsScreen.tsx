@@ -1966,11 +1966,13 @@ export default function SettingsScreen({
         animationType="fade"
         onRequestClose={handleCloseUpdateModal}
       >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={handleCloseUpdateModal}
-          focusable={!isTV}
-        >
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={handleCloseUpdateModal}
+            focusable={!isTV}
+            accessible={false}
+          />
           <View
             style={[
               styles.modalContent,
@@ -1990,6 +1992,10 @@ export default function SettingsScreen({
                   { backgroundColor: theme.backgroundSecondary },
                 ]}
                 contentContainerStyle={styles.releaseNotesContent}
+                focusable={isTV}
+                hasTVPreferredFocus={isTV}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator
               >
                 <ThemedText
                   type="small"
@@ -2053,7 +2059,7 @@ export default function SettingsScreen({
                 ]}
                 textStyle={{ color: theme.text }}
                 disabled={downloadingApk || installingApk}
-                hasTVPreferredFocus={isTV}
+                hasTVPreferredFocus={isTV && !updateInfo?.releaseNotes}
               >
                 Later
               </Button>
@@ -2072,7 +2078,7 @@ export default function SettingsScreen({
               </Button>
             </View>
           </View>
-        </Pressable>
+        </View>
       </Modal>
 
       <Toast
