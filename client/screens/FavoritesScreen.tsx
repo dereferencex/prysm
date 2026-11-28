@@ -1,10 +1,5 @@
 import React, { useState, useMemo, useCallback, useRef } from "react";
-import {
-  StyleSheet,
-  View,
-  ActivityIndicator,
-  Platform,
-} from "react-native";
+import { StyleSheet, View, ActivityIndicator, Platform } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -65,13 +60,20 @@ function FocusableTab({
           },
         ],
       ]}
-      focusedStyle={[styles.tabFocused, { backgroundColor: theme.primary + "30" }]}
+      focusedStyle={[
+        styles.tabFocused,
+        { backgroundColor: theme.primary + "30" },
+      ]}
     >
       <Ionicons
         name={icon as any}
         size={16}
         color={
-          isFocused ? theme.text : isActive ? theme.primary : theme.textSecondary
+          isFocused
+            ? theme.text
+            : isActive
+              ? theme.primary
+              : theme.textSecondary
         }
       />
       <ThemedText
@@ -107,7 +109,6 @@ export default function FavoritesScreen() {
     favoriteCategories,
     isLoading,
     toggleFavorite,
-    toggleFavoriteCategory,
     getFavoriteChannels,
     getFavoriteCategoryChannels,
     settings,
@@ -189,15 +190,6 @@ export default function FavoritesScreen() {
       return handler;
     },
     [toggleFavorite, longPressHandlers],
-  );
-
-  const handleCategoryUnfavorite = useCallback(
-    async (category: string) => {
-      if (!Platform.isTV)
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      await toggleFavoriteCategory(category);
-    },
-    [toggleFavoriteCategory],
   );
 
   const renderChannelItem = useCallback(
@@ -359,7 +351,7 @@ export default function FavoritesScreen() {
           ListHeaderComponent={ListHeader}
           ListHeaderComponentStyle={styles.listHeaderWrapper}
           ListEmptyComponent={ListEmpty}
-          drawDistance={Platform.isTV ? 1200 : 300}
+          drawDistance={Platform.isTV ? 600 : 300}
           contentContainerStyle={{
             paddingBottom: insets.bottom + Spacing.md,
             paddingHorizontal: Spacing.xs,

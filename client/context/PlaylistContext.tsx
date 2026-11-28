@@ -11,12 +11,7 @@ import React, {
 import { AppState, AppStateStatus } from "react-native";
 import { Channel, Playlist } from "@/types/playlist";
 import * as storage from "@/lib/storage";
-import {
-  parseM3U,
-  fetchAndParseM3U,
-  parsePlaylist,
-  fetchAndParsePlaylist,
-} from "@/lib/m3u-parser";
+import { parsePlaylist, fetchAndParsePlaylist } from "@/lib/m3u-parser";
 import { syncFavourites } from "@/lib/tv-channel";
 
 interface PlaylistContextType {
@@ -98,6 +93,21 @@ export function PlaylistProvider({ children }: { children: ReactNode }) {
     }
     return map;
   }, [playlist]);
+
+  const favoriteSet = useMemo(() => new Set(favorites), [favorites]);
+  const favoriteCategorySet = useMemo(
+    () => new Set(favoriteCategories),
+    [favoriteCategories],
+  );
+  const channelSearchIndex = useMemo(
+    () =>
+      (playlist?.channels || []).map((channel) => ({
+        channel,
+        name: channel.name.toLowerCase(),
+        group: (channel.group || "").toLowerCase(),
+      })),
+    [playlist],
+  );
 
   useEffect(() => {
     loadInitialData();
@@ -384,9 +394,9 @@ export function PlaylistProvider({ children }: { children: ReactNode }) {
 
   const isCategoryFavorite = useCallback(
     (category: string): boolean => {
-      return favoriteCategories.includes(category);
+      return favoriteCategorySet.has(category);
     },
-    [favoriteCategories],
+    [favoriteCategorySet],
   );
 
   const addToRecent = async (channelId: string) => {
@@ -474,27 +484,26 @@ export function PlaylistProvider({ children }: { children: ReactNode }) {
 
   const getFavoriteChannels = useCallback((): Channel[] => {
     if (!playlist) return [];
-    return playlist.channels.filter((ch) => favorites.includes(ch.id));
-  }, [playlist, favorites]);
+    return playlist.channels.filter((ch) => favoriteSet.has(ch.id));
+  }, [playlist, favoriteSet]);
 
   const getFavoriteCategoryChannels = useCallback((): Channel[] => {
     if (!playlist) return [];
-    return playlist.channels.filter((ch) =>
-      favoriteCategories.includes(ch.group),
-    );
-  }, [playlist, favoriteCategories]);
+    return playlist.channels.filter((ch) => favoriteCategorySet.has(ch.group));
+  }, [playlist, favoriteCategorySet]);
 
   const searchChannels = useCallback(
     (query: string): Channel[] => {
       if (!playlist || !query.trim()) return [];
-      const lowerQuery = query.toLowerCase();
-      return playlist.channels.filter(
-        (ch) =>
-          ch.name.toLowerCase().includes(lowerQuery) ||
-          ch.group.toLowerCase().includes(lowerQuery),
-      );
+      const lowerQuery = query.toLowerCase().trim();
+      return channelSearchIndex
+        .filter(
+          ({ name, group }) =>
+            name.includes(lowerQuery) || group.includes(lowerQuery),
+        )
+        .map(({ channel }) => channel);
     },
-    [playlist],
+    [playlist, channelSearchIndex],
   );
 
   return (

@@ -91,7 +91,8 @@ export default function PlayerScreen() {
   } = usePlaylist();
 
   const channel = getChannelById(channelId);
-  const isFavorite = favorites.includes(channelId);
+  const favoriteIds = useMemo(() => new Set(favorites), [favorites]);
+  const isFavorite = favoriteIds.has(channelId);
   const epg = useEpg();
   const epgNowNext =
     settings.showEpg && settings.showEpgInPlayer && epg.effectiveUrl

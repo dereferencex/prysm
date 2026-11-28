@@ -10,13 +10,11 @@ import {
   View,
   Pressable,
   ActivityIndicator,
-  ScrollView,
   Modal,
   Platform,
   ViewStyle,
 } from "react-native";
 
-const isTV = Platform.isTV;
 import { FlashList } from "@shopify/flash-list";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -45,6 +43,7 @@ import { Spacing, BorderRadius } from "@/constants/theme";
 import { Channel } from "@/types/playlist";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
+const isTV = Platform.isTV;
 const emptyChannelsImage = require("../../assets/images/empty-channels.png");
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -203,21 +202,11 @@ function FocusableCloseButton({
 const DRAWER_WIDTH = 280;
 const DOUBLE_PRESS_DELAY = 300;
 // Extra rows pre-rendered beyond the visible viewport on TV for smooth D-pad scrolling
-const TV_DRAW_DISTANCE = 1200;
+const TV_DRAW_DISTANCE = 600;
 const MOBILE_DRAW_DISTANCE = 300;
 
 const ItemSeparator = () => <View style={{ height: Spacing.sm }} />;
 const keyExtractor = (item: Channel) => item.id;
-
-/** Estimated total card height: logo area + info section + separator */
-function getEstimatedCardHeight(
-  cardWidth: number,
-  isUltraWide: boolean,
-): number {
-  const logoHeight = isUltraWide ? cardWidth * 0.5 : cardWidth * 0.55;
-  const infoHeight = 56; // name (2 lines ~28px) + live row (~12px) + padding (~16px)
-  return Math.ceil(logoHeight + infoHeight + Spacing.sm); // Spacing.sm = separator
-}
 
 export default function ChannelsScreen() {
   const insets = useSafeAreaInsets();
@@ -235,6 +224,7 @@ export default function ChannelsScreen() {
     toggleFavoriteCategory,
     isCategoryFavorite,
     searchChannels,
+    getChannelsByCategory,
     settings,
     updateSettings,
   } = usePlaylist();
@@ -266,6 +256,10 @@ export default function ChannelsScreen() {
     (rememberedCategory && playlist?.categories.includes(rememberedCategory)
       ? rememberedCategory
       : "All");
+  const favoriteCategorySet = useMemo(
+    () => new Set(favoriteCategories),
+    [favoriteCategories],
+  );
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [guideView, setGuideView] = useState(false);
   const epg = useEpg();
@@ -279,14 +273,14 @@ export default function ChannelsScreen() {
   const categories = useMemo(() => {
     if (!playlist) return ["All"];
     const sortedCategories = [...playlist.categories].sort((a, b) => {
-      const aIsFav = favoriteCategories.includes(a);
-      const bIsFav = favoriteCategories.includes(b);
+      const aIsFav = favoriteCategorySet.has(a);
+      const bIsFav = favoriteCategorySet.has(b);
       if (aIsFav && !bIsFav) return -1;
       if (!aIsFav && bIsFav) return 1;
       return 0;
     });
     return ["All", ...sortedCategories];
-  }, [playlist, favoriteCategories]);
+  }, [playlist, favoriteCategorySet]);
 
   const categoryChannelCounts = useMemo(() => {
     if (!playlist) return {};
@@ -319,11 +313,17 @@ export default function ChannelsScreen() {
     }
 
     if (selectedCategory !== "All") {
-      return playlist.channels.filter((ch) => ch.group === selectedCategory);
+      return getChannelsByCategory(selectedCategory);
     }
 
     return playlist.channels;
-  }, [playlist, debouncedSearchQuery, selectedCategory, searchChannels]);
+  }, [
+    playlist,
+    debouncedSearchQuery,
+    selectedCategory,
+    searchChannels,
+    getChannelsByCategory,
+  ]);
 
   const openDrawer = useCallback(() => {
     setDrawerOpen(true);

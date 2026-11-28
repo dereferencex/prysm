@@ -86,18 +86,11 @@ function buildChannelMatcher(
 }
 
 function computeNowNext(
-  programs: EpgProgram[],
+  programsByChannel: Map<string, EpgProgram[]>,
   now: number,
 ): Map<string, EpgNowNext> {
-  const byChannel = new Map<string, EpgProgram[]>();
-  for (const p of programs) {
-    const arr = byChannel.get(p.channelId);
-    if (arr) arr.push(p);
-    else byChannel.set(p.channelId, [p]);
-  }
   const map = new Map<string, EpgNowNext>();
-  for (const [cid, list] of byChannel) {
-    list.sort((a, b) => a.start - b.start);
+  for (const [cid, list] of programsByChannel) {
     let nowP: EpgProgram | undefined;
     let nextP: EpgProgram | undefined;
     for (let i = 0; i < list.length; i++) {
@@ -269,11 +262,6 @@ export function EpgProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(t);
   }, []);
 
-  const nowNextMap = useMemo(
-    () => computeNowNext(programs, tick),
-    [programs, tick],
-  );
-
   const programsByChannel = useMemo(() => {
     const m = new Map<string, EpgProgram[]>();
     for (const p of programs) {
@@ -281,8 +269,16 @@ export function EpgProvider({ children }: { children: ReactNode }) {
       if (arr) arr.push(p);
       else m.set(p.channelId, [p]);
     }
+    for (const list of m.values()) {
+      list.sort((a, b) => a.start - b.start);
+    }
     return m;
   }, [programs]);
+
+  const nowNextMap = useMemo(
+    () => computeNowNext(programsByChannel, tick),
+    [programsByChannel, tick],
+  );
 
   const getNowNext = useCallback(
     (channelId: string) => nowNextMap.get(channelId),
