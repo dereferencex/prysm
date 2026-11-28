@@ -9,7 +9,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning: [S
 
 ### Added
 - **Xtream Codes login** — add playlists with server URL, username and password,
-  then load live channels through the provider API.
+  then load live channels through the provider API. Thanks to
+  [@pgfsim](https://github.com/pgfsim) for the contribution.
 - **Responsive shared screens on TV** — adapt setup, network stream and logs
   screens for TV layouts and remote navigation.
 
